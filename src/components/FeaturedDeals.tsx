@@ -1,81 +1,74 @@
-import { ArrowRight, Gift, Percent, Star } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { ArrowRight } from "lucide-react";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 
 const FeaturedDeals = () => {
-  const deals = [
-    {
-      id: 1,
-      title: "Sale Sinh Nhật",
-      subtitle: "Vé tham quan & Khách sạn",
-      discount: "Giảm đến 40%",
-      bgColor: "bg-gradient-to-r from-orange-500 to-red-500",
-      icon: Gift,
-    },
-    {
-      id: 2,
-      title: "Ưu đãi cuối tuần",
-      subtitle: "Tours trong nước",
-      discount: "Giảm đến 25%",
-      bgColor: "bg-gradient-to-r from-blue-500 to-purple-500", 
-      icon: Star,
-    },
-    {
-      id: 3,
-      title: "Flash Sale",
-      subtitle: "Du lịch quốc tế",
-      discount: "Giảm đến 60%",
-      bgColor: "bg-gradient-to-r from-green-500 to-teal-500",
-      icon: Percent,
-    },
-  ];
-
   return (
-    <section className="py-12 bg-gray-50">
+    <section className="py-8 bg-gray-50">
       <div className="container mx-auto px-4">
-        <div className="flex items-center justify-between mb-8">
-          <h2 className="text-3xl font-bold text-foreground">Ưu đãi cho bạn</h2>
-          <Button variant="ghost" className="text-primary hover:text-primary/80">
-            Xem tất cả
-            <ArrowRight className="h-4 w-4 ml-1" />
-          </Button>
-        </div>
+        <h2 className="text-2xl font-bold text-gray-900 mb-6">Ưu đãi cho bạn</h2>
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {deals.map((deal) => {
-            const IconComponent = deal.icon;
-            return (
-              <Card key={deal.id} className="overflow-hidden hover:shadow-hover transition-all duration-300 group cursor-pointer">
-                <div className={`${deal.bgColor} p-6 text-white relative overflow-hidden`}>
-                  <div className="relative z-10">
-                    <div className="flex items-center justify-between mb-4">
-                      <IconComponent className="h-8 w-8" />
-                      <Badge className="bg-white/20 text-white border-white/30">
-                        HOT
-                      </Badge>
-                    </div>
-                    
-                    <h3 className="text-xl font-bold mb-2">{deal.title}</h3>
-                    <p className="text-white/90 text-sm mb-3">{deal.subtitle}</p>
-                    <p className="text-2xl font-bold">{deal.discount}</p>
-                    
-                    <Button 
-                      className="mt-4 bg-white text-gray-900 hover:bg-white/90"
-                      size="sm"
-                    >
-                      Khám phá ngay
-                      <ArrowRight className="h-4 w-4 ml-1" />
-                    </Button>
-                  </div>
-                  
-                  {/* Decorative elements */}
-                  <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/10 rounded-full"></div>
-                  <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-white/5 rounded-full"></div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {/* Main promotional card */}
+          <Card className="md:col-span-2 overflow-hidden rounded-xl">
+            <div 
+              className="relative h-48 bg-cover bg-center p-6 flex flex-col justify-between text-white"
+              style={{
+                backgroundImage: "linear-gradient(135deg, #FF6B35 0%, #F7931E 100%)",
+              }}
+            >
+              <div>
+                <div className="flex items-center space-x-2 mb-2">
+                  <span className="text-2xl">✨</span>
+                  <span className="text-sm font-medium bg-white/20 px-2 py-1 rounded">klook</span>
                 </div>
-              </Card>
-            );
-          })}
+                <div className="text-sm opacity-90 mb-1">Official Experience Partner</div>
+                <div className="text-lg font-bold">TICKETS COMING SOON</div>
+              </div>
+              <Button size="sm" className="bg-white text-orange-500 hover:bg-white/90 w-fit">
+                Find Out More
+              </Button>
+            </div>
+          </Card>
+
+          {/* Secondary promotional card */}
+          <Card className="overflow-hidden rounded-xl">
+            <div 
+              className="relative h-48 bg-cover bg-center p-4 flex flex-col justify-between text-white"
+              style={{
+                backgroundImage: "linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)",
+              }}
+            >
+              <div className="text-xs bg-orange-500 px-2 py-1 rounded w-fit font-medium">
+                KHÁCH SẠNG DEAL
+              </div>
+              <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white w-fit">
+                Đợt ngay 🔥
+              </Button>
+            </div>
+          </Card>
+
+          {/* Birthday sale card */}
+          <Card className="overflow-hidden rounded-xl">
+            <div 
+              className="relative h-48 bg-cover bg-center p-4 flex flex-col justify-between text-white"
+              style={{
+                backgroundImage: "linear-gradient(135deg, #EC4899 0%, #F97316 100%)",
+              }}
+            >
+              <div>
+                <div className="text-xs bg-white/20 px-2 py-1 rounded w-fit font-medium mb-2">
+                  🎂 Sale Sinh Nhật
+                </div>
+                <div className="text-sm font-bold">Sale Sinh Nhật</div>
+                <div className="text-xs opacity-90">Vé tham quan & Khách sạn</div>
+                <div className="text-sm font-bold mt-1">Giảm đến 40%</div>
+              </div>
+              <div className="flex items-center justify-end">
+                <ArrowRight className="h-6 w-6" />
+              </div>
+            </div>
+          </Card>
         </div>
       </div>
     </section>
