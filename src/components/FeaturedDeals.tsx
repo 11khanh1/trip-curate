@@ -1,74 +1,75 @@
-import { ArrowRight } from "lucide-react";
-import { Card } from "@/components/ui/card";
+import { Star, Clock, MapPin, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const FeaturedDeals = () => {
+  const deals = [
+    {
+      id: 1,
+      title: "Sale Sinh Nhật",
+      subtitle: "Vé tham quan & Khách sạn",
+      discount: "Giảm đến 40%",
+      bgColor: "bg-gradient-to-br from-purple-500 to-pink-500",
+      textColor: "text-white",
+      buttonText: "Sắn Deal ngay"
+    },
+    {
+      id: 2,
+      title: "SIÊU SALE SINH NHẬT KLOOK 11",
+      subtitle: "🎂 Sinh Nhật Siêu To",
+      discount: "Deal khủng",
+      bgColor: "bg-gradient-to-br from-orange-500 to-red-500",
+      textColor: "text-white",
+      buttonText: "Sắn Deal ngay"
+    },
+    {
+      id: 3,
+      title: "Sale Sinh Nhật",
+      subtitle: "Vé tham quan & Khách sạn",
+      discount: "Giảm đến 40%",
+      bgColor: "bg-gradient-to-br from-blue-500 to-purple-500",
+      textColor: "text-white",
+      buttonText: "Sắn Deal ngay"
+    }
+  ];
+
   return (
-    <section className="py-8 bg-gray-50">
+    <section className="py-12 bg-background">
       <div className="container mx-auto px-4">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">Ưu đãi cho bạn</h2>
-        
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {/* Main promotional card */}
-          <Card className="md:col-span-2 overflow-hidden rounded-xl">
-            <div 
-              className="relative h-48 bg-cover bg-center p-6 flex flex-col justify-between text-white"
-              style={{
-                backgroundImage: "linear-gradient(135deg, #FF6B35 0%, #F7931E 100%)",
-              }}
+        <h2 className="text-2xl font-bold text-foreground mb-8">
+          Ưu đãi cho bạn
+        </h2>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {deals.map((deal) => (
+            <div
+              key={deal.id}
+              className={`relative rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 group cursor-pointer ${deal.bgColor} p-6 min-h-[200px] flex flex-col justify-between`}
             >
-              <div>
-                <div className="flex items-center space-x-2 mb-2">
-                  <span className="text-2xl">✨</span>
-                  <span className="text-sm font-medium bg-white/20 px-2 py-1 rounded">klook</span>
-                </div>
-                <div className="text-sm opacity-90 mb-1">Official Experience Partner</div>
-                <div className="text-lg font-bold">TICKETS COMING SOON</div>
+              {/* Decorative elements */}
+              <div className="absolute top-4 right-4 opacity-20">
+                <div className="w-16 h-16 bg-white rounded-full"></div>
               </div>
-              <Button size="sm" className="bg-white text-orange-500 hover:bg-white/90 w-fit">
-                Find Out More
+              <div className="absolute bottom-4 left-4 opacity-10">
+                <div className="w-24 h-24 bg-white rounded-full"></div>
+              </div>
+              
+              <div className={deal.textColor}>
+                <div className="bg-white/20 backdrop-blur-sm text-white px-3 py-1 rounded-full text-xs font-bold mb-3 w-fit">
+                  {deal.discount}
+                </div>
+                <h3 className="text-xl font-bold mb-2 leading-tight">{deal.title}</h3>
+                <p className="text-white/90 text-sm mb-4">{deal.subtitle}</p>
+              </div>
+              
+              <Button 
+                size="sm"
+                className="bg-white/20 backdrop-blur-sm text-white border border-white/30 hover:bg-white/30 w-fit text-xs font-semibold"
+              >
+                {deal.buttonText}
+                <ArrowRight className="w-3 h-3 ml-1" />
               </Button>
             </div>
-          </Card>
-
-          {/* Secondary promotional card */}
-          <Card className="overflow-hidden rounded-xl">
-            <div 
-              className="relative h-48 bg-cover bg-center p-4 flex flex-col justify-between text-white"
-              style={{
-                backgroundImage: "linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)",
-              }}
-            >
-              <div className="text-xs bg-orange-500 px-2 py-1 rounded w-fit font-medium">
-                KHÁCH SẠNG DEAL
-              </div>
-              <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white w-fit">
-                Đợt ngay 🔥
-              </Button>
-            </div>
-          </Card>
-
-          {/* Birthday sale card */}
-          <Card className="overflow-hidden rounded-xl">
-            <div 
-              className="relative h-48 bg-cover bg-center p-4 flex flex-col justify-between text-white"
-              style={{
-                backgroundImage: "linear-gradient(135deg, #EC4899 0%, #F97316 100%)",
-              }}
-            >
-              <div>
-                <div className="text-xs bg-white/20 px-2 py-1 rounded w-fit font-medium mb-2">
-                  🎂 Sale Sinh Nhật
-                </div>
-                <div className="text-sm font-bold">Sale Sinh Nhật</div>
-                <div className="text-xs opacity-90">Vé tham quan & Khách sạn</div>
-                <div className="text-sm font-bold mt-1">Giảm đến 40%</div>
-              </div>
-              <div className="flex items-center justify-end">
-                <ArrowRight className="h-6 w-6" />
-              </div>
-            </div>
-          </Card>
+          ))}
         </div>
       </div>
     </section>

@@ -1,84 +1,76 @@
-import { Search, Globe, HelpCircle, ShoppingCart, User } from "lucide-react";
+import { Search, Menu, User, Globe, ShoppingBag, Gift } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { useState } from "react";
+import AuthModal from "./AuthModal";
 
 const TravelHeader = () => {
+  const [showAuthModal, setShowAuthModal] = useState(false);
+
   return (
-    <header className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
-      <div className="container mx-auto px-4 py-3">
-        <div className="flex items-center justify-between">
-          {/* Logo and Search */}
-          <div className="flex items-center space-x-6 flex-1">
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-gradient-orange rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-lg">K</span>
+    <>
+      <header className="bg-white shadow-sm border-b sticky top-0 z-40">
+        <div className="container mx-auto px-4">
+          <div className="flex items-center justify-between h-16">
+            {/* Logo */}
+            <div className="flex items-center space-x-8">
+              <div className="text-2xl font-bold">
+                <span className="text-primary">klook</span>
               </div>
-              <span className="text-2xl font-bold" style={{color: '#FF5722'}}>klook</span>
+              
+              {/* Navigation */}
+              <nav className="hidden lg:flex items-center space-x-6">
+                <a href="#" className="text-sm text-foreground hover:text-primary transition-colors">
+                  Khu vực phổ biến
+                </a>
+                <a href="#" className="text-sm text-foreground hover:text-primary transition-colors">
+                  Điểm đến phổ biến
+                </a>
+                <a href="#" className="text-sm text-foreground hover:text-primary transition-colors">
+                  Địa danh phổ biến
+                </a>
+                <a href="#" className="text-sm text-foreground hover:text-primary transition-colors">
+                  Khám phá Klook
+                </a>
+                <a href="#" className="flex items-center text-sm text-foreground hover:text-primary transition-colors">
+                  <Gift className="w-4 h-4 mr-1" />
+                  Phiếu Quà Tặng Klook
+                </a>
+              </nav>
             </div>
-            
-            <div className="flex-1 max-w-md hidden md:block">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input 
-                  placeholder="Tìm thêm điểm đến, hoạt động" 
-                  className="pl-10 border-gray-300 focus:border-orange-500 focus:ring-orange-500"
-                />
-              </div>
-            </div>
-          </div>
-          
-          {/* Right Navigation */}
-          <div className="flex items-center space-x-4">
-            <div className="hidden md:flex items-center space-x-4 text-sm">
-              <div className="flex items-center space-x-1 cursor-pointer hover:text-orange-500">
-                <Globe className="h-4 w-4" />
-                <span>VN</span>
-              </div>
-              <span>VND</span>
-              <div className="flex items-center space-x-1 cursor-pointer hover:text-orange-500">
-                <HelpCircle className="h-4 w-4" />
-                <span>Trợ giúp</span>
-              </div>
-              <div className="flex items-center space-x-1 cursor-pointer hover:text-orange-500">
-                <ShoppingCart className="h-4 w-4" />
-                <span>Xem giỏ hàng</span>
-              </div>
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              <Button variant="ghost" className="text-gray-700 hover:text-orange-500">
-                Đăng ký
+
+            {/* Right side */}
+            <div className="flex items-center space-x-3">
+              <Button variant="ghost" size="sm" className="hidden md:flex">
+                <Globe className="w-4 h-4 mr-2" />
+                VN
               </Button>
-              <Button className="bg-orange-500 hover:bg-orange-600 text-white px-6">
+              
+              <Button variant="ghost" size="sm" className="hidden md:flex">
+                <ShoppingBag className="w-4 h-4" />
+              </Button>
+              
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => setShowAuthModal(true)}
+              >
+                <User className="w-4 h-4 mr-2" />
                 Đăng nhập
+              </Button>
+              
+              <Button variant="ghost" size="sm" className="md:hidden">
+                <Menu className="w-4 h-4" />
               </Button>
             </div>
           </div>
         </div>
-        
-        {/* Secondary Navigation */}
-        <nav className="mt-4 border-t pt-3">
-          <div className="flex items-center space-x-8 text-sm">
-            <a href="#" className="font-medium hover:text-orange-500 transition-colors">
-              Khu vực phổ biến
-            </a>
-            <a href="#" className="font-medium hover:text-orange-500 transition-colors">
-              Điểm đến phổ biến
-            </a>
-            <a href="#" className="font-medium hover:text-orange-500 transition-colors">
-              Địa danh phổ biến
-            </a>
-            <a href="#" className="font-medium hover:text-orange-500 transition-colors">
-              Khám phá Klook
-            </a>
-            <a href="#" className="flex items-center space-x-1 font-medium text-orange-500">
-              <span>🎁</span>
-              <span>Phiếu Quà Tặng Klook</span>
-            </a>
-          </div>
-        </nav>
-      </div>
-    </header>
+      </header>
+
+      <AuthModal 
+        isOpen={showAuthModal} 
+        onClose={() => setShowAuthModal(false)} 
+      />
+    </>
   );
 };
 
