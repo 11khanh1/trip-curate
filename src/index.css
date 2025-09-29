@@ -101,4 +101,13 @@
   .shadow-hover {
     box-shadow: 0 8px 30px -8px rgba(255, 107, 53, 0.3);
   }
+  
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
 }
