@@ -1,5 +1,6 @@
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 import TourCard from "./TourCard";
 
 const PopularActivities = () => {
@@ -92,10 +93,12 @@ const PopularActivities = () => {
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between mb-8">
           <h2 className="text-3xl font-bold text-foreground">Các hoạt động nổi bật</h2>
-          <Button variant="ghost" className="text-primary hover:text-primary/80">
-            Xem tất cả
-            <ArrowRight className="h-4 w-4 ml-1" />
-          </Button>
+          <Link to="/activities">
+            <Button variant="ghost" className="text-primary hover:text-primary/80">
+              Xem tất cả
+              <ArrowRight className="h-4 w-4 ml-1" />
+            </Button>
+          </Link>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
