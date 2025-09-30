@@ -15,9 +15,9 @@ const TravelHeader = () => {
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
             <div className="flex items-center">
-              <div className="text-2xl font-bold">
+              <a href="/" className="text-2xl font-bold">
                 <span className="text-primary">klook</span>
-              </div>
+              </a>
             </div>
             
             {/* Search Bar */}
