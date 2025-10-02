@@ -24,48 +24,56 @@ const Singapore = () => {
 
   const activities = [
     {
-      id: 1,
+      id: "1",
       title: "Vé Universal Studios Singapore",
       location: "Sentosa",
       rating: 4.9,
-      reviews: 28000,
+      reviewCount: 28000,
       price: 2200000,
       image: "https://images.unsplash.com/photo-1565967511849-76a60a516170?w=400&h=300&fit=crop",
       discount: 15,
-      category: "theme-park"
+      category: "theme-park",
+      duration: "Cả ngày",
+      features: ["Vé vào cửa", "Trò chơi không giới hạn", "Transformers 3D"]
     },
     {
-      id: 2,
+      id: "2",
       title: "Vé Gardens by the Bay",
       location: "Marina Bay",
       rating: 4.8,
-      reviews: 18500,
+      reviewCount: 18500,
       price: 950000,
       image: "https://images.unsplash.com/photo-1508964942414-3a1ce8a12845?w=400&h=300&fit=crop",
       discount: 10,
-      category: "outdoor"
+      category: "outdoor",
+      duration: "3 giờ",
+      features: ["Cloud Forest", "Flower Dome", "Supertree Grove"]
     },
     {
-      id: 3,
+      id: "3",
       title: "Tour City Highlights",
       location: "Singapore",
       rating: 4.7,
-      reviews: 12300,
+      reviewCount: 12300,
       price: 1500000,
       image: "https://images.unsplash.com/photo-1525625293386-3f8f99389edd?w=400&h=300&fit=crop",
       discount: 12,
-      category: "tour"
+      category: "tour",
+      duration: "5 giờ",
+      features: ["Hướng dẫn viên", "Đưa đón", "Tham quan điểm nổi bật"]
     },
     {
-      id: 4,
+      id: "4",
       title: "Thẻ SIM 4G Singapore",
       location: "Toàn quốc",
       rating: 4.9,
-      reviews: 9500,
+      reviewCount: 9500,
       price: 280000,
       image: "https://images.unsplash.com/photo-1551817958-11e0f7bbea9b?w=400&h=300&fit=crop",
       discount: 5,
-      category: "wifi-sim"
+      category: "wifi-sim",
+      duration: "7 ngày",
+      features: ["4G tốc độ cao", "Nhận tại sân bay", "Không giới hạn"]
     }
   ];
 

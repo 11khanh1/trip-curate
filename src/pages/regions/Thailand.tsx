@@ -24,48 +24,56 @@ const Thailand = () => {
 
   const activities = [
     {
-      id: 1,
+      id: "1",
       title: "Tour đảo Phi Phi bằng thuyền cao tốc",
       location: "Phuket",
       rating: 4.9,
-      reviews: 18500,
+      reviewCount: 18500,
       price: 1350000,
       image: "https://images.unsplash.com/photo-1589394815804-964ed0be2eb5?w=400&h=300&fit=crop",
       discount: 20,
-      category: "tour"
+      category: "tour",
+      duration: "8 giờ",
+      features: ["Thuyền cao tốc", "Lặn biển", "Bữa trưa buffet"]
     },
     {
-      id: 2,
+      id: "2",
       title: "Massage truyền thống Thái",
       location: "Bangkok",
       rating: 4.8,
-      reviews: 12000,
+      reviewCount: 12000,
       price: 450000,
       image: "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=400&h=300&fit=crop",
       discount: 15,
-      category: "massage"
+      category: "massage",
+      duration: "2 giờ",
+      features: ["Massage Thái cổ truyền", "Dầu thơm", "Đồ uống miễn phí"]
     },
     {
-      id: 3,
+      id: "3",
       title: "Vé Safari World Bangkok",
       location: "Bangkok",
       rating: 4.7,
-      reviews: 9800,
+      reviewCount: 9800,
       price: 850000,
       image: "https://images.unsplash.com/photo-1508009603885-50cf7c579365?w=400&h=300&fit=crop",
       discount: 12,
-      category: "theme-park"
+      category: "theme-park",
+      duration: "Cả ngày",
+      features: ["Safari & Marine Park", "Biểu diễn động vật", "Đưa đón"]
     },
     {
-      id: 4,
+      id: "4",
       title: "Thẻ SIM 4G Thái Lan",
       location: "Toàn quốc",
       rating: 4.9,
-      reviews: 15200,
+      reviewCount: 15200,
       price: 180000,
       image: "https://images.unsplash.com/photo-1551817958-11e0f7bbea9b?w=400&h=300&fit=crop",
       discount: 5,
-      category: "wifi-sim"
+      category: "wifi-sim",
+      duration: "8 ngày",
+      features: ["4G tốc độ cao", "Không giới hạn", "Nhận tại sân bay"]
     }
   ];
 

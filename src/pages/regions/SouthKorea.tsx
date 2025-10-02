@@ -24,48 +24,56 @@ const SouthKorea = () => {
 
   const activities = [
     {
-      id: 1,
+      id: "1",
       title: "Vé Everland Theme Park",
       location: "Seoul",
       rating: 4.9,
-      reviews: 22000,
+      reviewCount: 22000,
       price: 1850000,
       image: "https://images.unsplash.com/photo-1517154421773-0529f29ea451?w=400&h=300&fit=crop",
       discount: 18,
-      category: "theme-park"
+      category: "theme-park",
+      duration: "Cả ngày",
+      features: ["Vé vào cửa", "Công viên giải trí lớn nhất", "Safari"]
     },
     {
-      id: 2,
+      id: "2",
       title: "Tour cung điện Gyeongbokgung",
       location: "Seoul",
       rating: 4.8,
-      reviews: 15600,
+      reviewCount: 15600,
       price: 950000,
       image: "https://images.unsplash.com/photo-1517154421773-0529f29ea451?w=400&h=300&fit=crop",
       discount: 12,
-      category: "tour"
+      category: "tour",
+      duration: "4 giờ",
+      features: ["Hướng dẫn viên", "Vé tham quan", "Lễ đổi gác"]
     },
     {
-      id: 3,
+      id: "3",
       title: "Jjimjilbang - Spa truyền thống Hàn Quốc",
       location: "Seoul",
       rating: 4.7,
-      reviews: 8900,
+      reviewCount: 8900,
       price: 650000,
       image: "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=400&h=300&fit=crop",
       discount: 10,
-      category: "massage"
+      category: "massage",
+      duration: "3 giờ",
+      features: ["Phòng xông hơi", "Xoa bóp", "Khu vực nghỉ ngơi"]
     },
     {
-      id: 4,
+      id: "4",
       title: "Thẻ SIM 4G Hàn Quốc",
       location: "Toàn quốc",
       rating: 4.9,
-      reviews: 11200,
+      reviewCount: 11200,
       price: 380000,
       image: "https://images.unsplash.com/photo-1551817958-11e0f7bbea9b?w=400&h=300&fit=crop",
       discount: 5,
-      category: "wifi-sim"
+      category: "wifi-sim",
+      duration: "10 ngày",
+      features: ["4G tốc độ cao", "Nhận tại sân bay", "Không giới hạn"]
     }
   ];
 

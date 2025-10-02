@@ -24,48 +24,56 @@ const Australia = () => {
 
   const activities = [
     {
-      id: 1,
+      id: "1",
       title: "Tour Great Barrier Reef",
       location: "Cairns",
       rating: 4.9,
-      reviews: 14500,
+      reviewCount: 14500,
       price: 3500000,
       image: "https://images.unsplash.com/photo-1582967788606-a171c1080cb0?w=400&h=300&fit=crop",
       discount: 15,
-      category: "tour"
+      category: "tour",
+      duration: "Cả ngày",
+      features: ["Lặn biển", "Bữa trưa", "Đưa đón thuyền"]
     },
     {
-      id: 2,
+      id: "2",
       title: "Vé Sydney Opera House",
       location: "Sydney",
       rating: 4.8,
-      reviews: 18200,
+      reviewCount: 18200,
       price: 1250000,
       image: "https://images.unsplash.com/photo-1506973035872-a4ec16b8e8d9?w=400&h=300&fit=crop",
       discount: 10,
-      category: "outdoor"
+      category: "outdoor",
+      duration: "2 giờ",
+      features: ["Tour hậu trường", "Hướng dẫn viên", "Tham quan nhà hát"]
     },
     {
-      id: 3,
+      id: "3",
       title: "Vé Sea World Gold Coast",
       location: "Gold Coast",
       rating: 4.7,
-      reviews: 9600,
+      reviewCount: 9600,
       price: 1850000,
       image: "https://images.unsplash.com/photo-1580209776019-8b3a8f1a40d2?w=400&h=300&fit=crop",
       discount: 12,
-      category: "theme-park"
+      category: "theme-park",
+      duration: "Cả ngày",
+      features: ["Công viên biển", "Show cá heo", "Trò chơi nước"]
     },
     {
-      id: 4,
+      id: "4",
       title: "Thẻ SIM 4G Úc",
       location: "Toàn quốc",
       rating: 4.8,
-      reviews: 7200,
+      reviewCount: 7200,
       price: 450000,
       image: "https://images.unsplash.com/photo-1551817958-11e0f7bbea9b?w=400&h=300&fit=crop",
       discount: 5,
-      category: "wifi-sim"
+      category: "wifi-sim",
+      duration: "14 ngày",
+      features: ["4G LTE", "Dung lượng lớn", "Kích hoạt ngay"]
     }
   ];
 

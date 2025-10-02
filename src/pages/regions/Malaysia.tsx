@@ -24,48 +24,56 @@ const Malaysia = () => {
 
   const activities = [
     {
-      id: 1,
+      id: "1",
       title: "Vé Petronas Twin Towers",
       location: "Kuala Lumpur",
       rating: 4.8,
-      reviews: 18500,
+      reviewCount: 18500,
       price: 850000,
       image: "https://images.unsplash.com/photo-1596422846543-75c6fc197f07?w=400&h=300&fit=crop",
       discount: 12,
-      category: "outdoor"
+      category: "outdoor",
+      duration: "2 giờ",
+      features: ["Vé vào Skybridge", "Tầng quan sát", "Hướng dẫn audio"]
     },
     {
-      id: 2,
+      id: "2",
       title: "Tour Penang Heritage",
       location: "Penang",
       rating: 4.7,
-      reviews: 9800,
+      reviewCount: 9800,
       price: 650000,
       image: "https://images.unsplash.com/photo-1590735213920-68192a487bc2?w=400&h=300&fit=crop",
       discount: 10,
-      category: "tour"
+      category: "tour",
+      duration: "5 giờ",
+      features: ["Hướng dẫn viên", "Phố cổ George Town", "Bữa trưa"]
     },
     {
-      id: 3,
+      id: "3",
       title: "Vé Sunway Lagoon",
       location: "Kuala Lumpur",
       rating: 4.8,
-      reviews: 15200,
+      reviewCount: 15200,
       price: 950000,
       image: "https://images.unsplash.com/photo-1596422846543-75c6fc197f07?w=400&h=300&fit=crop",
       discount: 15,
-      category: "theme-park"
+      category: "theme-park",
+      duration: "Cả ngày",
+      features: ["6 công viên chủ đề", "Trò chơi nước", "Phòng thay đồ"]
     },
     {
-      id: 4,
+      id: "4",
       title: "Thẻ SIM 4G Malaysia",
       location: "Toàn quốc",
       rating: 4.9,
-      reviews: 12500,
+      reviewCount: 12500,
       price: 180000,
       image: "https://images.unsplash.com/photo-1551817958-11e0f7bbea9b?w=400&h=300&fit=crop",
       discount: 5,
-      category: "wifi-sim"
+      category: "wifi-sim",
+      duration: "7 ngày",
+      features: ["4G tốc độ cao", "Nhận tại sân bay", "Kích hoạt dễ dàng"]
     }
   ];
 

@@ -24,48 +24,56 @@ const Japan = () => {
 
   const activities = [
     {
-      id: 1,
+      id: "1",
       title: "Vé Tokyo Disneyland",
       location: "Tokyo",
       rating: 4.9,
-      reviews: 25000,
+      reviewCount: 25000,
       price: 2500000,
       image: "https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=400&h=300&fit=crop",
       discount: 10,
-      category: "theme-park"
+      category: "theme-park",
+      duration: "Cả ngày",
+      features: ["Vé vào cửa", "FastPass", "Trò chơi không giới hạn"]
     },
     {
-      id: 2,
+      id: "2",
       title: "Tour ngắm hoa anh đào",
       location: "Kyoto",
       rating: 4.8,
-      reviews: 12000,
+      reviewCount: 12000,
       price: 1800000,
       image: "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=400&h=300&fit=crop",
       discount: 15,
-      category: "tour"
+      category: "tour",
+      duration: "6 giờ",
+      features: ["Hướng dẫn viên tiếng Việt", "Đưa đón", "Vé tham quan"]
     },
     {
-      id: 3,
+      id: "3",
       title: "Vé Universal Studios Japan",
       location: "Osaka",
       rating: 4.9,
-      reviews: 18000,
+      reviewCount: 18000,
       price: 2300000,
       image: "https://images.unsplash.com/photo-1590559899731-a382839e5549?w=400&h=300&fit=crop",
       discount: 12,
-      category: "theme-park"
+      category: "theme-park",
+      duration: "Cả ngày",
+      features: ["Vé vào cửa", "Express Pass", "Thế giới phù thủy Harry Potter"]
     },
     {
-      id: 4,
+      id: "4",
       title: "Thẻ SIM 4G Nhật Bản",
       location: "Toàn quốc",
       rating: 4.7,
-      reviews: 8500,
+      reviewCount: 8500,
       price: 350000,
       image: "https://images.unsplash.com/photo-1551817958-11e0f7bbea9b?w=400&h=300&fit=crop",
       discount: 5,
-      category: "wifi-sim"
+      category: "wifi-sim",
+      duration: "7 ngày",
+      features: ["4G tốc độ cao", "Không giới hạn dung lượng", "Nhận tại sân bay"]
     }
   ];
 

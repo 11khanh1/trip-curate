@@ -24,48 +24,56 @@ const USA = () => {
 
   const activities = [
     {
-      id: 1,
+      id: "1",
       title: "Vé Universal Studios Hollywood",
       location: "Los Angeles",
       rating: 4.9,
-      reviews: 32000,
+      reviewCount: 32000,
       price: 3850000,
       image: "https://images.unsplash.com/photo-1534430480872-3498386e7856?w=400&h=300&fit=crop",
       discount: 15,
-      category: "theme-park"
+      category: "theme-park",
+      duration: "Cả ngày",
+      features: ["Vé vào cửa", "Studio Tour", "Thế giới phù thủy"]
     },
     {
-      id: 2,
+      id: "2",
       title: "Tour Tượng Nữ thần Tự do",
       location: "New York",
       rating: 4.8,
-      reviews: 28500,
+      reviewCount: 28500,
       price: 2150000,
       image: "https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?w=400&h=300&fit=crop",
       discount: 10,
-      category: "tour"
+      category: "tour",
+      duration: "4 giờ",
+      features: ["Vé phà", "Vé vào Ellis Island", "Hướng dẫn viên"]
     },
     {
-      id: 3,
+      id: "3",
       title: "Vé Walt Disney World",
       location: "Orlando",
       rating: 4.9,
-      reviews: 45000,
+      reviewCount: 45000,
       price: 4200000,
       image: "https://images.unsplash.com/photo-1607882009820-ee6c59a67c2d?w=400&h=300&fit=crop",
       discount: 12,
-      category: "theme-park"
+      category: "theme-park",
+      duration: "Cả ngày",
+      features: ["Vé 4 công viên", "FastPass+", "Magic Hours"]
     },
     {
-      id: 4,
+      id: "4",
       title: "Thẻ SIM 4G Mỹ",
       location: "Toàn quốc",
       rating: 4.7,
-      reviews: 16500,
+      reviewCount: 16500,
       price: 520000,
       image: "https://images.unsplash.com/photo-1551817958-11e0f7bbea9b?w=400&h=300&fit=crop",
       discount: 5,
-      category: "wifi-sim"
+      category: "wifi-sim",
+      duration: "15 ngày",
+      features: ["4G LTE", "Gọi điện không giới hạn", "Dung lượng lớn"]
     }
   ];
 

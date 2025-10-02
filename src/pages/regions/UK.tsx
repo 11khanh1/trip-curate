@@ -24,48 +24,56 @@ const UK = () => {
 
   const activities = [
     {
-      id: 1,
+      id: "1",
       title: "Vé London Eye",
       location: "London",
       rating: 4.8,
-      reviews: 22000,
+      reviewCount: 22000,
       price: 1650000,
       image: "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=400&h=300&fit=crop",
       discount: 12,
-      category: "outdoor"
+      category: "outdoor",
+      duration: "30 phút",
+      features: ["Vé vào cửa", "Ưu tiên", "View 360 độ"]
     },
     {
-      id: 2,
+      id: "2",
       title: "Tour Lâu đài Edinburgh",
       location: "Edinburgh",
       rating: 4.9,
-      reviews: 15800,
+      reviewCount: 15800,
       price: 1350000,
       image: "https://images.unsplash.com/photo-1555297249-bd18c5e75827?w=400&h=300&fit=crop",
       discount: 15,
-      category: "tour"
+      category: "tour",
+      duration: "3 giờ",
+      features: ["Hướng dẫn viên", "Vé tham quan", "Lịch sử Scotland"]
     },
     {
-      id: 3,
+      id: "3",
       title: "Vé Warner Bros Studio Tour London",
       location: "London",
       rating: 4.9,
-      reviews: 28000,
+      reviewCount: 28000,
       price: 2150000,
       image: "https://images.unsplash.com/photo-1547036967-23d11aacaee0?w=400&h=300&fit=crop",
       discount: 10,
-      category: "theme-park"
+      category: "theme-park",
+      duration: "4 giờ",
+      features: ["Making of Harry Potter", "Hậu trường phim", "Đưa đón"]
     },
     {
-      id: 4,
+      id: "4",
       title: "Thẻ SIM 4G Anh",
       location: "Toàn quốc",
       rating: 4.7,
-      reviews: 8500,
+      reviewCount: 8500,
       price: 380000,
       image: "https://images.unsplash.com/photo-1551817958-11e0f7bbea9b?w=400&h=300&fit=crop",
       discount: 5,
-      category: "wifi-sim"
+      category: "wifi-sim",
+      duration: "10 ngày",
+      features: ["4G tốc độ cao", "Châu Âu", "Không giới hạn"]
     }
   ];
 

@@ -24,48 +24,56 @@ const Switzerland = () => {
 
   const activities = [
     {
-      id: 1,
+      id: "1",
       title: "Vé Jungfraujoch - Nóc nhà châu Âu",
       location: "Interlaken",
       rating: 4.9,
-      reviews: 16500,
+      reviewCount: 16500,
       price: 4500000,
       image: "https://images.unsplash.com/photo-1527004013197-933c4bb611b3?w=400&h=300&fit=crop",
       discount: 15,
-      category: "outdoor"
+      category: "outdoor",
+      duration: "Cả ngày",
+      features: ["Tàu leo núi", "Cung điện băng", "Đỉnh Alps"]
     },
     {
-      id: 2,
+      id: "2",
       title: "Tour Thụy Sĩ toàn cảnh",
       location: "Zurich",
       rating: 4.8,
-      reviews: 9800,
+      reviewCount: 9800,
       price: 3850000,
       image: "https://images.unsplash.com/photo-1559564484-e48bf9fac9e5?w=400&h=300&fit=crop",
       discount: 10,
-      category: "tour"
+      category: "tour",
+      duration: "8 giờ",
+      features: ["Hướng dẫn viên", "Đưa đón", "Điểm nổi bật"]
     },
     {
-      id: 3,
+      id: "3",
       title: "Vé Matterhorn Glacier Paradise",
       location: "Zermatt",
       rating: 4.9,
-      reviews: 12400,
+      reviewCount: 12400,
       price: 3200000,
       image: "https://images.unsplash.com/photo-1531366936337-7c912a4589a7?w=400&h=300&fit=crop",
       discount: 12,
-      category: "outdoor"
+      category: "outdoor",
+      duration: "6 giờ",
+      features: ["Cáp treo cao nhất", "View núi Matterhorn", "Sông băng"]
     },
     {
-      id: 4,
+      id: "4",
       title: "Thẻ SIM 4G Thụy Sĩ",
       location: "Toàn quốc",
       rating: 4.7,
-      reviews: 5600,
+      reviewCount: 5600,
       price: 480000,
       image: "https://images.unsplash.com/photo-1551817958-11e0f7bbea9b?w=400&h=300&fit=crop",
       discount: 5,
-      category: "wifi-sim"
+      category: "wifi-sim",
+      duration: "10 ngày",
+      features: ["4G tốc độ cao", "Dùng châu Âu", "Kích hoạt nhanh"]
     }
   ];
 

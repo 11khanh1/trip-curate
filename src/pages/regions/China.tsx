@@ -24,48 +24,56 @@ const China = () => {
 
   const activities = [
     {
-      id: 1,
+      id: "1",
       title: "Vé Disneyland Thượng Hải",
       location: "Thượng Hải",
       rating: 4.9,
-      reviews: 32000,
+      reviewCount: 32000,
       price: 2800000,
       image: "https://images.unsplash.com/photo-1474181487882-5abf3f0ba6c2?w=400&h=300&fit=crop",
       discount: 15,
-      category: "theme-park"
+      category: "theme-park",
+      duration: "Cả ngày",
+      features: ["Vé vào cửa", "Pháo hoa", "Trò chơi Disney"]
     },
     {
-      id: 2,
+      id: "2",
       title: "Tour Vạn Lý Trường Thành",
       location: "Bắc Kinh",
       rating: 4.8,
-      reviews: 18500,
+      reviewCount: 18500,
       price: 1650000,
       image: "https://images.unsplash.com/photo-1508804185872-d7badad00f7d?w=400&h=300&fit=crop",
       discount: 10,
-      category: "tour"
+      category: "tour",
+      duration: "8 giờ",
+      features: ["Hướng dẫn viên tiếng Việt", "Đưa đón", "Bữa trưa"]
     },
     {
-      id: 3,
+      id: "3",
       title: "Vé Cung điện Mùa hè",
       location: "Bắc Kinh",
       rating: 4.7,
-      reviews: 12400,
+      reviewCount: 12400,
       price: 750000,
       image: "https://images.unsplash.com/photo-1508804185872-d7badad00f7d?w=400&h=300&fit=crop",
       discount: 8,
-      category: "outdoor"
+      category: "outdoor",
+      duration: "3 giờ",
+      features: ["Vé tham quan", "Vườn hoàng gia", "Hồ Côn Minh"]
     },
     {
-      id: 4,
+      id: "4",
       title: "Thẻ SIM 4G Trung Quốc",
       location: "Toàn quốc",
       rating: 4.6,
-      reviews: 9800,
+      reviewCount: 9800,
       price: 320000,
       image: "https://images.unsplash.com/photo-1551817958-11e0f7bbea9b?w=400&h=300&fit=crop",
       discount: 5,
-      category: "wifi-sim"
+      category: "wifi-sim",
+      duration: "10 ngày",
+      features: ["4G tốc độ cao", "Truy cập Google", "Kích hoạt dễ dàng"]
     }
   ];
 

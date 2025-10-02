@@ -24,48 +24,56 @@ const Indonesia = () => {
 
   const activities = [
     {
-      id: 1,
+      id: "1",
       title: "Tour Ngôi đền Tanah Lot",
       location: "Bali",
       rating: 4.9,
-      reviews: 22000,
+      reviewCount: 22000,
       price: 750000,
       image: "https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=400&h=300&fit=crop",
       discount: 15,
-      category: "tour"
+      category: "tour",
+      duration: "8 giờ",
+      features: ["Hướng dẫn viên", "Đưa đón", "Bữa trưa"]
     },
     {
-      id: 2,
+      id: "2",
       title: "Massage truyền thống Bali",
       location: "Bali",
       rating: 4.8,
-      reviews: 15600,
+      reviewCount: 15600,
       price: 350000,
       image: "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=400&h=300&fit=crop",
       discount: 10,
-      category: "massage"
+      category: "massage",
+      duration: "90 phút",
+      features: ["Dầu thơm", "Tinh dầu", "Trà thảo mộc"]
     },
     {
-      id: 3,
+      id: "3",
       title: "Vé Waterbom Bali",
       location: "Bali",
       rating: 4.7,
-      reviews: 12800,
+      reviewCount: 12800,
       price: 650000,
       image: "https://images.unsplash.com/photo-1527004013197-933c4bb611b3?w=400&h=300&fit=crop",
       discount: 12,
-      category: "theme-park"
+      category: "theme-park",
+      duration: "Cả ngày",
+      features: ["Vé vào cửa", "Trò chơi không giới hạn", "Phòng thay đồ"]
     },
     {
-      id: 4,
+      id: "4",
       title: "Thẻ SIM 4G Indonesia",
       location: "Toàn quốc",
       rating: 4.8,
-      reviews: 9500,
+      reviewCount: 9500,
       price: 150000,
       image: "https://images.unsplash.com/photo-1551817958-11e0f7bbea9b?w=400&h=300&fit=crop",
       discount: 5,
-      category: "wifi-sim"
+      category: "wifi-sim",
+      duration: "7 ngày",
+      features: ["4G tốc độ cao", "Dung lượng lớn", "Kích hoạt tức thì"]
     }
   ];
 
