@@ -1,9 +1,9 @@
 import { Search, Menu, User, Globe, ShoppingBag, Gift, ChevronDown, HelpCircle, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useState } from "react";
 import { Link } from "react-router-dom";
 import AuthModal from "./AuthModal";
+import { useState, useEffect } from "react";
 import {
   NavigationMenu,
   NavigationMenuContent,
@@ -11,9 +11,24 @@ import {
   NavigationMenuList,
   NavigationMenuTrigger,
 } from "@/components/ui/navigation-menu";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 
 const TravelHeader = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [currentUser, setCurrentUser] = useState<{ name: string; email: string } | null>(null);
+
+  useEffect(() => {
+    // load từ localStorage (nếu đã login)
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      setCurrentUser(JSON.parse(storedUser));
+    }
+  }, []);
 
   const regions = [
     { id: "1", name: "VIỆT NAM", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1583417319070-4a69db38a482?w=100&h=100&fit=crop", url: "/regions/vietnam" },
@@ -121,53 +136,91 @@ const TravelHeader = () => {
             </div>
 
             {/* Right side */}
-            <div className="flex items-center space-x-1">
+            <div className="flex items-center space-x-2">
               <Button variant="ghost" size="sm" className="hidden lg:flex text-gray-600 hover:text-gray-800 text-sm">
-                <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMTQiIHZpZXdCb3g9IjAgMCAyMCAxNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjIwIiBoZWlnaHQ9IjQiIGZpbGw9IiNEQTAyMGUiLz4KPHJLY3Qgd2lkdGg9IjIwIiBoZWlnaHQ9IjQiIHk9IjUiIGZpbGw9IiNGRkVCM0IiLz4KPHJLY3Qgd2lkdGg9IjIwIiBoZWlnaHQ9IjQiIHk9IjEwIiBmaWxsPSIjREEwMjBlIi8+Cjwvc3ZnPgo=" alt="VN flag" className="w-4 h-4 mr-1" />
+                <img
+                  src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMTQiIHZpZXdCb3g9IjAgMCAyMCAxNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjIwIiBoZWlnaHQ9IjQiIGZpbGw9IiNEQTAyMGUiLz4KPHJLY3Qgd2lkdGg9IjIwIiBoZWlnaHQ9IjQiIHk9IjUiIGZpbGw9IiNGRkVCM0IiLz4KPHJLY3Qgd2lkdGg9IjIwIiBoZWlnaHQ9IjQiIHk9IjEwIiBmaWxsPSIjREEwMjBlIi8+Cjwvc3ZnPgo="
+                  alt="VN flag"
+                  className="w-4 h-4 mr-1"
+                />
                 VN
                 <ChevronDown className="w-3 h-3 ml-1" />
               </Button>
-              
+
               <Button variant="ghost" size="sm" className="hidden lg:flex text-gray-600 hover:text-gray-800 text-sm">
                 VND
                 <ChevronDown className="w-3 h-3 ml-1" />
               </Button>
-              
+
               <Button variant="ghost" size="sm" className="hidden md:flex text-gray-600 hover:text-gray-800 text-sm">
                 Mở ứng dụng
               </Button>
-              
+
               <Button variant="ghost" size="sm" className="hidden md:flex text-gray-600 hover:text-gray-800 text-sm">
                 <HelpCircle className="w-4 h-4 mr-1" />
                 Trợ giúp
               </Button>
-              
+
               <Button variant="ghost" size="sm" className="hidden md:flex text-gray-600 hover:text-gray-800 text-sm">
                 <Clock className="w-4 h-4 mr-1" />
                 Xem gần đây
               </Button>
-              
-              <Button 
-                variant="ghost" 
-                size="sm"
-                onClick={() => setShowAuthModal(true)}
-                className="text-gray-600 hover:text-gray-800 text-sm"
-              >
-                Đăng ký
-              </Button>
-              
-              <Button 
-                onClick={() => setShowAuthModal(true)}
-                className="bg-primary hover:bg-primary/90 text-white text-sm px-4 py-2 rounded-lg"
-              >
-                Đăng nhập
-              </Button>
-              
+
+              {currentUser ? (
+  // Nếu đã đăng nhập
+                <div className="flex items-center gap-2">
+                  <User className="w-5 h-5 text-gray-600" />
+
+                  {/* Dropdown menu */}
+                  <div className="relative">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="flex items-center gap-1">
+                          <span className="font-medium text-gray-800">{currentUser.name}</span>
+                          <ChevronDown className="w-4 h-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-40">
+                        <DropdownMenuItem
+                          onClick={() => {
+                            localStorage.removeItem("token");
+                            localStorage.removeItem("user");
+                            setCurrentUser(null);
+                          }}
+                        >
+                          Đăng xuất
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+              ) : (
+                // Nếu chưa đăng nhập
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowAuthModal(true)}
+                    className="text-gray-600 hover:text-gray-800 text-sm"
+                  >
+                    Đăng ký
+                  </Button>
+
+                  <Button
+                    onClick={() => setShowAuthModal(true)}
+                    className="bg-primary hover:bg-primary/90 text-white text-sm px-4 py-2 rounded-lg"
+                  >
+                    Đăng nhập
+                  </Button>
+                </>
+              )}
+
               <Button variant="ghost" size="sm" className="md:hidden">
                 <Menu className="w-4 h-4" />
               </Button>
             </div>
           </div>
+
           
           {/* Secondary navigation */}
           <div className="border-t py-3">
@@ -280,6 +333,7 @@ const TravelHeader = () => {
       <AuthModal 
         isOpen={showAuthModal} 
         onClose={() => setShowAuthModal(false)} 
+        onLoginSuccess={(user) => setCurrentUser(user)} 
       />
     </>
   );

@@ -8,15 +8,17 @@ import { Separator } from "@/components/ui/separator";
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onLoginSuccess: (user: { name: string; email: string }) => void;
 }
 
-const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
+
+const AuthModal = ({ isOpen, onClose, onLoginSuccess  }: AuthModalProps) => {
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
     password: "",
-    fullName: "",
+    name: "",
     phone: "",
     confirmPassword: ""
   });
@@ -30,11 +32,74 @@ const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Hiển thị thông báo cần Supabase
-    alert("Để sử dụng tính năng đăng nhập/đăng ký, vui lòng kết nối với Supabase thông qua nút xanh ở góc trên bên phải.");
+
+    try {
+      if (isLogin) {
+        // === API LOGIN ===
+        const res = await fetch("https://travel-backend-ua5x.onrender.com/api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: formData.email,
+            password: formData.password,
+          }),
+        });
+
+        const data = await res.json();
+        console.log("Login response:", data); 
+
+        if (!res.ok) {
+          alert(data.message || "Đăng nhập thất bại");
+          return;
+        }
+
+        if (data.token) 
+          {
+            localStorage.setItem("token", data.token);
+            localStorage.setItem("user", JSON.stringify(data.user));
+          }
+        onLoginSuccess(data.user);
+        alert("Đăng nhập thành công!");
+        onClose();
+      } else {
+        // Validate confirmPassword trước khi gọi API
+        if (formData.password !== formData.confirmPassword) {
+          alert("Mật khẩu và xác nhận mật khẩu không khớp");
+          return;
+        }
+
+        // === API REGISTER ===
+        const res = await fetch("https://travel-backend-ua5x.onrender.com/api/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: formData.name,      // dùng name thay cho fullName
+            phone: formData.phone,
+            email: formData.email,
+            password: formData.password,
+            role: "user",
+          }),
+        });
+
+        const data = await res.json();
+        console.log("Register response:", data); 
+
+        if (!res.ok) {
+          alert(data.message || "Đăng ký thất bại");
+          return;
+        }
+
+        alert("Đăng ký thành công! Bạn có thể đăng nhập.");
+        setIsLogin(true);
+      }
+    } catch (err) {
+      console.error("Auth error:", err);
+      alert("Có lỗi xảy ra, vui lòng thử lại sau.");
+    }
   };
+
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -88,15 +153,15 @@ const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
           <form onSubmit={handleSubmit} className="space-y-4">
             {!isLogin && (
               <div className="space-y-2">
-                <Label htmlFor="fullName">Họ và tên</Label>
+                <Label htmlFor="name">Họ và tên</Label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
-                    id="fullName"
+                    id="name"
                     type="text"
                     placeholder="Nhập họ và tên"
-                    value={formData.fullName}
-                    onChange={(e) => handleInputChange("fullName", e.target.value)}
+                    value={formData.name}
+                    onChange={(e) => handleInputChange("name", e.target.value)}
                     className="pl-10"
                     required
                   />
@@ -222,7 +287,7 @@ const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
           <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
             <p className="text-sm text-blue-800">
               <strong>Lưu ý:</strong> Để sử dụng tính năng đăng nhập/đăng ký, cần kết nối với Supabase. 
-              Vui lòng click nút Supabase màu xanh ở góc trên bên phải để kích hoạt tích hợp.
+              
             </p>
           </div>
         </div>
