@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import TravelHeader from "@/components/TravelHeader";
 import Footer from "@/components/Footer";
-import { Star, MapPin, Heart, ChevronRight, Calendar, Users, Check } from "lucide-react";
+import { Star, MapPin, Heart, ChevronRight, Calendar, Users, Check, AlertCircle, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -16,6 +16,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
+import TourCard from "@/components/TourCard";
 
 const ActivityDetail = () => {
   const { id } = useParams();
@@ -26,7 +27,7 @@ const ActivityDetail = () => {
   const activity = {
     id: id || "1",
     title: "Dịch Vụ Đón Tiễn Ưu Tiên Tại Sân Bay Tân Sơn Nhất (SGN) - Hồ Chí Minh",
-    location: "Thành phố Hồ Chí Minh",
+    locationName: "Thành phố Hồ Chí Minh",
     region: "VIỆT NAM",
     category: "Dịch vụ du lịch",
     rating: 4.4,
@@ -93,6 +94,100 @@ const ActivityDetail = () => {
         answer: "Tất cả xe đều được trang bị điều hòa và giữ sạch sẽ.",
       },
     ],
+    importantNotes: [
+      {
+        title: "Xác nhận",
+        items: [
+          "Xác nhận ngay tức thì. Nếu bạn không nhận được email xác nhận đơn hàng, hãy liên hệ với chúng tôi",
+        ],
+      },
+      {
+        title: "Hướng dẫn đặt",
+        items: [
+          "Vui lòng cung cấp thông tin chính xác khi đặt. Không thể thay đổi sau khi xác nhận.",
+          "Đảm bảo kiểm tra email xác nhận và lưu lại mã đặt chỗ của bạn.",
+        ],
+      },
+      {
+        title: "Điều kiện sử dụng",
+        items: [
+          "Miễn phí cho trẻ em từ 0-5 tuổi nếu bé không sử dụng ghế riêng",
+          "Vui lòng có mặt tại điểm đón đúng giờ. Trường hợp muộn quá 15 phút sẽ bị hủy.",
+        ],
+      },
+      {
+        title: "Thông tin thêm",
+        items: [
+          "Có dịch vụ hỗ trợ cho khách có nhu cầu đặc biệt",
+          "Vui lòng liên hệ trước nếu bạn cần hỗ trợ đặc biệt",
+        ],
+      },
+    ],
+    addOns: [
+      {
+        id: "1",
+        title: "Bảo hiểm du lịch",
+        description: "Bảo vệ chuyến đi của bạn với bảo hiểm toàn diện",
+        price: 150000,
+        image: "https://images.unsplash.com/photo-1450101499163-c8848c66ca85?w=400&h=300&fit=crop",
+      },
+      {
+        id: "2",
+        title: "Hướng dẫn viên tiếng Anh",
+        description: "Thuê hướng dẫn viên chuyên nghiệp",
+        price: 500000,
+        image: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=300&fit=crop",
+      },
+    ],
+    location: {
+      name: "Sân bay Tân Sơn Nhất",
+      address: "Trường Sơn, Phường 2, Tân Bình, Thành phố Hồ Chí Minh",
+      coordinates: { lat: 10.8188, lng: 106.6519 },
+    },
+    relatedActivities: [
+      {
+        id: "2",
+        title: "Tour Thành phố Hồ Chí Minh 1 ngày",
+        location: "Thành phố Hồ Chí Minh",
+        rating: 4.6,
+        reviewCount: 2500,
+        price: 450000,
+        originalPrice: 550000,
+        discount: 18,
+        duration: "8 giờ",
+        category: "Tour du lịch",
+        image: "https://images.unsplash.com/photo-1583417319070-4a69db38a482?w=800&h=600&fit=crop",
+        features: ["Hướng dẫn viên", "Bữa trưa", "Vé tham quan"],
+      },
+      {
+        id: "3",
+        title: "Chuyến tham quan Đồng bằng sông Cửu Long",
+        location: "Miền Tây",
+        rating: 4.7,
+        reviewCount: 1800,
+        price: 650000,
+        originalPrice: 750000,
+        discount: 13,
+        duration: "1 ngày",
+        category: "Tour du lịch",
+        image: "https://images.unsplash.com/photo-1528127269322-539801943592?w=800&h=600&fit=crop",
+        features: ["Du thuyền", "Bữa trưa", "Hướng dẫn viên"],
+      },
+      {
+        id: "4",
+        title: "Vé Landmark 81 SkyView",
+        location: "Quận Bình Thạnh",
+        rating: 4.5,
+        reviewCount: 3200,
+        price: 250000,
+        originalPrice: 300000,
+        discount: 17,
+        duration: "2 giờ",
+        category: "Điểm tham quan",
+        image: "https://images.unsplash.com/photo-1555881698-7497e38b9e62?w=800&h=600&fit=crop",
+        features: ["Vé vào cửa", "Audio guide"],
+      },
+    ],
     reviews: [
       {
         id: "1",
@@ -132,7 +227,7 @@ const ActivityDetail = () => {
             </BreadcrumbItem>
             <BreadcrumbSeparator />
             <BreadcrumbItem>
-              <BreadcrumbPage>{activity.location}</BreadcrumbPage>
+              <BreadcrumbPage>{activity.locationName}</BreadcrumbPage>
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
@@ -203,7 +298,7 @@ const ActivityDetail = () => {
                   
                   <div className="flex items-center gap-1 text-sm text-muted-foreground">
                     <MapPin className="h-4 w-4" />
-                    <span>{activity.location}</span>
+                    <span>{activity.locationName}</span>
                   </div>
                 </div>
               </div>
@@ -243,6 +338,12 @@ const ActivityDetail = () => {
                   className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-6 py-3"
                 >
                   Về dịch vụ này
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="notes"
+                  className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-6 py-3"
+                >
+                  Những điều cần lưu ý
                 </TabsTrigger>
                 <TabsTrigger 
                   value="terms"
@@ -307,6 +408,27 @@ const ActivityDetail = () => {
                 </div>
               </TabsContent>
 
+              <TabsContent value="notes" className="mt-6">
+                <div className="space-y-6">
+                  {activity.importantNotes.map((note, index) => (
+                    <div key={index}>
+                      <div className="flex items-start gap-3 mb-3">
+                        <AlertCircle className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                        <h4 className="font-semibold text-foreground text-lg">{note.title}</h4>
+                      </div>
+                      <ul className="space-y-2 ml-8">
+                        {note.items.map((item, itemIndex) => (
+                          <li key={itemIndex} className="text-muted-foreground flex items-start gap-2">
+                            <span className="text-primary mt-1">•</span>
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </TabsContent>
+
               <TabsContent value="terms" className="mt-6">
                 <div className="space-y-6">
                   {activity.termsAndConditions.map((term, index) => (
@@ -368,6 +490,35 @@ const ActivityDetail = () => {
               </TabsContent>
             </Tabs>
 
+            {/* Location */}
+            <div className="space-y-4">
+              <h2 className="text-2xl font-bold text-foreground">Địa điểm</h2>
+              <Card>
+                <CardContent className="p-6">
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="font-semibold text-foreground mb-2">{activity.location.name}</h4>
+                      <p className="text-muted-foreground flex items-start gap-2">
+                        <MapPin className="h-5 w-5 mt-0.5 flex-shrink-0" />
+                        <span>{activity.location.address}</span>
+                      </p>
+                    </div>
+                    <div className="w-full h-64 bg-muted rounded-lg overflow-hidden">
+                      <iframe
+                        src={`https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3919.086097468119!2d${activity.location.coordinates.lng}!3d${activity.location.coordinates.lat}!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zM1BMIS4!5e0!3m2!1svi!2s!4v1234567890123!5m2!1svi!2s`}
+                        width="100%"
+                        height="100%"
+                        style={{ border: 0 }}
+                        allowFullScreen
+                        loading="lazy"
+                        referrerPolicy="no-referrer-when-downgrade"
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
             {/* FAQ */}
             <div className="space-y-4">
               <h2 className="text-2xl font-bold text-foreground">Câu hỏi thường gặp</h2>
@@ -385,7 +536,7 @@ const ActivityDetail = () => {
           </div>
 
           {/* Booking sidebar */}
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-1 space-y-6">
             <Card className="sticky top-4">
               <CardContent className="p-6 space-y-4">
                 <div>
@@ -468,8 +619,56 @@ const ActivityDetail = () => {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Add-ons */}
+            {activity.addOns && activity.addOns.length > 0 && (
+              <Card>
+                <CardContent className="p-6 space-y-4">
+                  <h3 className="font-semibold text-lg text-foreground flex items-center gap-2">
+                    <Info className="h-5 w-5 text-primary" />
+                    Thêm vào trải nghiệm của bạn
+                  </h3>
+                  <div className="space-y-3">
+                    {activity.addOns.map((addon) => (
+                      <div key={addon.id} className="flex gap-3 p-3 border rounded-lg hover:border-primary transition-colors cursor-pointer">
+                        <img 
+                          src={addon.image} 
+                          alt={addon.title}
+                          className="w-16 h-16 object-cover rounded"
+                        />
+                        <div className="flex-1">
+                          <h4 className="font-medium text-sm text-foreground">{addon.title}</h4>
+                          <p className="text-xs text-muted-foreground mt-1">{addon.description}</p>
+                          <p className="text-sm font-semibold text-primary mt-1">
+                            ₫ {addon.price.toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
+
+        {/* Related Activities */}
+        {activity.relatedActivities && activity.relatedActivities.length > 0 && (
+          <div className="mt-12 space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-foreground">Bạn có thể sẽ thích</h2>
+              <Link to="/activities" className="text-primary hover:underline flex items-center gap-1">
+                Xem tất cả
+                <ChevronRight className="h-4 w-4" />
+              </Link>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {activity.relatedActivities.map((related) => (
+                <TourCard key={related.id} {...related} />
+              ))}
+            </div>
+          </div>
+        )}
       </main>
 
       <Footer />
