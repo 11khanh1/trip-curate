@@ -2,6 +2,7 @@ import { Search, Menu, User, Globe, ShoppingBag, Gift, ChevronDown, HelpCircle, 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import AuthModal from "./AuthModal";
 import {
   NavigationMenu,
@@ -15,18 +16,18 @@ const TravelHeader = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   const regions = [
-    { id: "1", name: "VIỆT NAM", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1583417319070-4a69db38a482?w=100&h=100&fit=crop" },
-    { id: "2", name: "NHẬT BẢN", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1480796927426-f609979314bd?w=100&h=100&fit=crop" },
-    { id: "3", name: "SINGAPORE", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1525625293386-3f8f99389edd?w=100&h=100&fit=crop" },
-    { id: "4", name: "THÁI LAN", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1528181304800-259b08848526?w=100&h=100&fit=crop" },
-    { id: "5", name: "TRUNG QUỐC", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1508804185872-d7badad00f7d?w=100&h=100&fit=crop" },
-    { id: "6", name: "HÀN QUỐC", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1517154421773-0529f29ea451?w=100&h=100&fit=crop" },
-    { id: "7", name: "ÚC", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1523482580672-f109ba8cb9be?w=100&h=100&fit=crop" },
-    { id: "8", name: "ANH", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=100&h=100&fit=crop" },
-    { id: "9", name: "THỤY SĨ", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1530122037265-a5f1f91d3b99?w=100&h=100&fit=crop" },
-    { id: "10", name: "MỸ", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1485738422979-f5c462d49f74?w=100&h=100&fit=crop" },
-    { id: "11", name: "MALAYSIA", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1596422846543-75c6fc197f07?w=100&h=100&fit=crop" },
-    { id: "12", name: "INDONESIA", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1555400038-63f5ba517a47?w=100&h=100&fit=crop" }
+    { id: "1", name: "VIỆT NAM", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1583417319070-4a69db38a482?w=100&h=100&fit=crop", url: "/regions/vietnam" },
+    { id: "2", name: "NHẬT BẢN", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1480796927426-f609979314bd?w=100&h=100&fit=crop", url: "/regions/japan" },
+    { id: "3", name: "SINGAPORE", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1525625293386-3f8f99389edd?w=100&h=100&fit=crop", url: "/regions/singapore" },
+    { id: "4", name: "THÁI LAN", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1528181304800-259b08848526?w=100&h=100&fit=crop", url: "/regions/thailand" },
+    { id: "5", name: "TRUNG QUỐC", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1508804185872-d7badad00f7d?w=100&h=100&fit=crop", url: "/regions/china" },
+    { id: "6", name: "HÀN QUỐC", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1517154421773-0529f29ea451?w=100&h=100&fit=crop", url: "/regions/south-korea" },
+    { id: "7", name: "ÚC", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1523482580672-f109ba8cb9be?w=100&h=100&fit=crop", url: "/regions/australia" },
+    { id: "8", name: "ANH", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=100&h=100&fit=crop", url: "/regions/uk" },
+    { id: "9", name: "THỤY SĨ", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1530122037265-a5f1f91d3b99?w=100&h=100&fit=crop", url: "/regions/switzerland" },
+    { id: "10", name: "MỸ", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1485738422979-f5c462d49f74?w=100&h=100&fit=crop", url: "/regions/usa" },
+    { id: "11", name: "MALAYSIA", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1596422846543-75c6fc197f07?w=100&h=100&fit=crop", url: "/regions/malaysia" },
+    { id: "12", name: "INDONESIA", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1555400038-63f5ba517a47?w=100&h=100&fit=crop", url: "/regions/indonesia" }
   ];
 
   const destinations = [
@@ -180,13 +181,13 @@ const TravelHeader = () => {
                     <div className="w-[800px] p-6 bg-white">
                       <div className="grid grid-cols-4 gap-4">
                         {regions.map((region) => (
-                          <a key={region.id} href="#" className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg transition-colors">
+                          <Link key={region.id} to={region.url} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg transition-colors">
                             <img src={region.image} alt={region.name} className="w-12 h-12 rounded-full object-cover" />
                             <div>
                               <p className="text-xs text-gray-500">{region.subtitle}</p>
                               <h3 className="font-semibold text-gray-900">{region.name}</h3>
                             </div>
-                          </a>
+                          </Link>
                         ))}
                       </div>
                     </div>
