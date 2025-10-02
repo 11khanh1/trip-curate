@@ -4,15 +4,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { useUser } from "@/context/UserContext";
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onLoginSuccess: (user: { name: string; email: string }) => void;
 }
 
 
-const AuthModal = ({ isOpen, onClose, onLoginSuccess  }: AuthModalProps) => {
+
+const AuthModal = ({ isOpen, onClose  }: AuthModalProps) => {
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
@@ -22,6 +23,8 @@ const AuthModal = ({ isOpen, onClose, onLoginSuccess  }: AuthModalProps) => {
     phone: "",
     confirmPassword: ""
   });
+
+    const { setCurrentUser } = useUser();
 
   if (!isOpen) return null;
 
@@ -55,14 +58,23 @@ const AuthModal = ({ isOpen, onClose, onLoginSuccess  }: AuthModalProps) => {
           return;
         }
 
-        if (data.token) 
-          {
-            localStorage.setItem("token", data.token);
-            localStorage.setItem("user", JSON.stringify(data.user));
-          }
-        onLoginSuccess(data.user);
-        alert("Đăng nhập thành công!");
-        onClose();
+        // Đăng nhập thành công:
+        if ((data.access_token || data.token) && data.user) {
+          // lấy token đúng key từ backend
+          const token = data.access_token || data.token;
+
+          localStorage.setItem("token", token);
+          localStorage.setItem("user", JSON.stringify(data.user));
+
+          setCurrentUser(data.user);
+          alert("Đăng nhập thành công!");
+          onClose();
+        } else {
+          alert("Dữ liệu đăng nhập không hợp lệ từ server.");
+        }
+
+
+
       } else {
         // Validate confirmPassword trước khi gọi API
         if (formData.password !== formData.confirmPassword) {

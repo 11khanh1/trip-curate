@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Link } from "react-router-dom";
 import AuthModal from "./AuthModal";
 import { useState, useEffect } from "react";
+import { useUser } from "@/context/UserContext";
 import {
   NavigationMenu,
   NavigationMenuContent,
@@ -20,15 +21,8 @@ import {
 
 const TravelHeader = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [currentUser, setCurrentUser] = useState<{ name: string; email: string } | null>(null);
+  const { currentUser, setCurrentUser } = useUser();
 
-  useEffect(() => {
-    // load từ localStorage (nếu đã login)
-    const storedUser = localStorage.getItem("user");
-    if (storedUser) {
-      setCurrentUser(JSON.parse(storedUser));
-    }
-  }, []);
 
   const regions = [
     { id: "1", name: "VIỆT NAM", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1583417319070-4a69db38a482?w=100&h=100&fit=crop", url: "/regions/vietnam" },
@@ -333,8 +327,8 @@ const TravelHeader = () => {
       <AuthModal 
         isOpen={showAuthModal} 
         onClose={() => setShowAuthModal(false)} 
-        onLoginSuccess={(user) => setCurrentUser(user)} 
       />
+
     </>
   );
 };
