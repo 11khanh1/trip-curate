@@ -272,6 +272,20 @@ const AuthModal = ({ isOpen, onClose, defaultMode = "login" }: AuthModalProps) =
               </svg>
               Tiếp tục với Google
             </Button>
+            <Button 
+              variant="outline" 
+              className="w-full h-12 text-sm font-medium"
+              onClick={handleSubmit}
+            >
+              <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24">
+                <path 
+                  fill="#1877F2" 
+                  d="M24 12.073C24 5.404 18.627 0 12 0S0 5.404 0 12.073C0 18.096 4.388 23.092 10.125 24v-8.437H7.078v-3.49h3.047V9.845c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953h-1.513c-1.492 0-1.955.93-1.955 1.887v2.258h3.328l-.532 3.49h-2.796V24C19.612 23.092 24 18.096 24 12.073z"
+                />
+              </svg>
+              Tiếp tục với Facebook
+            </Button>
+
           </div>
           {/* Toggle */}
           <div className="text-center mt-6">
