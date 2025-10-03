@@ -19,6 +19,17 @@ import Switzerland from "./pages/regions/Switzerland";
 import USA from "./pages/regions/USA";
 import Malaysia from "./pages/regions/Malaysia";
 import Indonesia from "./pages/regions/Indonesia";
+import Deals from "./pages/Deals";
+import OurStory from "./pages/about/OurStory";
+import Careers from "./pages/about/Careers";
+import Press from "./pages/about/Press";
+import Partnership from "./pages/about/Partnership";
+import Affiliate from "./pages/about/Affiliate";
+import HelpCenter from "./pages/support/HelpCenter";
+import ContactUs from "./pages/support/ContactUs";
+import CancellationPolicy from "./pages/support/CancellationPolicy";
+import PrivacyPolicy from "./pages/support/PrivacyPolicy";
+import TermsOfService from "./pages/support/TermsOfService";
 
 const queryClient = new QueryClient();
 
@@ -44,6 +55,17 @@ const App = () => (
           <Route path="/regions/usa" element={<USA />} />
           <Route path="/regions/malaysia" element={<Malaysia />} />
           <Route path="/regions/indonesia" element={<Indonesia />} />
+          <Route path="/deals" element={<Deals />} />
+          <Route path="/about/our-story" element={<OurStory />} />
+          <Route path="/about/careers" element={<Careers />} />
+          <Route path="/about/press" element={<Press />} />
+          <Route path="/about/partnership" element={<Partnership />} />
+          <Route path="/about/affiliate" element={<Affiliate />} />
+          <Route path="/support/help-center" element={<HelpCenter />} />
+          <Route path="/support/contact" element={<ContactUs />} />
+          <Route path="/support/cancellation-policy" element={<CancellationPolicy />} />
+          <Route path="/support/privacy-policy" element={<PrivacyPolicy />} />
+          <Route path="/support/terms-of-service" element={<TermsOfService />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
