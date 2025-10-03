@@ -134,9 +134,9 @@ const TravelHeader = () => {
             <div className="flex items-center space-x-2">
               <Button variant="ghost" size="sm" className="hidden lg:flex text-gray-600 hover:text-gray-800 text-sm">
                 <img
-                  src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMTQiIHZpZXdCb3g9IjAgMCAyMCAxNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjIwIiBoZWlnaHQ9IjQiIGZpbGw9IiNEQTAyMGUiLz4KPHJLY3Qgd2lkdGg9IjIwIiBoZWlnaHQ9IjQiIHk9IjUiIGZpbGw9IiNGRkVCM0IiLz4KPHJLY3Qgd2lkdGg9IjIwIiBoZWlnaHQ9IjQiIHk9IjEwIiBmaWxsPSIjREEwMjBlIi8+Cjwvc3ZnPgo="
+                  src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><path fill='%23da251d' d='M0 0h512v512H0z'/><path fill='%23ff0' d='m256 128 47 144h151l-122 88 47 144-123-89-122 89 47-144-123-88h151z'/></svg>"
                   alt="VN flag"
-                  className="w-4 h-4 mr-1"
+                  className="w-5 h-5 mr-1"
                 />
                 VN
                 <ChevronDown className="w-3 h-3 ml-1" />
