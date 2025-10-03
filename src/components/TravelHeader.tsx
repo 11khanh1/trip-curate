@@ -322,7 +322,7 @@ const TravelHeader = () => {
                 <NavigationMenuItem>
                   <a href="#" className="flex items-center text-sm text-primary font-medium hover:text-primary/80 transition-colors">
                     <Gift className="w-4 h-4 mr-1" />
-                    🎁 Phiếu Quà Tặng Klook
+                    Phiếu Quà Tặng Klook
                   </a>
                 </NavigationMenuItem>
               </NavigationMenuList>
