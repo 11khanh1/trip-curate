@@ -22,6 +22,7 @@ import {
 const TravelHeader = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const { currentUser, setCurrentUser } = useUser();
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
 
 
   const regions = [
@@ -113,7 +114,7 @@ const TravelHeader = () => {
             {/* Logo */}
             <div className="flex items-center">
               <a href="/" className="text-2xl font-bold">
-                <span className="text-primary">klook</span>
+                <span className="text-primary">VietTravel</span>
               </a>
             </div>
             
@@ -194,14 +195,20 @@ const TravelHeader = () => {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setShowAuthModal(true)}
+                    onClick={() => {
+                      setAuthMode("register");
+                      setShowAuthModal(true);
+                    }}
                     className="text-gray-600 hover:text-gray-800 text-sm"
                   >
                     Đăng ký
                   </Button>
 
                   <Button
-                    onClick={() => setShowAuthModal(true)}
+                    onClick={() => {
+                      setAuthMode("login");
+                      setShowAuthModal(true);
+                    }}
                     className="bg-primary hover:bg-primary/90 text-white text-sm px-4 py-2 rounded-lg"
                   >
                     Đăng nhập
@@ -327,6 +334,7 @@ const TravelHeader = () => {
       <AuthModal 
         isOpen={showAuthModal} 
         onClose={() => setShowAuthModal(false)} 
+        defaultMode={authMode}
       />
 
     </>
