@@ -295,13 +295,7 @@ const AuthModal = ({ isOpen, onClose  }: AuthModalProps) => {
             </p>
           )}
 
-          {/* Supabase Notice */}
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-            <p className="text-sm text-blue-800">
-              <strong>Lưu ý:</strong> Để sử dụng tính năng đăng nhập/đăng ký, cần kết nối với Supabase. 
-              
-            </p>
-          </div>
+          
         </div>
       </div>
     </div>
