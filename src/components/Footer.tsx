@@ -1,45 +1,46 @@
 import { Facebook, Instagram, Twitter, Youtube, MapPin, Phone, Mail } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const Footer = () => {
   const footerSections = [
     {
       title: "Về Klook",
       links: [
-        "Câu chuyện của chúng tôi",
-        "Tuyển dụng",
-        "Báo chí",
-        "Quan hệ đối tác",
-        "Chương trình liên kết"
+        { name: "Câu chuyện của chúng tôi", url: "/about/our-story" },
+        { name: "Tuyển dụng", url: "/about/careers" },
+        { name: "Báo chí", url: "/about/press" },
+        { name: "Quan hệ đối tác", url: "/about/partnership" },
+        { name: "Chương trình liên kết", url: "/about/affiliate" }
       ]
     },
     {
       title: "Hỗ trợ",
       links: [
-        "Trung tâm trợ giúp",
-        "Liên hệ chúng tôi",
-        "Chính sách hủy",
-        "Chính sách bảo mật",
-        "Điều khoản sử dụng"
+        { name: "Trung tâm trợ giúp", url: "/support/help-center" },
+        { name: "Liên hệ chúng tôi", url: "/support/contact" },
+        { name: "Chính sách hủy", url: "/support/cancellation-policy" },
+        { name: "Chính sách bảo mật", url: "/support/privacy-policy" },
+        { name: "Điều khoản sử dụng", url: "/support/terms-of-service" }
       ]
     },
     {
       title: "Điểm đến phổ biến",
       links: [
-        "Du lịch Hà Nội",
-        "Du lịch TP.HCM",
-        "Du lịch Đà Nẵng",
-        "Du lịch Phú Quốc",
-        "Du lịch Nha Trang"
+        { name: "Du lịch Việt Nam", url: "/regions/vietnam" },
+        { name: "Du lịch Nhật Bản", url: "/regions/japan" },
+        { name: "Du lịch Thái Lan", url: "/regions/thailand" },
+        { name: "Du lịch Singapore", url: "/regions/singapore" },
+        { name: "Du lịch Hàn Quốc", url: "/regions/south-korea" }
       ]
     },
     {
       title: "Sản phẩm",
       links: [
-        "Vé tham quan",
-        "Khách sạn",
-        "Vé máy bay",
-        "Xe đưa đón",
-        "Tour trọn gói"
+        { name: "Vé tham quan", url: "/activities" },
+        { name: "Ưu đãi hot", url: "/deals" },
+        { name: "Khách sạn", url: "/" },
+        { name: "Vé máy bay", url: "/" },
+        { name: "Tour trọn gói", url: "/" }
       ]
     }
   ];
@@ -80,12 +81,12 @@ const Footer = () => {
               <ul className="space-y-2">
                 {section.links.map((link, linkIndex) => (
                   <li key={linkIndex}>
-                    <a 
-                      href="#" 
+                    <Link 
+                      to={link.url} 
                       className="text-gray-400 hover:text-white transition-colors text-sm"
                     >
-                      {link}
-                    </a>
+                      {link.name}
+                    </Link>
                   </li>
                 ))}
               </ul>
@@ -139,9 +140,9 @@ const Footer = () => {
           <div className="flex flex-col md:flex-row justify-between items-center text-sm text-gray-400">
             <p>&copy; 2024 TravelBooking. Tất cả quyền được bảo lưu.</p>
             <div className="flex space-x-6 mt-2 md:mt-0">
-              <a href="#" className="hover:text-white transition-colors">Chính sách bảo mật</a>
-              <a href="#" className="hover:text-white transition-colors">Điều khoản dịch vụ</a>
-              <a href="#" className="hover:text-white transition-colors">Cookie</a>
+              <Link to="/support/privacy-policy" className="hover:text-white transition-colors">Chính sách bảo mật</Link>
+              <Link to="/support/terms-of-service" className="hover:text-white transition-colors">Điều khoản dịch vụ</Link>
+              <Link to="/support/help-center" className="hover:text-white transition-colors">Trợ giúp</Link>
             </div>
           </div>
         </div>
