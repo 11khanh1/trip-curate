@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { UserProvider } from "@/context/UserContext";
 import Index from "./pages/Index";
 import AllActivities from "./pages/AllActivities";
 import ActivityDetail from "./pages/ActivityDetail";
@@ -30,15 +31,17 @@ import ContactUs from "./pages/support/ContactUs";
 import CancellationPolicy from "./pages/support/CancellationPolicy";
 import PrivacyPolicy from "./pages/support/PrivacyPolicy";
 import TermsOfService from "./pages/support/TermsOfService";
+import AccountSettings from "./pages/AccountSettings";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
+      <UserProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/activities" element={<AllActivities />} />
@@ -56,6 +59,7 @@ const App = () => (
           <Route path="/regions/malaysia" element={<Malaysia />} />
           <Route path="/regions/indonesia" element={<Indonesia />} />
           <Route path="/deals" element={<Deals />} />
+          <Route path="/account-settings" element={<AccountSettings />} />
           <Route path="/about/our-story" element={<OurStory />} />
           <Route path="/about/careers" element={<Careers />} />
           <Route path="/about/press" element={<Press />} />
@@ -70,6 +74,7 @@ const App = () => (
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
+      </UserProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );

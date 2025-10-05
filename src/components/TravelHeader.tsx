@@ -1,4 +1,4 @@
-import { Search, Menu, User, Globe, ShoppingBag, Gift, ChevronDown, HelpCircle, Clock } from "lucide-react";
+import { Search, Menu, User, Globe, ShoppingBag, Gift, ChevronDown, HelpCircle, Clock, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Link } from "react-router-dom";
@@ -175,13 +175,20 @@ const TravelHeader = () => {
                           <ChevronDown className="w-4 h-4" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-40">
+                      <DropdownMenuContent align="end" className="w-48 bg-white">
+                        <DropdownMenuItem asChild>
+                          <Link to="/account-settings" className="flex items-center gap-2 cursor-pointer">
+                            <Settings className="w-4 h-4" />
+                            Cài đặt
+                          </Link>
+                        </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => {
                             localStorage.removeItem("token");
                             localStorage.removeItem("user");
                             setCurrentUser(null);
                           }}
+                          className="cursor-pointer"
                         >
                           Đăng xuất
                         </DropdownMenuItem>
