@@ -20,6 +20,10 @@ const AuthModal = ({ isOpen, onClose, defaultMode = "login" }: AuthModalProps) =
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const [resetSent, setResetSent] = useState(false);
+  const [step, setStep] = useState<"email" | "otp" | "reset">("email");
+  const [otp, setOtp] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -50,28 +54,67 @@ const AuthModal = ({ isOpen, onClose, defaultMode = "login" }: AuthModalProps) =
   };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    try {
-      const res = await fetch("https://travel-backend-ua5x.onrender.com/api/forgot-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: resetEmail }),
-      });
+  e.preventDefault();
+  try {
+    const res = await fetch("https://travel-backend-ua5x.onrender.com/api/forgot-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "email", value: resetEmail })
+    });
+    const data = await res.json();
 
-      const data = await res.json();
+    if (!res.ok) return alert(data.message || "Lỗi khi gửi OTP");
+    alert("Mã OTP đã được gửi đến email của bạn!");
+    setStep("otp");
+  } catch (err) {
+    console.error(err);
+    alert("Lỗi mạng hoặc server.");
+  }
+};
 
-      if (!res.ok) {
-        alert(data.message || "Có lỗi xảy ra khi gửi email khôi phục mật khẩu");
-        return;
-      }
+const handleVerifyOtp = async (e: React.FormEvent) => {
+  e.preventDefault();
+  try {
+    const res = await fetch("https://travel-backend-ua5x.onrender.com/api/verify-otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "email", value: resetEmail , otp }),
+    });
+    const data = await res.json();
 
-      setResetSent(true);
-    } catch (err) {
-      console.error("Forgot password error:", err);
-      alert("Có lỗi xảy ra, vui lòng thử lại sau.");
-    }
-  };
+    if (!res.ok) return alert(data.message || "OTP không đúng hoặc hết hạn");
+    alert("Xác thực OTP thành công! Hãy đặt lại mật khẩu mới.");
+    setStep("reset");
+  } catch (err) {
+    console.error(err);
+    alert("Lỗi khi xác thực OTP.");
+  }
+};
+
+const handleResetPassword = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (newPassword !== confirmNewPassword) {
+    alert("Mật khẩu xác nhận không khớp!");
+    return;
+  }
+  try {
+    const res = await fetch("https://travel-backend-ua5x.onrender.com/api/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({  type: "email", value: resetEmail , newPassword }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) return alert(data.message || "Không thể đặt lại mật khẩu");
+    alert("Đặt lại mật khẩu thành công! Hãy đăng nhập lại.");
+    setIsForgotPassword(false);
+    setStep("email");
+  } catch (err) {
+    console.error(err);
+    alert("Lỗi khi đặt lại mật khẩu.");
+  }
+};
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -160,82 +203,103 @@ const AuthModal = ({ isOpen, onClose, defaultMode = "login" }: AuthModalProps) =
         {/* Content */}
         <div className="p-6">
           {isForgotPassword ? (
-            /* Forgot Password Form */
             <div className="space-y-6">
-              {!resetSent ? (
-                <>
-                  <div className="text-center mb-6">
-                    <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <Mail className="w-8 h-8 text-primary" />
-                    </div>
+              {step === "email" && (
+                <form onSubmit={handleForgotPassword} className="space-y-4">
+                  <div className="text-center mb-4">
+                    <Mail className="w-8 h-8 mx-auto text-primary mb-2" />
                     <p className="text-sm text-muted-foreground">
-                      Nhập địa chỉ email của bạn và chúng tôi sẽ gửi cho bạn liên kết để khôi phục mật khẩu.
+                      Nhập email để nhận mã OTP khôi phục mật khẩu.
                     </p>
                   </div>
 
-                  <form onSubmit={handleForgotPassword} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="reset-email">Email</Label>
-                      <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                        <Input
-                          id="reset-email"
-                          type="email"
-                          placeholder="Nhập địa chỉ email"
-                          value={resetEmail}
-                          onChange={(e) => setResetEmail(e.target.value)}
-                          className="pl-10"
-                          required
-                        />
-                      </div>
-                    </div>
+                  <div className="space-y-2">
+                    <Label>Email</Label>
+                    <Input
+                      type="email"
+                      placeholder="Nhập địa chỉ email"
+                      value={resetEmail}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                      required
+                    />
+                  </div>
 
-                    <Button type="submit" className="w-full h-12 gradient-orange text-white font-semibold">
-                      Gửi liên kết khôi phục
-                    </Button>
-                  </form>
-
-                  <div className="text-center">
-                    <Button
-                      variant="link"
-                      className="p-0 h-auto text-sm text-primary"
-                      onClick={() => setIsForgotPassword(false)}
-                    >
-                      ← Quay lại đăng nhập
-                    </Button>
-                  </div>
-                </>
-              ) : (
-                <div className="text-center space-y-4">
-                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-                    <svg className="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                  <h3 className="text-xl font-semibold">Email đã được gửi!</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Chúng tôi đã gửi liên kết khôi phục mật khẩu đến <strong>{resetEmail}</strong>. 
-                    Vui lòng kiểm tra email của bạn.
-                  </p>
-                  <div className="pt-4">
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => {
-                        setIsForgotPassword(false);
-                        setResetSent(false);
-                        setResetEmail("");
-                      }}
-                    >
-                      Quay lại đăng nhập
-                    </Button>
-                  </div>
-                </div>
+                  <Button type="submit" className="w-full h-12 gradient-orange text-white font-semibold">
+                    Gửi mã OTP
+                  </Button>
+                </form>
               )}
+
+              {step === "otp" && (
+                <form onSubmit={handleVerifyOtp} className="space-y-4">
+                  <div className="text-center mb-4">
+                    <p className="text-sm text-muted-foreground">
+                      Mã OTP đã được gửi đến email <strong>{resetEmail}</strong>.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Mã OTP</Label>
+                    <Input
+                      type="text"
+                      placeholder="Nhập mã OTP"
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <Button type="submit" className="w-full h-12 gradient-orange text-white font-semibold">
+                    Xác thực OTP
+                  </Button>
+                </form>
+              )}
+
+              {step === "reset" && (
+                <form onSubmit={handleResetPassword} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Mật khẩu mới</Label>
+                    <Input
+                      type="password"
+                      placeholder="Nhập mật khẩu mới"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Xác nhận mật khẩu</Label>
+                    <Input
+                      type="password"
+                      placeholder="Nhập lại mật khẩu"
+                      value={confirmNewPassword}
+                      onChange={(e) => setConfirmNewPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <Button type="submit" className="w-full h-12 gradient-orange text-white font-semibold">
+                    Đặt lại mật khẩu
+                  </Button>
+                </form>
+              )}
+
+              <div className="text-center">
+                <Button
+                  variant="link"
+                  className="p-0 h-auto text-sm text-primary"
+                  onClick={() => {
+                    setIsForgotPassword(false);
+                    setStep("email");
+                  }}
+                >
+                  ← Quay lại đăng nhập
+                </Button>
+              </div>
             </div>
           ) : (
             <>
-              {/* Login/Register Form */}
+          {/* Login/Register Form */}
               <form onSubmit={handleSubmit} className="space-y-4 mb-6">
                 {!isLogin && (
                   <div className="space-y-2">
@@ -420,5 +484,6 @@ const AuthModal = ({ isOpen, onClose, defaultMode = "login" }: AuthModalProps) =
     </div>
   );
 };
+
 
 export default AuthModal;
