@@ -1,4 +1,4 @@
-import { Search, Menu, User, Globe, ShoppingBag, Gift, ChevronDown, HelpCircle, Clock, Settings } from "lucide-react";
+import { Search, Menu, User, Globe, ShoppingBag, Gift, ChevronDown, HelpCircle, Clock, Settings, Shield, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Link } from "react-router-dom";
@@ -182,14 +182,23 @@ const TravelHeader = () => {
                             Cài đặt
                           </Link>
                         </DropdownMenuItem>
+                        {currentUser.role === "admin" && (
+                          <DropdownMenuItem asChild>
+                            <Link to="/admin" className="flex items-center gap-2 cursor-pointer">
+                              <Shield className="w-4 h-4" />
+                              Quản lý
+                            </Link>
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuItem
                           onClick={() => {
                             localStorage.removeItem("token");
                             localStorage.removeItem("user");
                             setCurrentUser(null);
                           }}
-                          className="cursor-pointer"
+                          className="cursor-pointer flex items-center gap-2 text-red-600"
                         >
+                          <LogOut className="w-4 h-4" />
                           Đăng xuất
                         </DropdownMenuItem>
                       </DropdownMenuContent>
