@@ -1,4 +1,4 @@
-import { Search, Menu, User, Globe, ShoppingBag, Gift, ChevronDown, HelpCircle, Clock, Settings, Shield, LogOut } from "lucide-react";
+import { Search, Menu, User, Globe, ShoppingBag, Gift, ChevronDown, HelpCircle, Clock, Settings, Shield, LogOut, Briefcase } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Link } from "react-router-dom";
@@ -190,6 +190,12 @@ const TravelHeader = () => {
                             </Link>
                           </DropdownMenuItem>
                         )}
+                        <DropdownMenuItem asChild>
+                          <Link to="/partner" className="flex items-center gap-2 cursor-pointer">
+                            <Briefcase className="w-4 h-4" />
+                            Đối tác
+                          </Link>
+                        </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => {
                             localStorage.removeItem("token");
