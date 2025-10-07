@@ -148,9 +148,15 @@ const AuthModal = ({ isOpen, onClose, defaultMode = "login" }: AuthModalProps) =
           const token = data.access_token || data.token;
 
           localStorage.setItem("token", token);
-          localStorage.setItem("user", JSON.stringify(data.user));
-
-          setCurrentUser(data.user);
+          
+          // Temporarily allow admin access for testing (INSECURE - use proper backend)
+          const userWithRole = {
+            ...data.user,
+            role: data.user.role || (data.user.email === "admin@example.com" ? "admin" : "user")
+          };
+          
+          localStorage.setItem("user", JSON.stringify(userWithRole));
+          setCurrentUser(userWithRole);
           alert("Đăng nhập thành công!");
           onClose();
         } else {
@@ -171,7 +177,6 @@ const AuthModal = ({ isOpen, onClose, defaultMode = "login" }: AuthModalProps) =
             phone: formData.phone,
             email: formData.email,
             password: formData.password,
-            role: "user",
           }),
         });
 
