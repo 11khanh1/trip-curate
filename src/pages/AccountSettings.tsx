@@ -10,6 +10,8 @@ import TravelHeader from "@/components/TravelHeader";
 import Footer from "@/components/Footer";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import {  MapPin } from "lucide-react";
+
 
 type SectionType = "profile" | "security" | "notifications" | "payment" | "preferences";
 
@@ -23,6 +25,7 @@ const AccountSettings = () => {
     dateOfBirth: "",
     gender: "",
     currentPassword: "",
+    address:"",
     newPassword: "",
     confirmPassword: "",
   });
@@ -218,6 +221,22 @@ const AccountSettings = () => {
                             className="h-11"
                           />
                         </div>
+                        <div className="space-y-2">
+                        <Label htmlFor="address" className="text-sm font-medium flex items-center gap-2">
+                          <MapPin className="w-4 h-4" />
+                          Địa chỉ <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          id="address"
+                          name="address"
+                          type="text"
+                          value={formData.address || ""}
+                          onChange={handleInputChange}
+                          placeholder="Nhập địa chỉ của bạn"
+                          className="h-11"
+                          required
+                        />
+                      </div>
                       </div>
 
                       <div className="flex justify-end pt-4 border-t">

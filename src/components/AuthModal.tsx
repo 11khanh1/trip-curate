@@ -54,66 +54,72 @@ const AuthModal = ({ isOpen, onClose, defaultMode = "login" }: AuthModalProps) =
   };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
-  e.preventDefault();
-  try {
-    const res = await fetch("https://travel-backend-ua5x.onrender.com/api/forgot-password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "email", value: resetEmail })
-    });
-    const data = await res.json();
+    e.preventDefault();
+    console.log("Attempting to send OTP for email:", resetEmail); 
+    try {
+      const res = await fetch("https://travel-backend-heov.onrender.com/api/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "email", value: resetEmail })
+      });
+      const data = await res.json();
+      console.log("Forgot password API response:", data); 
 
-    if (!res.ok) return alert(data.message || "Lỗi khi gửi OTP");
-    alert("Mã OTP đã được gửi đến email của bạn!");
-    setStep("otp");
-  } catch (err) {
-    console.error(err);
-    alert("Lỗi mạng hoặc server.");
-  }
-};
+      if (!res.ok) {
+        alert(data.message || "Lỗi khi gửi OTP");
+        console.error("API Error sending OTP:", data.message); 
+        return;
+      }
+      alert("Mã OTP đã được gửi đến email của bạn!");
+      setStep("otp");
+    } catch (err) {
+      console.error("Network or server error during OTP request:", err); // Log network errors
+      alert("Lỗi mạng hoặc server.");
+    }
+  };
 
-const handleVerifyOtp = async (e: React.FormEvent) => {
-  e.preventDefault();
-  try {
-    const res = await fetch("https://travel-backend-ua5x.onrender.com/api/verify-otp", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "email", value: resetEmail , otp }),
-    });
-    const data = await res.json();
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch("https://travel-backend-heov.onrender.com/api/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "email", value: resetEmail , otp }),
+      });
+      const data = await res.json();
 
-    if (!res.ok) return alert(data.message || "OTP không đúng hoặc hết hạn");
-    alert("Xác thực OTP thành công! Hãy đặt lại mật khẩu mới.");
-    setStep("reset");
-  } catch (err) {
-    console.error(err);
-    alert("Lỗi khi xác thực OTP.");
-  }
-};
+      if (!res.ok) return alert(data.message || "OTP không đúng hoặc hết hạn");
+      alert("Xác thực OTP thành công! Hãy đặt lại mật khẩu mới.");
+      setStep("reset");
+    } catch (err) {
+      console.error(err);
+      alert("Lỗi khi xác thực OTP.");
+    }
+  };
 
-const handleResetPassword = async (e: React.FormEvent) => {
-  e.preventDefault();
-  if (newPassword !== confirmNewPassword) {
-    alert("Mật khẩu xác nhận không khớp!");
-    return;
-  }
-  try {
-    const res = await fetch("https://travel-backend-ua5x.onrender.com/api/reset-password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({  type: "email", value: resetEmail , newPassword }),
-    });
-    const data = await res.json();
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword !== confirmNewPassword) {
+      alert("Mật khẩu xác nhận không khớp!");
+      return;
+    }
+    try {
+      const res = await fetch("https://travel-backend-heov.onrender.com/api/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({  type: "email", value: resetEmail , newPassword }),
+      });
+      const data = await res.json();
 
-    if (!res.ok) return alert(data.message || "Không thể đặt lại mật khẩu");
-    alert("Đặt lại mật khẩu thành công! Hãy đăng nhập lại.");
-    setIsForgotPassword(false);
-    setStep("email");
-  } catch (err) {
-    console.error(err);
-    alert("Lỗi khi đặt lại mật khẩu.");
-  }
-};
+      if (!res.ok) return alert(data.message || "Không thể đặt lại mật khẩu");
+      alert("Đặt lại mật khẩu thành công! Hãy đăng nhập lại.");
+      setIsForgotPassword(false);
+      setStep("email");
+    } catch (err) {
+      console.error(err);
+      alert("Lỗi khi đặt lại mật khẩu.");
+    }
+  };
 
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -121,7 +127,7 @@ const handleResetPassword = async (e: React.FormEvent) => {
 
     try {
       if (isLogin) {
-        const res = await fetch("https://travel-backend-ua5x.onrender.com/api/login", {
+        const res = await fetch("https://travel-backend-heov.onrender.com/api/login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -157,7 +163,7 @@ const handleResetPassword = async (e: React.FormEvent) => {
           return;
         }
 
-        const res = await fetch("https://travel-backend-ua5x.onrender.com/api/register", {
+        const res = await fetch("https://travel-backend-heov.onrender.com/api/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
