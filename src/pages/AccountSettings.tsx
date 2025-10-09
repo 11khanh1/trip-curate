@@ -29,6 +29,7 @@ const AccountSettings = () => {
     newPassword: "",
     confirmPassword: "",
   });
+  const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
   const menuItems = [
     { id: "profile" as SectionType, label: "Hồ sơ của tôi", icon: User },
@@ -74,7 +75,7 @@ const AccountSettings = () => {
     try {
       toast.loading("⏳ Đang xử lý yêu cầu...", { id: "changePwd" });
 
-      const res = await fetch("/api/reset-password", {
+      const res = await fetch(`${BASE_URL}/api/reset-password`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

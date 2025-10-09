@@ -36,7 +36,7 @@ const AuthModal = ({ isOpen, onClose, defaultMode = "login" }: AuthModalProps) =
 
   const { setCurrentUser } = useUser();
   const navigate = useNavigate();
-
+  const BASE_URL = import.meta.env.VITE_API_BASE_URL;
  
   useEffect(() => {
     if (isOpen) {
@@ -60,7 +60,7 @@ const AuthModal = ({ isOpen, onClose, defaultMode = "login" }: AuthModalProps) =
     e.preventDefault();
     console.log("Attempting to send OTP for email:", resetEmail); 
     try {
-      const res = await fetch("/api/forgot-password", {
+      const res = await fetch(`${BASE_URL}/api/forgot-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "email", value: resetEmail })
@@ -84,7 +84,7 @@ const AuthModal = ({ isOpen, onClose, defaultMode = "login" }: AuthModalProps) =
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch("/api/verify-otp", {
+      const res = await fetch(`${BASE_URL}/api/verify-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "email", value: resetEmail , otp }),
@@ -107,7 +107,7 @@ const AuthModal = ({ isOpen, onClose, defaultMode = "login" }: AuthModalProps) =
       return;
     }
     try {
-      const res = await fetch("/api/reset-password", {
+      const res = await fetch(`${BASE_URL}/api/reset-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({  type: "email", value: resetEmail , newPassword }),
@@ -130,7 +130,7 @@ const AuthModal = ({ isOpen, onClose, defaultMode = "login" }: AuthModalProps) =
 
     try {
       if (isLogin) {
-        const res = await fetch("/api/login", {
+        const res = await fetch(`${BASE_URL}/api/login`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -173,7 +173,7 @@ const AuthModal = ({ isOpen, onClose, defaultMode = "login" }: AuthModalProps) =
           return;
         }
 
-        const res = await fetch("/api/register", {
+        const res = await fetch(`${BASE_URL}/api/register`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
