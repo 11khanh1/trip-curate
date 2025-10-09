@@ -14,7 +14,7 @@ const FeaturedDeals = () => {
     },
     {
       id: 2,
-      title: "SIÊU SALE SINH NHẬT VIETTRAVEL 11",
+      title: "SIÊU SALE SINH NHẬT KLOOK 11",
       subtitle: "🎂 Sinh Nhật Siêu To",
       discount: "Deal khủng",
       bgColor: "bg-gradient-to-br from-orange-500 to-red-500",

@@ -53,7 +53,7 @@ const Footer = () => {
           {/* Company Info */}
           <div className="lg:col-span-1">
             <div className="text-2xl font-bold text-primary mb-4">
-              VietTravel
+              TravelBooking
             </div>
             <p className="text-gray-400 mb-6">
               Nền tảng đặt tour du lịch hàng đầu với gợi ý cá nhân hóa.
@@ -61,15 +61,15 @@ const Footer = () => {
             <div className="space-y-3">
               <div className="flex items-center text-gray-400">
                 <MapPin className="w-4 h-4 mr-2" />
-                <span className="text-sm">140 Đường Lê Trọng Tấn, Quận Tân Phú, TP.HCM</span>
+                <span className="text-sm">123 Đường ABC, Quận 1, TP.HCM</span>
               </div>
               <div className="flex items-center text-gray-400">
                 <Phone className="w-4 h-4 mr-2" />
-                <span className="text-sm">+84 337 236 327</span>
+                <span className="text-sm">+84 123 456 789</span>
               </div>
               <div className="flex items-center text-gray-400">
                 <Mail className="w-4 h-4 mr-2" />
-                <span className="text-sm">info@viettravel.com</span>
+                <span className="text-sm">info@travelbooking.com</span>
               </div>
             </div>
           </div>
@@ -138,7 +138,7 @@ const Footer = () => {
       <div className="bg-gray-950 py-4">
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row justify-between items-center text-sm text-gray-400">
-            <p>&copy; 2025 VietTravel. Tất cả quyền được bảo lưu.</p>
+            <p>&copy; 2024 TravelBooking. Tất cả quyền được bảo lưu.</p>
             <div className="flex space-x-6 mt-2 md:mt-0">
               <Link to="/support/privacy-policy" className="hover:text-white transition-colors">Chính sách bảo mật</Link>
               <Link to="/support/terms-of-service" className="hover:text-white transition-colors">Điều khoản dịch vụ</Link>

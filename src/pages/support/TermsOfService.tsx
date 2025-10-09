@@ -15,7 +15,7 @@ const TermsOfService = () => {
             <FileText className="w-16 h-16 mx-auto mb-6" />
             <h1 className="text-5xl font-bold mb-6">Điều khoản sử dụng</h1>
             <p className="text-xl">
-              Quy định và điều kiện khi sử dụng dịch vụ VietTravel
+              Quy định và điều kiện khi sử dụng dịch vụ Klook
             </p>
             <p className="text-sm mt-4 opacity-90">
               Có hiệu lực từ: 01/01/2025
@@ -35,7 +35,7 @@ const TermsOfService = () => {
                   <div>
                     <h3 className="font-semibold text-lg mb-2">Thông báo quan trọng</h3>
                     <p className="text-muted-foreground">
-                      Bằng việc truy cập và sử dụng dịch vụ của VietTravel, bạn đồng ý tuân thủ các điều khoản 
+                      Bằng việc truy cập và sử dụng dịch vụ của Klook, bạn đồng ý tuân thủ các điều khoản 
                       và điều kiện được nêu dưới đây. Vui lòng đọc kỹ trước khi sử dụng.
                     </p>
                   </div>
@@ -48,7 +48,7 @@ const TermsOfService = () => {
                 <CardContent className="p-8">
                   <h2 className="text-2xl font-bold mb-4">1. Định nghĩa</h2>
                   <div className="space-y-3 text-muted-foreground">
-                    <p><strong>"VietTravel"</strong> hoặc <strong>"Chúng tôi"</strong> là nền tảng đặt chỗ trực tuyến.</p>
+                    <p><strong>"Klook"</strong> hoặc <strong>"Chúng tôi"</strong> là nền tảng đặt chỗ trực tuyến.</p>
                     <p><strong>"Người dùng"</strong> hoặc <strong>"Bạn"</strong> là cá nhân/tổ chức sử dụng dịch vụ.</p>
                     <p><strong>"Dịch vụ"</strong> bao gồm website, ứng dụng di động và các nền tảng liên quan.</p>
                     <p><strong>"Nhà cung cấp"</strong> là đối tác cung cấp các hoạt động và dịch vụ du lịch.</p>
@@ -75,7 +75,7 @@ const TermsOfService = () => {
                         <li>• Bạn chịu trách nhiệm bảo mật thông tin tài khoản</li>
                         <li>• Không chia sẻ tài khoản với người khác</li>
                         <li>• Thông báo ngay nếu phát hiện truy cập trái phép</li>
-                        <li>• VietTravel có quyền tạm khóa tài khoản nếu phát hiện vi phạm</li>
+                        <li>• Klook có quyền tạm khóa tài khoản nếu phát hiện vi phạm</li>
                       </ul>
                     </div>
                   </div>
@@ -101,7 +101,7 @@ const TermsOfService = () => {
                         <li>• Giá hiển thị bằng VND (trừ khi có ghi chú khác)</li>
                         <li>• Giá có thể thay đổi mà không cần báo trước</li>
                         <li>• Phí dịch vụ và thuế được tính riêng (nếu có)</li>
-                        <li>• VietTravel không chịu trách nhiệm về sai sót giá do lỗi kỹ thuật</li>
+                        <li>• Klook không chịu trách nhiệm về sai sót giá do lỗi kỹ thuật</li>
                       </ul>
                     </div>
                     <div>
@@ -125,7 +125,7 @@ const TermsOfService = () => {
                     <li>• Vui lòng kiểm tra điều khoản cụ thể trước khi đặt</li>
                     <li>• Hoàn tiền sẽ được xử lý theo phương thức thanh toán ban đầu</li>
                     <li>• Thời gian hoàn tiền: 7-14 ngày làm việc</li>
-                    <li>• VietTravel không chịu trách nhiệm về phí ngân hàng phát sinh</li>
+                    <li>• Klook không chịu trách nhiệm về phí ngân hàng phát sinh</li>
                   </ul>
                 </CardContent>
               </Card>
@@ -135,7 +135,7 @@ const TermsOfService = () => {
                   <h2 className="text-2xl font-bold mb-4">5. Trách nhiệm và miễn trừ</h2>
                   <div className="space-y-4">
                     <div>
-                      <h3 className="font-semibold mb-2">5.1 Trách nhiệm của VietTravel</h3>
+                      <h3 className="font-semibold mb-2">5.1 Trách nhiệm của Klook</h3>
                       <ul className="space-y-2 text-muted-foreground ml-4">
                         <li>• Cung cấp nền tảng đặt chỗ trung gian</li>
                         <li>• Bảo vệ thông tin người dùng</li>
@@ -146,7 +146,7 @@ const TermsOfService = () => {
                     <div>
                       <h3 className="font-semibold mb-2">5.2 Miễn trừ trách nhiệm</h3>
                       <ul className="space-y-2 text-muted-foreground ml-4">
-                        <li>• VietTravel không chịu trách nhiệm về chất lượng dịch vụ từ nhà cung cấp</li>
+                        <li>• Klook không chịu trách nhiệm về chất lượng dịch vụ từ nhà cung cấp</li>
                         <li>• Không đảm bảo website hoạt động liên tục không lỗi</li>
                         <li>• Không chịu trách nhiệm về thiệt hại gián tiếp</li>
                         <li>• Không chịu trách nhiệm về hành vi của bên thứ ba</li>
@@ -160,7 +160,7 @@ const TermsOfService = () => {
                 <CardContent className="p-8">
                   <h2 className="text-2xl font-bold mb-4">6. Quyền sở hữu trí tuệ</h2>
                   <ul className="space-y-2 text-muted-foreground ml-4">
-                    <li>• Mọi nội dung trên website thuộc quyền sở hữu của VietTravel</li>
+                    <li>• Mọi nội dung trên website thuộc quyền sở hữu của Klook</li>
                     <li>• Không được sao chép, phân phối mà không có sự cho phép</li>
                     <li>• Logo, thương hiệu được bảo vệ bởi luật sở hữu trí tuệ</li>
                     <li>• Vi phạm sẽ bị xử lý theo quy định pháp luật</li>
@@ -172,7 +172,7 @@ const TermsOfService = () => {
                 <CardContent className="p-8">
                   <h2 className="text-2xl font-bold mb-4">7. Thay đổi điều khoản</h2>
                   <p className="text-muted-foreground mb-4">
-                    VietTravel có quyền thay đổi điều khoản sử dụng này bất kỳ lúc nào. Các thay đổi sẽ có hiệu lực 
+                    Klook có quyền thay đổi điều khoản sử dụng này bất kỳ lúc nào. Các thay đổi sẽ có hiệu lực 
                     ngay khi được đăng tải trên website. Việc bạn tiếp tục sử dụng dịch vụ sau khi thay đổi 
                     đồng nghĩa với việc chấp nhận các điều khoản mới.
                   </p>
@@ -197,9 +197,9 @@ const TermsOfService = () => {
                     Nếu bạn có bất kỳ câu hỏi nào về điều khoản sử dụng, vui lòng liên hệ:
                   </p>
                   <div className="space-y-2 text-muted-foreground">
-                    <p><strong>Công ty:</strong> VietTravel Việt Nam</p>
+                    <p><strong>Công ty:</strong> Klook Việt Nam</p>
                     <p><strong>Địa chỉ:</strong> Tầng 10, Tòa nhà ABC, 123 Nguyễn Huệ, Q.1, TP.HCM</p>
-                    <p><strong>Email:</strong> legal@viettravel.com.vn</p>
+                    <p><strong>Email:</strong> legal@klook.com.vn</p>
                     <p><strong>Hotline:</strong> 1900-xxxx</p>
                   </div>
                 </CardContent>

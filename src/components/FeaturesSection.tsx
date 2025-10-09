@@ -10,7 +10,7 @@ const FeaturesSection = () => {
     {
       icon: <CreditCard className="w-12 h-12 text-primary" />,
       title: "Chơi vui, giá tốt",
-      description: "Trải nghiệm chất lượng với giá tốt. Tích luỹ VietTravel xu để được thêm ưu đãi"
+      description: "Trải nghiệm chất lượng với giá tốt. Tích luỹ Klook xu để được thêm ưu đãi"
     },
     {
       icon: <Clock className="w-12 h-12 text-primary" />,

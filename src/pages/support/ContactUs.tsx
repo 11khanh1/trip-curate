@@ -18,7 +18,7 @@ const ContactUs = () => {
     {
       icon: <Mail className="w-6 h-6" />,
       title: "Email",
-      content: "support@viettravel.com.vn",
+      content: "support@klook.com.vn",
       description: "Phản hồi trong vòng 24 giờ",
     },
     {

@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import AuthModal from "./AuthModal";
 import { useState, useEffect } from "react";
 import { useUser } from "@/context/UserContext";
+import { useNavigate } from "react-router-dom"; 
 import {
   NavigationMenu,
   NavigationMenuContent,
@@ -183,8 +184,13 @@ const TravelHeader = () => {
                           </Link>
                         </DropdownMenuItem>
 
+
                         
                         <DropdownMenuItem asChild>
+
+                        
+                          
+
                             <Link to="/admin" className="flex items-center gap-2 cursor-pointer">
                               <Shield className="w-4 h-4" />
                               Quản lý
@@ -198,13 +204,15 @@ const TravelHeader = () => {
                             Đối tác
                           </Link>
                         </DropdownMenuItem>
-                        )
+                        
                         
                         <DropdownMenuItem
                           onClick={() => {
                             localStorage.removeItem("token");
                             localStorage.removeItem("user");
+                            
                             setCurrentUser(null);
+                            setTimeout(() => {window.location.href = "/"}, 300);
                           }}
                           className="cursor-pointer flex items-center gap-2 text-red-600"
                         >
@@ -318,7 +326,7 @@ const TravelHeader = () => {
 
                 <NavigationMenuItem>
                   <NavigationMenuTrigger className="text-sm text-gray-700 hover:text-primary bg-transparent hover:bg-transparent data-[state=open]:bg-transparent">
-                    Khám phá VietTravel
+                    Khám phá Klook
                   </NavigationMenuTrigger>
                   <NavigationMenuContent>
                     <div className="w-[800px] p-6 bg-white">

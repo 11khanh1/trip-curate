@@ -37,56 +37,83 @@ export function AdminSidebar() {
   const collapsed = state === "collapsed";
 
   const isActive = (path: string, exact?: boolean) => {
-    if (exact) {
-      return location.pathname === path;
-    }
+    if (exact) return location.pathname === path;
     return location.pathname.startsWith(path);
   };
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-sidebar-border">
-      <SidebarHeader className="border-b border-sidebar-border p-4">
-        {!collapsed && (
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-primary">
-              <span className="text-lg font-bold text-white">TC</span>
+    <Sidebar
+      collapsible="icon"
+      className="border-r border-gray-200 bg-white/90 backdrop-blur-sm shadow-sm"
+    >
+      {/* Header Logo */}
+      <SidebarHeader className="border-b border-gray-200 p-4">
+        {!collapsed ? (
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-orange-500 shadow-sm">
+              <span className="text-lg font-bold text-white">VT</span>
             </div>
             <div>
-              <h2 className="text-sm font-semibold text-sidebar-foreground">TripCurate</h2>
-              <p className="text-xs text-sidebar-foreground/60">Admin Panel</p>
+              <h2 className="text-sm font-semibold text-gray-800 leading-tight">
+                VietTravel
+              </h2>
+              <p className="text-xs text-gray-500">Admin Panel</p>
             </div>
           </div>
-        )}
-        {collapsed && (
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-primary mx-auto">
+        ) : (
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-orange-500 shadow-sm mx-auto">
             <span className="text-lg font-bold text-white">TC</span>
           </div>
         )}
       </SidebarHeader>
 
-      <SidebarContent>
+      {/* Menu */}
+      <SidebarContent className="py-4">
         <SidebarGroup>
-          <SidebarGroupLabel>Quản lý</SidebarGroupLabel>
+          {!collapsed && (
+            <SidebarGroupLabel className="text-xs font-semibold text-gray-500 px-4 uppercase tracking-wide">
+              Quản lý
+            </SidebarGroupLabel>
+          )}
           <SidebarGroupContent>
             <SidebarMenu>
-              {menuItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isActive(item.url, item.exact)}
-                    tooltip={collapsed ? item.title : undefined}
-                  >
-                    <NavLink to={item.url}>
-                      <item.icon className="h-4 w-4" />
-                      {!collapsed && <span>{item.title}</span>}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {menuItems.map((item) => {
+                const active = isActive(item.url, item.exact);
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      tooltip={collapsed ? item.title : undefined}
+                      isActive={active}
+                      className={`group flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-150 
+                        ${active
+                          ? "bg-gradient-to-r from-primary/10 to-orange-100 text-primary font-semibold"
+                          : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"}`
+                      }
+                    >
+                      <NavLink to={item.url}>
+                        <item.icon
+                          className={`h-5 w-5 ${
+                            active ? "text-primary" : "text-gray-500 group-hover:text-gray-800"
+                          }`}
+                        />
+                        {!collapsed && (
+                          <span className="text-sm leading-none">{item.title}</span>
+                        )}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+
+      {/* Footer */}
+      <div className="border-t border-gray-200 p-4 text-center text-xs text-gray-400">
+        {!collapsed && "© 2025 VietTravel"}
+      </div>
     </Sidebar>
   );
 }

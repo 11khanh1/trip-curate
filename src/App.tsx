@@ -34,6 +34,14 @@ import CancellationPolicy from "./pages/support/CancellationPolicy";
 import PrivacyPolicy from "./pages/support/PrivacyPolicy";
 import TermsOfService from "./pages/support/TermsOfService";
 import AccountSettings from "./pages/AccountSettings";
+import AdminLayout from "./pages/admin/AdminLayout";
+import Dashboard from "./pages/admin/Dashboard";
+import Activities from "./pages/admin/Activities";
+import Bookings from "./pages/admin/Bookings";
+import Customers from "./pages/admin/Customers";
+import Promotions from "./pages/admin/Promotions";
+import Locations from "./pages/admin/Locations";
+import Settings from "./pages/admin/Settings";
 
 const queryClient = new QueryClient();
 
@@ -46,6 +54,7 @@ const App = () => (
         <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
+      
           <Route path="/activities" element={<AllActivities />} />
           <Route path="/activity/:id" element={<ActivityDetail />} />
           <Route path="/regions/vietnam" element={<Vietnam />} />
@@ -74,7 +83,17 @@ const App = () => (
           <Route path="/support/cancellation-policy" element={<CancellationPolicy />} />
           <Route path="/support/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/support/terms-of-service" element={<TermsOfService />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<Dashboard />} />
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="activities" element={<Activities />} />
+            <Route path="bookings" element={<Bookings />} />
+            <Route path="customers" element={<Customers />} />
+            <Route path="promotions" element={<Promotions />} />
+            <Route path="locations" element={<Locations />} />
+            <Route path="settings" element={<Settings />} />
+          </Route>
+            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

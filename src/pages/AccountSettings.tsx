@@ -46,33 +46,71 @@ const AccountSettings = () => {
   };
 
   const handleUpdateProfile = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Update user in context and localStorage
-    const updatedUser = {
-      ...currentUser,
-      name: formData.name,
-      email: formData.email,
+      e.preventDefault();
+      // Update user in context and localStorage
+      const updatedUser = {
+        ...currentUser,
+        name: formData.name,
+        email: formData.email,
+      };
+      setCurrentUser(updatedUser);
+      localStorage.setItem("user", JSON.stringify(updatedUser));
+      toast.success("Cập nhật thông tin thành công!");
     };
-    setCurrentUser(updatedUser);
-    localStorage.setItem("user", JSON.stringify(updatedUser));
-    toast.success("Cập nhật thông tin thành công!");
-  };
 
-  const handleChangePassword = (e: React.FormEvent) => {
+  const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
+
     if (formData.newPassword !== formData.confirmPassword) {
-      toast.error("Mật khẩu xác nhận không khớp!");
+      toast.error("❌ Mật khẩu xác nhận không khớp!");
       return;
     }
-    // In real app, call API to change password
-    toast.success("Đổi mật khẩu thành công!");
-    setFormData({
-      ...formData,
-      currentPassword: "",
-      newPassword: "",
-      confirmPassword: "",
-    });
+
+    if (formData.newPassword.length < 8) {
+      toast.error("⚠️ Mật khẩu mới phải có ít nhất 8 ký tự!");
+      return;
+    }
+
+    try {
+      toast.loading("⏳ Đang xử lý yêu cầu...", { id: "changePwd" });
+
+      const res = await fetch("/api/reset-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({
+            type: "email",
+            value: currentUser?.email,
+            current_password: formData.currentPassword,
+            new_password: formData.newPassword,
+            new_password_confirmation: formData.confirmPassword,
+        }),
+      });
+
+      const data = await res.json();
+      console.log("Change password response:", data);
+
+      if (!res.ok) {
+        toast.error(data.message || "Đổi mật khẩu thất bại!", { id: "changePwd" });
+        return;
+      }
+
+      toast.success("✅ Đổi mật khẩu thành công!", { id: "changePwd" });
+      setFormData({
+        ...formData,
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+    } catch (error) {
+      console.error("Lỗi đổi mật khẩu:", error);
+      toast.error("⚠️ Lỗi kết nối đến máy chủ!", { id: "changePwd" });
+    }
   };
+
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">

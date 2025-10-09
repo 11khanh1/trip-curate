@@ -5,6 +5,8 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useUser } from "@/context/UserContext";
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -33,6 +35,7 @@ const AuthModal = ({ isOpen, onClose, defaultMode = "login" }: AuthModalProps) =
   });
 
   const { setCurrentUser } = useUser();
+  const navigate = useNavigate();
 
  
   useEffect(() => {
@@ -57,7 +60,7 @@ const AuthModal = ({ isOpen, onClose, defaultMode = "login" }: AuthModalProps) =
     e.preventDefault();
     console.log("Attempting to send OTP for email:", resetEmail); 
     try {
-      const res = await fetch("https://travel-backend-heov.onrender.com/api/forgot-password", {
+      const res = await fetch("/api/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "email", value: resetEmail })
@@ -81,7 +84,7 @@ const AuthModal = ({ isOpen, onClose, defaultMode = "login" }: AuthModalProps) =
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch("https://travel-backend-heov.onrender.com/api/verify-otp", {
+      const res = await fetch("/api/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "email", value: resetEmail , otp }),
@@ -104,7 +107,7 @@ const AuthModal = ({ isOpen, onClose, defaultMode = "login" }: AuthModalProps) =
       return;
     }
     try {
-      const res = await fetch("https://travel-backend-heov.onrender.com/api/reset-password", {
+      const res = await fetch("/api/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({  type: "email", value: resetEmail , newPassword }),
@@ -127,7 +130,7 @@ const AuthModal = ({ isOpen, onClose, defaultMode = "login" }: AuthModalProps) =
 
     try {
       if (isLogin) {
-        const res = await fetch("https://travel-backend-heov.onrender.com/api/login", {
+        const res = await fetch("/api/login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -159,6 +162,7 @@ const AuthModal = ({ isOpen, onClose, defaultMode = "login" }: AuthModalProps) =
           setCurrentUser(userWithRole);
           alert("Đăng nhập thành công!");
           onClose();
+          navigate("/");
         } else {
           alert("Dữ liệu đăng nhập không hợp lệ từ server.");
         }
@@ -169,7 +173,7 @@ const AuthModal = ({ isOpen, onClose, defaultMode = "login" }: AuthModalProps) =
           return;
         }
 
-        const res = await fetch("https://travel-backend-heov.onrender.com/api/register", {
+        const res = await fetch("/api/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

@@ -11,7 +11,7 @@ const AppDownload = () => {
             Ứng dụng du lịch từ A tới Z
           </h2>
           <p className="text-white/90 text-lg max-w-2xl mx-auto">
-            Ưu đãi hot khi đặt tour, vé tham quan, khách sạn, vé di chuyển khắp thế giới qua app VietTravel!
+            Ưu đãi hot khi đặt tour, vé tham quan, khách sạn, vé di chuyển khắp thế giới qua app Klook!
           </p>
         </div>
 
@@ -43,7 +43,7 @@ const AppDownload = () => {
             <div className="flex items-center justify-center mb-4">
               <QrCode className="w-6 h-6 text-white mr-3" />
               <h3 className="text-white font-semibold">
-                Quét mã QR để tải ứng dụng VietTravel
+                Quét mã QR để tải ứng dụng Klook
               </h3>
             </div>
             <div className="w-32 h-32 bg-white rounded-lg flex items-center justify-center mx-auto">
@@ -54,7 +54,7 @@ const AppDownload = () => {
 
         <div className="flex items-center justify-center mt-8 space-x-4">
           <Smartphone className="w-8 h-8 text-white" />
-          <span className="text-white text-lg">Tải ngay ứng dụng VietTravel</span>
+          <span className="text-white text-lg">Tải ngay ứng dụng Klook</span>
         </div>
       </div>
     </section>

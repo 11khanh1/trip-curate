@@ -31,13 +31,6 @@ const Admin = () => {
   const { currentUser } = useUser();
   const navigate = useNavigate();
 
-  useEffect(() => {
-
-    if (!currentUser) {
-      navigate("/");
-      return;
-    }
-  }, [currentUser, navigate]);
 
 
   // Mock data for demo
@@ -98,8 +91,14 @@ const Admin = () => {
     return texts[status] || status;
   };
 
+  // Show loading or null while checking auth
+  if (!currentUser) {
+    return null;
+  }
 
-
+  if (currentUser.role !== "admin") {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-background">
