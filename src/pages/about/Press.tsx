@@ -9,19 +9,19 @@ const Press = () => {
     {
       id: 1,
       date: "15/03/2025",
-      title: "VietTravel mở rộng dịch vụ sang 50 quốc gia mới",
+      title: "Klook mở rộng dịch vụ sang 50 quốc gia mới",
       excerpt: "Nền tảng du lịch hàng đầu châu Á công bố kế hoạch mở rộng toàn cầu...",
     },
     {
       id: 2,
       date: "28/02/2025",
-      title: "VietTravel hợp tác với các điểm đến UNESCO",
+      title: "Klook hợp tác với các điểm đến UNESCO",
       excerpt: "Đưa trải nghiệm di sản thế giới đến gần hơn với du khách...",
     },
     {
       id: 3,
       date: "10/01/2025",
-      title: "VietTravel đạt mốc 100 triệu người dùng",
+      title: "Klook đạt mốc 100 triệu người dùng",
       excerpt: "Con số ấn tượng đánh dấu sự phát triển vượt bậc của nền tảng...",
     },
   ];
@@ -29,12 +29,12 @@ const Press = () => {
   const mediaContacts = [
     {
       region: "Việt Nam",
-      email: "press.vn@viettravel.com",
+      email: "press.vn@klook.com",
       phone: "+84 24 1234 5678",
     },
     {
       region: "Châu Á - Thái Bình Dương",
-      email: "press.apac@viettravel.com",
+      email: "press.apac@klook.com",
       phone: "+65 1234 5678",
     },
   ];
@@ -50,7 +50,7 @@ const Press = () => {
             <Newspaper className="w-16 h-16 mx-auto mb-6" />
             <h1 className="text-5xl font-bold mb-6">Phòng báo chí</h1>
             <p className="text-xl">
-              Tin tức mới nhất và thông tin báo chí về VietTravel
+              Tin tức mới nhất và thông tin báo chí về Klook
             </p>
           </div>
         </div>
@@ -91,7 +91,7 @@ const Press = () => {
           <div className="max-w-4xl mx-auto text-center">
             <h2 className="text-3xl font-bold mb-4">Bộ công cụ truyền thông</h2>
             <p className="text-lg text-muted-foreground mb-8">
-              Tải xuống logo, hình ảnh và tài liệu thương hiệu của VietTravel
+              Tải xuống logo, hình ảnh và tài liệu thương hiệu của Klook
             </p>
             <Button size="lg">
               <Download className="w-5 h-5 mr-2" />
