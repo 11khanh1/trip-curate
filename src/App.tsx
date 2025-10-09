@@ -9,7 +9,6 @@ import AllActivities from "./pages/AllActivities";
 import ActivityDetail from "./pages/ActivityDetail";
 import NotFound from "./pages/NotFound";
 import Admin from "./pages/Admin";
-import Partner from "./pages/Partner";
 import Vietnam from "./pages/regions/Vietnam";
 import Japan from "./pages/regions/Japan";
 import Singapore from "./pages/regions/Singapore";
@@ -63,7 +62,6 @@ const App = () => (
           <Route path="/deals" element={<Deals />} />
           <Route path="/account-settings" element={<AccountSettings />} />
           <Route path="/admin" element={<Admin />} />
-          <Route path="/partner" element={<Partner />} />
           <Route path="/about/our-story" element={<OurStory />} />
           <Route path="/about/careers" element={<Careers />} />
           <Route path="/about/press" element={<Press />} />
