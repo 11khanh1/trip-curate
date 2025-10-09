@@ -29,17 +29,13 @@ const Admin = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check if user is admin (TEMPORARY: For production, use proper backend auth)
+
     if (!currentUser) {
       navigate("/");
       return;
     }
-    
-    if (currentUser.role !== "admin") {
-      alert("Bạn không có quyền truy cập trang này");
-      navigate("/");
-    }
   }, [currentUser, navigate]);
+
 
   // Mock data for demo
   const stats = [
@@ -83,14 +79,8 @@ const Admin = () => {
     return texts[status] || status;
   };
 
-  // Show loading or null while checking auth
-  if (!currentUser) {
-    return null;
-  }
 
-  if (currentUser.role !== "admin") {
-    return null;
-  }
+
 
   return (
     <div className="min-h-screen bg-background">

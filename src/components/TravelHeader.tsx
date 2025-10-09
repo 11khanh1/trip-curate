@@ -182,14 +182,12 @@ const TravelHeader = () => {
                             Cài đặt
                           </Link>
                         </DropdownMenuItem>
-                        {currentUser.role === "admin" && (
-                          <DropdownMenuItem asChild>
-                            <Link to="/admin" className="flex items-center gap-2 cursor-pointer">
-                              <Shield className="w-4 h-4" />
-                              Quản lý
-                            </Link>
-                          </DropdownMenuItem>
-                        )}
+                        <DropdownMenuItem asChild>
+                          <Link to="/admin" className="flex items-center gap-2 cursor-pointer">
+                            <Shield className="w-4 h-4" />
+                            Quản lý
+                          </Link>
+                        </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => {
                             localStorage.removeItem("token");
@@ -308,7 +306,7 @@ const TravelHeader = () => {
 
                 <NavigationMenuItem>
                   <NavigationMenuTrigger className="text-sm text-gray-700 hover:text-primary bg-transparent hover:bg-transparent data-[state=open]:bg-transparent">
-                    Khám phá Klook
+                    Khám phá VietTravel
                   </NavigationMenuTrigger>
                   <NavigationMenuContent>
                     <div className="w-[800px] p-6 bg-white">

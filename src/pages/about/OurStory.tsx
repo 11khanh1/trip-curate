@@ -26,7 +26,7 @@ const OurStory = () => {
             <div>
               <h2 className="text-3xl font-bold mb-4">Khởi đầu hành trình</h2>
               <p className="text-lg text-muted-foreground leading-relaxed">
-                Klook được thành lập vào năm 2014 bởi một nhóm những người đam mê du lịch, 
+                VietTravel được thành lập vào năm 2014 bởi một nhóm những người đam mê du lịch, 
                 với mong muốn mang đến trải nghiệm đặt chỗ dễ dàng và thuận tiện cho khách du lịch 
                 trên khắp châu Á. Chúng tôi nhận thấy rằng việc đặt các hoạt động và dịch vụ du lịch 
                 thường rất phức tạp và tốn thời gian.
@@ -36,7 +36,7 @@ const OurStory = () => {
             <div>
               <h2 className="text-3xl font-bold mb-4">Sứ mệnh của chúng tôi</h2>
               <p className="text-lg text-muted-foreground leading-relaxed">
-                Sứ mệnh của Klook là biến mọi khoảnh khắc trong hành trình du lịch của bạn trở nên 
+                Sứ mệnh của VietTravel là biến mọi khoảnh khắc trong hành trình du lịch của bạn trở nên 
                 đáng nhớ và dễ dàng hơn. Chúng tôi kết nối du khách với hàng nghìn trải nghiệm 
                 tuyệt vời trên toàn thế giới, từ vé tham quan các điểm đến nổi tiếng đến những 
                 trải nghiệm địa phương độc đáo.
@@ -90,7 +90,7 @@ const OurStory = () => {
               <p className="text-lg text-muted-foreground leading-relaxed">
                 Chúng tôi không ngừng đổi mới và phát triển để mang đến những trải nghiệm tốt nhất 
                 cho khách hàng. Từ công nghệ đặt chỗ thông minh đến dịch vụ chăm sóc khách hàng 
-                24/7, Klook cam kết đồng hành cùng bạn trong mọi chuyến đi.
+                24/7, VietTravel cam kết đồng hành cùng bạn trong mọi chuyến đi.
               </p>
             </div>
           </div>

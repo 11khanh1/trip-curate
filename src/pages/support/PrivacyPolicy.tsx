@@ -77,7 +77,7 @@ const PrivacyPolicy = () => {
             <Card className="mb-12">
               <CardContent className="p-8">
                 <p className="text-lg text-muted-foreground leading-relaxed">
-                  Klook ("chúng tôi", "của chúng tôi") cam kết bảo vệ quyền riêng tư của người dùng. 
+                  VietTravel ("chúng tôi", "của chúng tôi") cam kết bảo vệ quyền riêng tư của người dùng. 
                   Chính sách bảo mật này giải thích cách chúng tôi thu thập, sử dụng, chia sẻ và 
                   bảo vệ thông tin cá nhân của bạn khi bạn sử dụng dịch vụ của chúng tôi.
                 </p>
@@ -164,7 +164,7 @@ const PrivacyPolicy = () => {
                   vui lòng liên hệ:
                 </p>
                 <div className="space-y-2 text-muted-foreground">
-                  <p><strong>Email:</strong> privacy@klook.com.vn</p>
+                  <p><strong>Email:</strong> privacy@viettravel.com.vn</p>
                   <p><strong>Địa chỉ:</strong> Tầng 10, Tòa nhà ABC, 123 Nguyễn Huệ, Q.1, TP.HCM</p>
                   <p><strong>Điện thoại:</strong> 1900-xxxx</p>
                 </div>
