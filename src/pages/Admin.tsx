@@ -22,6 +22,9 @@ import {
   Calendar,
   Shield,
   Settings,
+  CheckCircle,
+  XCircle,
+  Package,
 } from "lucide-react";
 
 const Admin = () => {
@@ -60,6 +63,22 @@ const Admin = () => {
     { name: "Sapa", bookings: 278, revenue: "₫720K" },
     { name: "Nha Trang", bookings: 245, revenue: "₫650K" },
   ];
+
+  const pendingTours = [
+    { id: "1", name: "Tour Hạ Long 3N2Đ", partner: "Công ty Du lịch ABC", location: "Quảng Ninh", price: "₫5,500,000", date: "2025-10-05" },
+    { id: "2", name: "Du lịch Đà Nẵng", partner: "Travel XYZ", location: "Đà Nẵng", price: "₫3,200,000", date: "2025-10-06" },
+    { id: "3", name: "Phú Quốc Resort", partner: "Beach Resort Co.", location: "Kiên Giang", price: "₫7,800,000", date: "2025-10-07" },
+  ];
+
+  const handleApproveTour = (id: string) => {
+    alert(`Đã duyệt tour ID: ${id}`);
+    // In production, this would call an API
+  };
+
+  const handleRejectTour = (id: string) => {
+    alert(`Đã từ chối tour ID: ${id}`);
+    // In production, this would call an API
+  };
 
   const getStatusBadge = (status: string) => {
     const variants: Record<string, "default" | "secondary" | "destructive"> = {
@@ -135,6 +154,10 @@ const Admin = () => {
               <Ticket className="h-4 w-4 mr-2" />
               Đặt chỗ
             </TabsTrigger>
+            <TabsTrigger value="tours">
+              <Package className="h-4 w-4 mr-2" />
+              Quản lý Tour
+            </TabsTrigger>
             <TabsTrigger value="users">
               <Users className="h-4 w-4 mr-2" />
               Người dùng
@@ -191,6 +214,75 @@ const Admin = () => {
                           <Button variant="ghost" size="sm">
                             Chi tiết
                           </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Tours Tab */}
+          <TabsContent value="tours">
+            <Card>
+              <CardHeader>
+                <CardTitle>Duyệt Tour từ Đối tác</CardTitle>
+                <CardDescription>
+                  Danh sách tour đang chờ phê duyệt từ đối tác
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Tên Tour</TableHead>
+                      <TableHead>Đối tác</TableHead>
+                      <TableHead>Địa điểm</TableHead>
+                      <TableHead>Giá</TableHead>
+                      <TableHead>Ngày gửi</TableHead>
+                      <TableHead className="text-right">Thao tác</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pendingTours.map((tour) => (
+                      <TableRow key={tour.id}>
+                        <TableCell className="font-medium">{tour.name}</TableCell>
+                        <TableCell>{tour.partner}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-4 w-4 text-muted-foreground" />
+                            {tour.location}
+                          </div>
+                        </TableCell>
+                        <TableCell className="font-semibold">{tour.price}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-muted-foreground" />
+                            {tour.date}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleApproveTour(tour.id)}
+                              className="text-green-600 hover:text-green-700"
+                            >
+                              <CheckCircle className="h-4 w-4 mr-1" />
+                              Duyệt
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRejectTour(tour.id)}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <XCircle className="h-4 w-4 mr-1" />
+                              Từ chối
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
