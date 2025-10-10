@@ -102,24 +102,21 @@ export default function Activities() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Phê duyệt Hoạt động</h1>
-          <p className="text-muted-foreground">
-            Xem thông tin chi tiết để duyệt hoặc từ chối hoạt động của đối tác
-          </p>
-        </div>
-        <div className="relative w-64">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Tìm kiếm hoạt động..." className="pl-8" />
-        </div>
       </div>
 
-      {/* Danh sách hoạt động */}
       <Card>
-        <CardHeader>
-          <CardTitle>Danh sách hoạt động cần duyệt</CardTitle>
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="space-y-1">
+            <CardTitle>Danh sách hoạt động cần duyệt</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Kiểm tra và phê duyệt các hoạt động du lịch do đối tác gửi lên.
+            </p>
+          </div>
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Tìm kiếm hoạt động..." className="pl-8" />
+          </div>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">

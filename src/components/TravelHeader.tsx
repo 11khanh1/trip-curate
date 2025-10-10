@@ -4,7 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Link } from "react-router-dom";
 import AuthModal from "@/components/auth/AuthModal";
 import { useState, useEffect } from "react";
-import { useUser } from "@/context/UserContext";
+// Giả định useUser trả về currentUser có thuộc tính role
+import { useUser } from "@/context/UserContext"; 
 import { useNavigate } from "react-router-dom"; 
 import {
   NavigationMenu,
@@ -20,11 +21,28 @@ import {
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 
+// Định nghĩa Role cho currentUser (giả định)
+interface CurrentUser {
+    id: string;
+    name: string;
+    email: string;
+    role: 'customer' | 'partner' | 'admin'; 
+}
+
+// Giả định hook useUser trả về user có role
+interface UserContextType {
+    currentUser: CurrentUser | null;
+    setCurrentUser: (user: CurrentUser | null) => void;
+}
+
+
 const TravelHeader = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const { currentUser, setCurrentUser } = useUser();
+  // Sử dụng kiểu dữ liệu giả định để TypeScript hoạt động
+  const { currentUser, setCurrentUser } = useUser() as UserContextType;
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
 
+  // Dữ liệu menu... (giữ nguyên)
 
   const regions = [
     { id: "1", name: "VIỆT NAM", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1583417319070-4a69db38a482?w=100&h=100&fit=crop", url: "/regions/vietnam" },
@@ -163,7 +181,7 @@ const TravelHeader = () => {
               </Button>
 
               {currentUser ? (
-  // Nếu đã đăng nhập
+              // Nếu đã đăng nhập
                 <div className="flex items-center gap-2">
                   <User className="w-5 h-5 text-gray-600" />
 
@@ -184,27 +202,27 @@ const TravelHeader = () => {
                           </Link>
                         </DropdownMenuItem>
 
-
+                        {/* LOGIC PHÂN QUYỀN BẮT ĐẦU */}
+                        {/* 1. ADMIN - Thấy mục Quản lý */}
+                        {currentUser.role === 'admin' && (
+                            <DropdownMenuItem asChild>
+                                <Link to="/admin" className="flex items-center gap-2 cursor-pointer">
+                                    <Shield className="w-4 h-4" />
+                                    Quản lý
+                                </Link>
+                            </DropdownMenuItem>
+                        )}
                         
-                        <DropdownMenuItem asChild>
-
-                        
-                          
-
-                            <Link to="/admin" className="flex items-center gap-2 cursor-pointer">
-                              <Shield className="w-4 h-4" />
-                              Quản lý
-                            </Link>
-                        </DropdownMenuItem>
-                        
-
-                        <DropdownMenuItem asChild>
-                          <Link to="/partner" className="flex items-center gap-2 cursor-pointer">
-                            <Briefcase className="w-4 h-4" />
-                            Đối tác
-                          </Link>
-                        </DropdownMenuItem>
-                        
+                        {/* 2. PARTNER - Thấy mục Đối tác */}
+                        {currentUser.role === 'partner' && (
+                            <DropdownMenuItem asChild>
+                                <Link to="/partner" className="flex items-center gap-2 cursor-pointer">
+                                    <Briefcase className="w-4 h-4" />
+                                    Đối tác
+                                </Link>
+                            </DropdownMenuItem>
+                        )}
+                        {/* LOGIC PHÂN QUYỀN KẾT THÚC */}
                         
                         <DropdownMenuItem
                           onClick={() => {

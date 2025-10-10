@@ -17,7 +17,11 @@ const LoginForm = ({ onSwitchToRegister, onForgotPassword, onSuccess }: LoginFor
   const navigate = useNavigate();
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
-  const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+  const isProd = import.meta.env.MODE === "production";
+  const BASE_URL = isProd
+    ? import.meta.env.VITE_API_BASE_URL_PROD
+    : import.meta.env.VITE_API_BASE_URL;
+
 
   const handleChange = (field: string, value: string) =>
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -25,7 +29,7 @@ const LoginForm = ({ onSwitchToRegister, onForgotPassword, onSuccess }: LoginFor
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch("/api/login", {
+      const res = await fetch(`${BASE_URL}/api/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),

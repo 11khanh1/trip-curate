@@ -29,7 +29,10 @@ const AccountSettings = () => {
     newPassword: "",
     confirmPassword: "",
   });
-  const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+  const isProd = import.meta.env.MODE === "production";
+  const BASE_URL = isProd
+    ? import.meta.env.VITE_API_BASE_URL_PROD
+    : import.meta.env.VITE_API_BASE_URL;
 
   const menuItems = [
     { id: "profile" as SectionType, label: "Hồ sơ của tôi", icon: User },

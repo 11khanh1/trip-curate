@@ -13,7 +13,10 @@ const ForgotPasswordForm = ({ onBackToLogin }: ForgotPasswordFormProps) => {
   const [otpSent, setOtpSent] = useState(false);
   const [otp, setOtp] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+  const isProd = import.meta.env.MODE === "production";
+  const BASE_URL = isProd
+    ? import.meta.env.VITE_API_BASE_URL_PROD
+    : import.meta.env.VITE_API_BASE_URL;
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();

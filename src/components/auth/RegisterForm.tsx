@@ -17,7 +17,10 @@ const RegisterForm = ({ onSwitchToLogin }: RegisterFormProps) => {
     otp: "",
   });
   const [loading, setLoading] = useState(false);
-  const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+  const isProd = import.meta.env.MODE === "production";
+  const BASE_URL = isProd
+    ? import.meta.env.VITE_API_BASE_URL_PROD
+    : import.meta.env.VITE_API_BASE_URL;
 
   // Gửi mã OTP
   const handleSendOtp = async (e: React.FormEvent) => {
@@ -105,12 +108,7 @@ const RegisterForm = ({ onSwitchToLogin }: RegisterFormProps) => {
               </Button>
             </div>
 
-            <Button
-              variant="link"
-              className="mt-3 text-sm text-gray-500 underline"
-            >
-              Lựa chọn khác
-            </Button>
+          
           </motion.div>
         )}
 

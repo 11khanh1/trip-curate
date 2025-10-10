@@ -13,10 +13,6 @@ export default function Customers() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Quản lý Khách hàng</h1>
-        <p className="text-muted-foreground">Danh sách khách hàng và lịch sử đặt chỗ</p>
-      </div>
 
       <Card>
         <CardHeader>

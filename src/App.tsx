@@ -8,8 +8,7 @@ import Index from "./pages/Index";
 import AllActivities from "./pages/AllActivities";
 import ActivityDetail from "./pages/ActivityDetail";
 import NotFound from "./pages/NotFound";
-import Admin from "./pages/Admin";
-import Partner from "./pages/Partner";
+import Partner from "./pages/partner/Partner";
 import Vietnam from "./pages/regions/Vietnam";
 import Japan from "./pages/regions/Japan";
 import Singapore from "./pages/regions/Singapore";
@@ -42,6 +41,13 @@ import Customers from "./pages/admin/Customers";
 import Promotions from "./pages/admin/Promotions";
 import Locations from "./pages/admin/Locations";
 import Settings from "./pages/admin/Settings";
+import PartnerLayout from "./pages/partner/PartnerLayout";
+import PartnerDashboard from "./pages/partner/Dashboard";
+import PartnerActivities from "./pages/partner/Activities";
+import PartnerBookings from "./pages/partner/Bookings";
+import PartnerRevenue from "./pages/partner/Revenue";
+import PartnerAnalytics from "./pages/partner/Analytics";
+import PartnerSettings from "./pages/partner/Settings";
 
 const queryClient = new QueryClient();
 
@@ -70,9 +76,7 @@ const App = () => (
           <Route path="/regions/malaysia" element={<Malaysia />} />
           <Route path="/regions/indonesia" element={<Indonesia />} />
           <Route path="/deals" element={<Deals />} />
-          <Route path="/account-settings" element={<AccountSettings />} />
-          <Route path="/admin" element={<Admin />} />
-          <Route path="/partner" element={<Partner />} />
+          <Route path="/account-settings" element={<AccountSettings />} />          
           <Route path="/about/our-story" element={<OurStory />} />
           <Route path="/about/careers" element={<Careers />} />
           <Route path="/about/press" element={<Press />} />
@@ -92,6 +96,16 @@ const App = () => (
             <Route path="promotions" element={<Promotions />} />
             <Route path="locations" element={<Locations />} />
             <Route path="settings" element={<Settings />} />
+          </Route>
+
+           <Route path="/partner" element={<PartnerLayout />}>
+            <Route index element={<PartnerDashboard />} />
+            
+            <Route path="activities" element={<PartnerActivities />} />
+            <Route path="bookings" element={<PartnerBookings />} />
+            <Route path="revenue" element={<PartnerRevenue />} />
+            <Route path="analytics" element={<PartnerAnalytics />} />
+            <Route path="settings" element={<PartnerSettings />} />
           </Route>
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

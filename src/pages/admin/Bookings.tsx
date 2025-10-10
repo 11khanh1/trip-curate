@@ -51,11 +51,6 @@ export default function Bookings() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Quản lý Đơn đặt</h1>
-        <p className="text-muted-foreground">Theo dõi và quản lý các đơn đặt chỗ</p>
-      </div>
-
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">

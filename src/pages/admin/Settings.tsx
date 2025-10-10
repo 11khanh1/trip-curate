@@ -7,10 +7,7 @@ import { Switch } from "@/components/ui/switch";
 export default function Settings() {
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Cài đặt</h1>
-        <p className="text-muted-foreground">Quản lý cấu hình hệ thống</p>
-      </div>
+
 
       <div className="grid gap-6">
         <Card>
