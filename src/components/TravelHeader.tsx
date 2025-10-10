@@ -2,7 +2,7 @@ import { Search, Menu, User, Globe, ShoppingBag, Gift, ChevronDown, HelpCircle, 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Link } from "react-router-dom";
-import AuthModal from "./AuthModal";
+import AuthModal from "@/components/auth/AuthModal";
 import { useState, useEffect } from "react";
 import { useUser } from "@/context/UserContext";
 import { useNavigate } from "react-router-dom"; 

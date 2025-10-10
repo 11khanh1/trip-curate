@@ -138,14 +138,11 @@ const Partner = () => {
   const postNewTour = async (tourData: TourAPI): Promise<Tour> => {
     setIsSubmitting(true);
     try {
-      // Giả lập token/auth header nếu cần
       const response = await axios.post("/api/partner/tours", tourData, {
-        // headers: { Authorization: `Bearer ${yourAuthToken}` }
       });
-      // Giả định backend trả về object tour đã được tạo, có thêm ID và status
       const newTourFromAPI: TourAPI & { id: string } = response.data;
 
-      // Chuyển đổi dữ liệu từ API để phù hợp với state hiển thị Tour
+
       const newTourForState: Tour = {
         id: newTourFromAPI.id,
         title: newTourFromAPI.title,
