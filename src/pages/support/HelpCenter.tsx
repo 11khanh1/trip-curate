@@ -34,12 +34,12 @@ const HelpCenter = () => {
   ];
 
   const popularArticles = [
-    "Làm thế nào để đặt hoạt động trên Klook?",
+    "Làm thế nào để đặt hoạt động trên VietTravel?",
     "Chính sách hủy và hoàn tiền",
     "Cách sử dụng mã giảm giá",
     "Tôi có thể thay đổi ngày đặt chỗ không?",
     "Làm sao để liên hệ với nhà cung cấp dịch vụ?",
-    "Klook có hỗ trợ thanh toán trả góp không?",
+    "VietTravel có hỗ trợ thanh toán trả góp không?",
   ];
 
   return (

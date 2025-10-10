@@ -77,7 +77,7 @@ const PrivacyPolicy = () => {
             <Card className="mb-12">
               <CardContent className="p-8">
                 <p className="text-lg text-muted-foreground leading-relaxed">
-                  Klook ("chúng tôi", "của chúng tôi") cam kết bảo vệ quyền riêng tư của người dùng. 
+                  VietTravel ("chúng tôi", "của chúng tôi") cam kết bảo vệ quyền riêng tư của người dùng. 
                   Chính sách bảo mật này giải thích cách chúng tôi thu thập, sử dụng, chia sẻ và 
                   bảo vệ thông tin cá nhân của bạn khi bạn sử dụng dịch vụ của chúng tôi.
                 </p>

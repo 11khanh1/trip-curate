@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 const Footer = () => {
   const footerSections = [
     {
-      title: "Về Klook",
+      title: "Về VietTravel",
       links: [
         { name: "Câu chuyện của chúng tôi", url: "/about/our-story" },
         { name: "Tuyển dụng", url: "/about/careers" },

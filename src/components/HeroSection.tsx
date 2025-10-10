@@ -33,10 +33,10 @@ const HeroSection = () => {
         </h1>
         
         <p className="text-lg md:text-xl mb-8 text-white/90 max-w-3xl mx-auto font-medium">
-          Mở ra chân trời mới, đam mê mới và đánh thức phiên bản rực rỡ của bạn cùng Klook - trên mọi hành trình, dù gần hay xa.
+          Mở ra chân trời mới, đam mê mới và đánh thức phiên bản rực rỡ của bạn cùng VietTravel - trên mọi hành trình, dù gần hay xa.
         </p>
 
-        {/* Search Bar - More compact like Klook */}
+        {/* Search Bar - More compact like VietTravel */}
         <div className="bg-white rounded-lg p-1 max-w-xl mx-auto shadow-2xl">
           <div className="flex items-center">
             <div className="flex-1 flex items-center px-4 py-3">

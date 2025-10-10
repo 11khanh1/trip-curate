@@ -344,7 +344,7 @@ const TravelHeader = () => {
 
                 <NavigationMenuItem>
                   <NavigationMenuTrigger className="text-sm text-gray-700 hover:text-primary bg-transparent hover:bg-transparent data-[state=open]:bg-transparent">
-                    Khám phá Klook
+                    Khám phá VietTravel
                   </NavigationMenuTrigger>
                   <NavigationMenuContent>
                     <div className="w-[800px] p-6 bg-white">
@@ -374,7 +374,7 @@ const TravelHeader = () => {
                 <NavigationMenuItem>
                   <a href="#" className="flex items-center text-sm text-primary font-medium hover:text-primary/80 transition-colors">
                     <Gift className="w-4 h-4 mr-1" />
-                    Phiếu Quà Tặng Klook
+                    Phiếu Quà Tặng VietTravel
                   </a>
                 </NavigationMenuItem>
               </NavigationMenuList>

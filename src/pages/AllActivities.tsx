@@ -269,7 +269,7 @@ const AllActivities = () => {
     { id: "regions", label: "Khu vực phổ biến" },
     { id: "destinations", label: "Điểm đến phổ biến" },
     { id: "landmarks", label: "Địa danh phổ biến" },
-    { id: "explore", label: "Khám phá Klook" }
+    { id: "explore", label: "Khám phá VietTravel" }
   ];
 
   const [activeMainTab, setActiveMainTab] = useState("activities");

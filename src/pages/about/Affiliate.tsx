@@ -61,7 +61,7 @@ const Affiliate = () => {
           <div className="max-w-3xl mx-auto text-center">
             <h1 className="text-5xl font-bold mb-6">Chương trình liên kết</h1>
             <p className="text-xl mb-8">
-              Kiếm tiền bằng cách giới thiệu Klook đến bạn bè và người theo dõi của bạn
+              Kiếm tiền bằng cách giới thiệu VietTravel đến bạn bè và người theo dõi của bạn
             </p>
             <Button size="lg" variant="secondary">
               Đăng ký ngay

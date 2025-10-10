@@ -37,7 +37,7 @@ const TourCard = ({
 }: TourCardProps) => {
   return (
     <Link to={`/activity/${id}`}>
-      <Card className="overflow-hidden hover:shadow-hover transition-all duration-300 group cursor-pointer">
+      <Card className="overflow-hidden hover:shadow-hover transition-all duration-300 group cursor-pointer h-full min-h-[440px] flex flex-col">
       <div className="relative">
         <img 
           src={image} 
@@ -65,7 +65,7 @@ const TourCard = ({
         </Button>
       </div>
       
-      <CardContent className="p-4 space-y-3">
+      <CardContent className="p-4 space-y-3 flex-1 flex flex-col">
         <div className="space-y-2">
           <div className="flex items-center text-sm text-muted-foreground">
             <MapPin className="h-4 w-4 mr-1" />
@@ -103,7 +103,7 @@ const TourCard = ({
           </div>
         </div>
         
-        <div className="flex items-center justify-between pt-2 border-t">
+        <div className="flex items-center justify-between pt-2 border-t mt-auto">
           <div className="space-y-1">
             <div className="flex items-center space-x-2">
               {originalPrice && (
