@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import TravelHeader from "@/components/TravelHeader";
 import Footer from "@/components/Footer";
-import { Star, MapPin, Heart, ChevronRight, Calendar, Users, Check, AlertCircle, Info } from "lucide-react";
+import { Star, MapPin, Heart, ChevronRight, Calendar, Users, Check, AlertCircle, Info, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -30,6 +30,8 @@ const ActivityDetail = () => {
     locationName: "Thành phố Hồ Chí Minh",
     region: "VIỆT NAM",
     category: "Dịch vụ du lịch",
+    tourType: "Tour ghép",
+    pickupType: "Đón tại điểm hẹn",
     rating: 4.4,
     reviewCount: 1840,
     bookedCount: 25400,
@@ -52,18 +54,32 @@ const ActivityDetail = () => {
     description: "Trải nghiệm dịch vụ đón tiễn sân bay cao cấp với xe riêng và tài xế chuyên nghiệp. Dịch vụ này giúp bạn di chuyển thoải mái từ sân bay đến khách sạn hoặc ngược lại mà không phải lo lắng về việc tìm taxi hay giao thông công cộng.",
     packages: [
       {
-        id: "1",
-        name: "Gói Tiêu chuẩn",
-        description: "Xe sedan 4 chỗ",
-        price: 765000,
-        features: ["Xe sedan 4 chỗ", "Tài xế tiếng Việt", "Nước uống miễn phí"],
+        id: 1,
+        name: "Gói Tiêu Chuẩn",
+        price: 1250000,
+        originalPrice: 1500000,
+        includes: [
+          "Xe đưa đón khứ hồi từ Hà Nội",
+          "Vé tham quan và phí vào cổng",
+          "Buffet hải sản trên tàu",
+          "Hướng dẫn viên tiếng Việt",
+          "Nước uống và đồ ăn nhẹ",
+        ],
       },
       {
-        id: "2", 
-        name: "Gói Cao cấp",
-        description: "Xe SUV 7 chỗ",
-        price: 950000,
-        features: ["Xe SUV 7 chỗ", "Tài xế tiếng Anh/Việt", "Nước uống + WiFi"],
+        id: 2,
+        name: "Gói VIP",
+        price: 1850000,
+        originalPrice: 2200000,
+        includes: [
+          "Xe riêng đưa đón khứ hồi từ Hà Nội",
+          "Vé tham quan và phí vào cổng",
+          "Buffet hải sản cao cấp trên tàu",
+          "Hướng dẫn viên song ngữ (Việt-Anh)",
+          "Nước uống cao cấp và đồ ăn nhẹ",
+          "Ghế ngồi ưu tiên trên tàu",
+          "Bảo hiểm du lịch",
+        ],
       },
     ],
     termsAndConditions: [
@@ -235,6 +251,47 @@ const ActivityDetail = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main content */}
           <div className="lg:col-span-2 space-y-6">
+            {/* Title and basic info */}
+            <div className="space-y-4">
+              <div className="space-y-2">
+                
+                <h1 className="text-3xl font-bold text-foreground">{activity.title}</h1>
+              
+              
+                  <div className="flex flex-wrap items-center gap-4 mb-4">
+                    
+                    <Badge variant="outline" className="text-sm">
+                      <Users className="h-3 w-3 mr-1" />
+                      {activity.tourType}
+                    </Badge>
+                    <Badge variant="outline" className="text-sm">
+                      <MapPin className="h-3 w-3 mr-1" />
+                      {activity.pickupType}
+                    </Badge>
+                  </div>
+                <div className="flex items-center gap-4 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center">
+                      <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+                      <span className="font-semibold ml-1">{activity.rating}/5</span>
+                    </div>
+                    <span className="text-sm text-muted-foreground">
+                      {activity.reviewCount.toLocaleString()} Đánh giá
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                    <Users className="h-4 w-4" />
+                    <span>{activity.bookedCount.toLocaleString()}+ Đã đặt</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                    <MapPin className="h-4 w-4" />
+                    <span>{activity.locationName}</span>
+                  </div>
+                </div>
+              </div>
+          
             {/* Image gallery */}
             <div className="space-y-4">
               <div className="relative rounded-lg overflow-hidden">
@@ -271,37 +328,7 @@ const ActivityDetail = () => {
               </div>
             </div>
 
-            {/* Title and basic info */}
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span>{activity.category}</span>
-                </div>
-                
-                <h1 className="text-3xl font-bold text-foreground">{activity.title}</h1>
-                
-                <div className="flex items-center gap-4 flex-wrap">
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center">
-                      <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
-                      <span className="font-semibold ml-1">{activity.rating}/5</span>
-                    </div>
-                    <span className="text-sm text-muted-foreground">
-                      {activity.reviewCount.toLocaleString()} Đánh giá
-                    </span>
-                  </div>
-                  
-                  <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                    <Users className="h-4 w-4" />
-                    <span>{activity.bookedCount.toLocaleString()}+ Đã đặt</span>
-                  </div>
-                  
-                  <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                    <MapPin className="h-4 w-4" />
-                    <span>{activity.locationName}</span>
-                  </div>
-                </div>
-              </div>
+            
 
               {/* Highlights */}
               <Card>
@@ -365,35 +392,106 @@ const ActivityDetail = () => {
                 </div>
               </TabsContent>
 
-              <TabsContent value="packages" className="mt-6">
-                <div className="space-y-4">
-                  {activity.packages.map((pkg) => (
-                    <Card key={pkg.id}>
-                      <CardContent className="p-6">
-                        <div className="flex justify-between items-start mb-4">
-                          <div>
-                            <h3 className="font-semibold text-lg text-foreground">{pkg.name}</h3>
-                            <p className="text-sm text-muted-foreground">{pkg.description}</p>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-2xl font-bold text-primary">
-                              ₫ {pkg.price.toLocaleString()}
-                            </span>
+              <TabsContent value="packages" className="space-y-6">
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="space-y-6">
+                      {/* Package Selection */}
+                      <div>
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-lg font-semibold">Vui lòng chọn ngày & gói dịch vụ</h3>
+                          <Button variant="link" className="text-primary p-0">
+                            Xóa tất cả
+                          </Button>
+                        </div>
+                        <Button variant="outline" className="w-full mb-4 justify-start text-primary">
+                          <Calendar className="mr-2 h-4 w-4" />
+                          Xem trạng thái dịch vụ
+                        </Button>
+                        
+                        <div className="space-y-3">
+                          <p className="text-sm font-medium text-muted-foreground">Loại gói dịch vụ</p>
+                          <div className="flex flex-wrap gap-2">
+                            {activity.packages.map((pkg) => (
+                              <Button
+                                key={pkg.id}
+                                variant="outline"
+                                className="relative rounded-full border-2 hover:border-primary"
+                              >
+                                <Badge 
+                                  variant="destructive" 
+                                  className="absolute -top-2 -right-2 rounded-full px-2 py-0.5 text-xs"
+                                >
+                                  Giảm {Math.round(((pkg.originalPrice - pkg.price) / pkg.originalPrice) * 100)}%
+                                </Badge>
+                                {pkg.name}
+                              </Button>
+                            ))}
                           </div>
                         </div>
-                        <Separator className="my-4" />
-                        <ul className="space-y-2">
-                          {pkg.features.map((feature, index) => (
-                            <li key={index} className="flex items-center gap-2">
-                              <Check className="h-4 w-4 text-primary" />
-                              <span className="text-sm">{feature}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+                      </div>
+
+                      <Separator />
+
+                      {/* People Counter */}
+                      <div className="space-y-4">
+                        <p className="text-sm font-medium text-muted-foreground">Số lượng</p>
+                        
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between p-4 rounded-lg border">
+                            <span className="font-medium">Người lớn</span>
+                            <div className="flex items-center gap-4">
+                              <Button variant="outline" size="icon" className="h-8 w-8 rounded-full">
+                                -
+                              </Button>
+                              <span className="w-8 text-center font-semibold">0</span>
+                              <Button variant="outline" size="icon" className="h-8 w-8 rounded-full">
+                                +
+                              </Button>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between p-4 rounded-lg border">
+                            <span className="font-medium">Trẻ em(5-8)</span>
+                            <div className="flex items-center gap-4">
+                              <Button variant="outline" size="icon" className="h-8 w-8 rounded-full">
+                                -
+                              </Button>
+                              <span className="w-8 text-center font-semibold">0</span>
+                              <Button variant="outline" size="icon" className="h-8 w-8 rounded-full">
+                                +
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <Separator />
+
+                      {/* Price & Actions */}
+                      <div className="space-y-4">
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-3xl font-bold">₫ 937,500</span>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Vui lòng hoàn tất các mục yêu cầu để chuyển đến bước tiếp theo
+                        </p>
+
+                        <div className="flex gap-3">
+                          <Button 
+                            variant="outline" 
+                            className="flex-1 border-orange-500 text-orange-500 hover:bg-orange-50"
+                          >
+                            Thêm vào giỏ hàng
+                          </Button>
+                          <Button className="flex-1 bg-orange-500 hover:bg-orange-600">
+                            Đặt ngay
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
               </TabsContent>
 
               <TabsContent value="details" className="mt-6">
@@ -536,89 +634,24 @@ const ActivityDetail = () => {
           </div>
 
           {/* Booking sidebar */}
-          <div className="lg:col-span-1 space-y-6">
-            <Card className="sticky top-4">
-              <CardContent className="p-6 space-y-4">
-                <div>
-                  <div className="flex items-baseline gap-2 mb-2">
-                    <span className="text-3xl font-bold text-primary">
-                      ₫ {activity.price.toLocaleString()}
-                    </span>
-                    {activity.originalPrice && (
-                      <span className="text-lg text-muted-foreground line-through">
-                        ₫ {activity.originalPrice.toLocaleString()}
+          <div className="lg:col-span-1 space-y-6 lg:self-start">
+            <div className="lg:sticky lg:top-24">
+              <Card className="w-full shadow-xl">
+                <CardContent className="pt-6">
+                  <div className="space-y-4">
+                    <div>
+                      <span className="text-3xl font-bold">
+                        ₫ {activity.price.toLocaleString()}
                       </span>
-                    )}
-                  </div>
-                  {activity.discount && (
-                    <Badge variant="destructive">Giảm {activity.discount}%</Badge>
-                  )}
-                </div>
+                    </div>
 
-                <Separator />
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium mb-2 block">Chọn ngày</label>
-                    <Button variant="outline" className="w-full justify-start">
-                      <Calendar className="h-4 w-4 mr-2" />
-                      Chọn ngày
+                    <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white text-base py-6">
+                      Chọn các gói dịch vụ
                     </Button>
                   </div>
-
-                  <div>
-                    <label className="text-sm font-medium mb-2 block">Số lượng</label>
-                    <div className="flex items-center gap-4">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                      >
-                        -
-                      </Button>
-                      <span className="text-lg font-semibold">{quantity}</span>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() => setQuantity(quantity + 1)}
-                      >
-                        +
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-
-                <Separator />
-
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Tổng cộng</span>
-                    <span className="font-semibold text-foreground">
-                      ₫ {(activity.price * quantity).toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-
-                <Button className="w-full" size="lg">
-                  Đặt ngay
-                </Button>
-
-                <div className="space-y-2 text-sm text-muted-foreground">
-                  <div className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-primary" />
-                    <span>Xác nhận tức thì</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-primary" />
-                    <span>Miễn phí hủy</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-primary" />
-                    <span>Vé điện tử</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
 
             {/* Add-ons */}
             {activity.addOns && activity.addOns.length > 0 && (

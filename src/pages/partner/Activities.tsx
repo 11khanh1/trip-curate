@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -108,11 +108,24 @@ export default function PartnerActivities() {
 
   const [formData, setFormData] = useState<FormData>(initialFormData);
 
+  const mediaList = useMemo(() => {
+    if (!selectedTour || !Array.isArray(selectedTour.media)) return [];
+    return selectedTour.media
+      .map((url) => (typeof url === "string" ? url.trim() : ""))
+      .filter((url, idx, arr) => url && arr.indexOf(url) === idx);
+  }, [selectedTour]);
+
   useEffect(() => {
-    if (selectedTour && Array.isArray(selectedTour.media) && selectedTour.media.length > 0) {
+    if (!isDetailOpen) {
       setSelectedImageIndex(0);
+      return;
     }
-  }, [selectedTour, isDetailOpen]);
+    if (!mediaList.length) {
+      setSelectedImageIndex(0);
+    } else {
+      setSelectedImageIndex((prev) => (prev < mediaList.length ? prev : 0));
+    }
+  }, [isDetailOpen, mediaList]);
 
   // ---------------------------- UTILS & API ----------------------------
 
@@ -338,7 +351,7 @@ useEffect(() => { fetchTours(); }, []);
         base_price: editingTour.base_price || 0,
         policy: editingTour.policy || "",
         tagsString: Array.isArray(editingTour.tags) ? editingTour.tags.join(", ") : "",
-        imageUrlsString: Array.isArray(editingTour.media) ? editingTour.media.join(", ") : "",
+        imageUrlsString: Array.isArray(editingTour.media) ? editingTour.media.join("\n") : "",
         itineraryItems: parsedItinerary.length > 0 ? parsedItinerary : initialFormData.itineraryItems,
         start_date: editingTour.schedule?.start_date?.split('T')[0] || initialFormData.start_date,
         end_date: editingTour.schedule?.end_date?.split('T')[0] || initialFormData.end_date,
@@ -365,14 +378,10 @@ useEffect(() => { fetchTours(); }, []);
       setIsDetailOpen(true);
       setIsDetailLoading(true);
       try {
-          // FIX: Bỏ đi <Tour> để cho phép kiểm tra thuộc tính 'tour' một cách linh hoạt.
-          // TypeScript sẽ không còn báo lỗi khi bạn truy cập res.data.tour.
           const res = await axios.get(`${API_BASE}/api/partner/tours/${id}`, {
               headers: getTokenHeader(),
           });
           
-          // Logic này giờ đã hợp lệ. Nó xử lý cả trường hợp API trả về trực tiếp
-          // object Tour và trường hợp trả về object lồng nhau { tour: Tour }
           const raw = res.data.tour || res.data;
           const tourData: Tour = normalizeTourFromAPI(raw);
           setSelectedTour(tourData);
@@ -400,8 +409,8 @@ useEffect(() => { fetchTours(); }, []);
   };
 
   const handleAddTour = () => {
-    setEditingTour(null); // Đảm bảo không có tour nào đang được edit
-    setFormData(initialFormData); // Reset form về trạng thái ban đầu
+    setEditingTour(null); 
+    setFormData(initialFormData); 
     setIsDialogOpen(true);
   };
 
@@ -445,7 +454,7 @@ useEffect(() => { fetchTours(); }, []);
 
     if (formData.itineraryItems.some(item => !item.title || !item.detail)) {
         toast({
-            title: "Lỗi dữ liệu",
+            title: "Thiếu thông tin hành trình",
             description: "Tiêu đề và Chi tiết hoạt động trong Hành trình không được để trống.",
             variant: "destructive",
         });
@@ -453,7 +462,10 @@ useEffect(() => { fetchTours(); }, []);
     }
 
     const tagsArray = formData.tagsString.split(",").map((t) => t.trim()).filter(Boolean);
-    const mediaArray = formData.imageUrlsString.split(",").map((u) => u.trim()).filter(Boolean);
+    const mediaArray = formData.imageUrlsString
+      .split(/\r?\n/)
+      .map((u) => u.trim())
+      .filter(Boolean);
     const itineraryStrings = formData.itineraryItems.map(
       (i) => `Ngày ${i.day}: ${i.title} - ${i.detail}`
     );
@@ -462,7 +474,6 @@ useEffect(() => { fetchTours(); }, []);
       start_date: formData.start_date,
       end_date: formData.end_date,
       seats_total: Number(formData.seats_total),
-      // FIX: `seats_available` không nên lớn hơn `seats_total`
       seats_available: Math.min(Number(formData.seats_available), Number(formData.seats_total)),
       season_price: Number(formData.season_price),
     };
@@ -502,6 +513,9 @@ useEffect(() => { fetchTours(); }, []);
     };
     return texts[status] || status;
   };
+  
+  // FIX: Khai báo biến currentImage trước khi sử dụng
+  const currentImage = mediaList[selectedImageIndex];
 
   // ---------------------------- RENDER ----------------------------
   return (
@@ -558,8 +572,14 @@ useEffect(() => { fetchTours(); }, []);
                         </div>
                     </div>
 
-                    <Label htmlFor="imageUrlsString">Ảnh (URL, cách nhau dấu phẩy)</Label>
-                    <Textarea id="imageUrlsString" value={formData.imageUrlsString} onChange={handleInputChange} rows={2} placeholder="https://example.com/img1.jpg; https://example.com/img2.jpg" />
+                    <Label htmlFor="imageUrlsString">Ảnh (mỗi dòng một URL)</Label>
+                    <Textarea
+                      id="imageUrlsString"
+                      value={formData.imageUrlsString}
+                      onChange={handleInputChange}
+                      rows={4}
+                      placeholder={"https://example.com/img1.jpg\nhttps://example.com/img2.jpg"}
+                    />
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
@@ -645,7 +665,7 @@ useEffect(() => { fetchTours(); }, []);
                   </DialogDescription>
               </DialogHeader>
 
-              {isDetailLoading ? ( // IMPROVEMENT: Dùng state loading riêng
+              {isDetailLoading ? ( 
                   <div className="flex justify-center items-center py-10">
                       <Loader2 className="h-8 w-8 animate-spin text-primary" />
                   </div>
@@ -675,7 +695,6 @@ useEffect(() => { fetchTours(); }, []);
                               <div className="col-span-2">
                                   <p className="text-sm font-semibold">Tags:</p>
                                   <div className="flex flex-wrap gap-2 pt-1">
-                                      {/* FIX: Kiểm tra `tags` là mảng và không rỗng */}
                                       {Array.isArray(selectedTour.tags) && selectedTour.tags.map((tag, i) => (
                                           <Badge key={i} variant="secondary">{tag}</Badge>
                                       ))}
@@ -735,33 +754,96 @@ useEffect(() => { fetchTours(); }, []);
                           </CardContent>
                       </Card>
 
-                      <Card>
-                        <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Image className="h-4 w-4"/> Media</CardTitle></CardHeader>
-                          <CardContent className="flex flex-wrap gap-3">
-                            {(Array.isArray(selectedTour.media) && selectedTour.media.length > 0) ? (
-                              selectedTour.media
-                                .filter((u, idx, arr) => arr.indexOf(u) === idx)
-                                .map((url, i) => (
-                                  <button
-                                    type="button"
-                                    key={i}
-                                    onClick={() => setViewerIndex(i)}
-                                    className="group relative rounded-md overflow-hidden border hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                                    aria-label={`Xem ảnh ${i+1}`}
-                                  >
+                        <Card>
+                          <CardHeader>
+                            <CardTitle className="text-lg flex items-center gap-2">
+                              <Image className="h-4 w-4" /> Bộ sưu tập ảnh
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            {mediaList.length > 0 ? (
+                              <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+                                <div className="relative w-full overflow-hidden rounded-xl border bg-muted aspect-[16/9]">
+                                  {/* FIX: Kiểm tra `currentImage` tồn tại trước khi render img */}
+                                  {currentImage ? (
                                     <img
-                                      src={url}
-                                      alt={`Ảnh tour ${i+1}`}
-                                      className="w-24 h-24 object-cover"
-                                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                                      src={currentImage}
+                                      alt={`Ảnh tour ${selectedImageIndex + 1}`}
+                                      className="h-full w-full object-cover"
+                                      onError={(e) => {
+                                        // Ẩn ảnh nếu có lỗi tải
+                                        (e.currentTarget as HTMLImageElement).style.display = "none";
+                                        // Hoặc có thể thay thế bằng ảnh placeholder
+                                        // e.currentTarget.src = "/placeholder.png"; 
+                                      }}
                                     />
-                                  </button>
-                                ))
+                                  ) : (
+                                    <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">
+                                      Không thể hiển thị ảnh.
+                                    </div>
+                                  )}
+
+                                  {mediaList.length > 1 && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        className={`absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/25 p-2 text-white transition hover:bg-black/40 focus:outline-none focus:ring-2 focus:ring-white ${
+                                          selectedImageIndex === 0 ? "opacity-40 cursor-not-allowed" : ""
+                                        }`}
+                                        onClick={() => setSelectedImageIndex((idx) => Math.max(idx - 1, 0))}
+                                        disabled={selectedImageIndex === 0}
+                                        aria-label="Ảnh trước"
+                                      >
+                                        <ChevronLeft className="h-5 w-5" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className={`absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/25 p-2 text-white transition hover:bg-black/40 focus:outline-none focus:ring-2 focus:ring-white ${
+                                          selectedImageIndex === mediaList.length - 1 ? "opacity-40 cursor-not-allowed" : ""
+                                        }`}
+                                        onClick={() => setSelectedImageIndex((idx) => Math.min(idx + 1, mediaList.length - 1))}
+                                        disabled={selectedImageIndex === mediaList.length - 1}
+                                        aria-label="Ảnh tiếp theo"
+                                      >
+                                        <ChevronRight className="h-5 w-5" />
+                                      </button>
+                                    </>
+                                  )}
+                                  <span className="absolute bottom-3 right-4 rounded-full bg-black/40 px-3 py-1 text-xs text-white">
+                                    {Math.min(selectedImageIndex + 1, mediaList.length)} / {mediaList.length}
+                                  </span>
+                                </div>
+
+                                <div className="flex gap-3 overflow-x-auto lg:flex-col lg:overflow-y-auto">
+                                  {mediaList.map((url, idx) => (
+                                    <button
+                                      type="button"
+                                      key={`${url}-${idx}`}
+                                      onClick={() => setSelectedImageIndex(idx)}
+                                      className={`flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-md border transition focus:outline-none focus:ring-2 focus:ring-primary ${
+                                        idx === selectedImageIndex
+                                          ? "border-primary ring-1 ring-primary"
+                                          : "border-transparent opacity-80 hover:opacity-100"
+                                      }`}
+                                      aria-label={`Chọn ảnh ${idx + 1}`}
+                                    >
+                                      <img
+                                        src={url}
+                                        alt={`Thumbnail ${idx + 1}`}
+                                        className="h-full w-full object-cover"
+                                        onError={(e) => {
+                                          (e.currentTarget as HTMLImageElement).style.visibility = "hidden";
+                                        }}
+                                      />
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
                             ) : (
                               <p className="text-sm text-muted-foreground">Chưa có ảnh nào cho tour này.</p>
                             )}
                           </CardContent>
-                      </Card>
+                        </Card>
                   </div>
               )}
 
@@ -824,21 +906,22 @@ useEffect(() => { fetchTours(); }, []);
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
-                          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleViewTour(tour.id)}>
+                          {/* IMPROVEMENT: Thêm aria-label cho các nút icon */}
+                          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleViewTour(tour.id)} aria-label="Xem chi tiết tour">
                             <Eye className="h-4 w-4" />
                           </Button>
 
                           {(tour.status === 'rejected') && (
-                            <Button variant="default" size="icon" className="h-8 w-8 bg-green-500 hover:bg-green-600" onClick={() => submitTourForApproval(tour.id)}>
+                            <Button variant="default" size="icon" className="h-8 w-8 bg-green-500 hover:bg-green-600" onClick={() => submitTourForApproval(tour.id)} aria-label="Gửi duyệt lại tour">
                               <Send className="h-4 w-4" />
                             </Button>
                           )}
                           
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditingTour(tour)} disabled={tour.status === 'approved'}>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditingTour(tour)} disabled={tour.status === 'approved'} aria-label="Chỉnh sửa tour">
                             <Edit className="h-4 w-4" />
                           </Button>
                           
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-red-600" onClick={() => handleDeleteTour(tour.id)} disabled={tour.status === 'approved'}>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-red-600" onClick={() => handleDeleteTour(tour.id)} disabled={tour.status === 'approved'} aria-label="Xóa tour">
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>

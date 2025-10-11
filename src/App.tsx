@@ -49,6 +49,7 @@ import PartnerRevenue from "./pages/partner/Revenue";
 import PartnerAnalytics from "./pages/partner/Analytics";
 import PartnerSettings from "./pages/partner/Settings";
 import AuthCallback from "./pages/AuthCallback";
+import ResultSearch from "./pages/ResultSearch";
 
 
 const queryClient = new QueryClient();
@@ -78,6 +79,7 @@ const App = () => (
           <Route path="/regions/malaysia" element={<Malaysia />} />
           <Route path="/regions/indonesia" element={<Indonesia />} />
           <Route path="/deals" element={<Deals />} />
+          <Route path="/resultsearch" element={<ResultSearch />} />
           <Route path="/account-settings" element={<AccountSettings />} />          
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/about/our-story" element={<OurStory />} />
