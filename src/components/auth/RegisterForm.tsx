@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Mail, Phone, User, ShieldCheck, Facebook as FacebookIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 
 interface RegisterFormProps {
   onSwitchToLogin: (email?: string) => void;
@@ -16,25 +17,74 @@ const RegisterForm = ({ onSwitchToLogin }: RegisterFormProps) => {
     email: "",
     otp: "",
   });
+  const [emailError, setEmailError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resendIn, setResendIn] = useState(0);
+  const timerRef = useRef<number | null>(null);
   const isProd = import.meta.env.MODE === "production";
   const BASE_URL = isProd
     ? import.meta.env.VITE_API_BASE_URL_PROD
     : import.meta.env.VITE_API_BASE_URL;
 
   // Gửi mã OTP
+  const isValidEmail = (value: string) => {
+    const email = value.trim();
+    if (!email) return false;
+    const re = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
+    return re.test(email);
+  };
+
+  const startResendCountdown = (seconds = 60) => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    setResendIn(seconds);
+    timerRef.current = window.setInterval(() => {
+      setResendIn((prev) => {
+        if (prev <= 1) {
+          if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, []);
+
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
+    const trimmed = formData.email.trim();
+    if (!isValidEmail(trimmed)) {
+      setEmailError("Email không hợp lệ");
+      return;
+    }
+    if (trimmed !== formData.email) {
+      setFormData((prev) => ({ ...prev, email: trimmed }));
+    }
     setLoading(true);
     try {
       const res = await fetch(`${BASE_URL}/api/forgot-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "email", value: formData.email }),
+        body: JSON.stringify({ type: "email", value: trimmed }),
       });
       if (!res.ok) throw new Error("Không thể gửi mã xác minh");
       alert("Đã gửi mã xác minh tới email của bạn!");
       setStep("verifyEmail");
+      startResendCountdown(60);
     } catch (err) {
       alert((err as Error).message);
     } finally {
@@ -63,6 +113,25 @@ const RegisterForm = ({ onSwitchToLogin }: RegisterFormProps) => {
       alert((err as Error).message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (resendIn > 0 || resending) return;
+    setResending(true);
+    try {
+      const res = await fetch(`${BASE_URL}/api/forgot-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "email", value: formData.email }),
+      });
+      if (!res.ok) throw new Error("Không thể gửi lại mã xác minh");
+      alert("Đã gửi lại mã xác minh!");
+      startResendCountdown(60);
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setResending(false);
     }
   };
 
@@ -135,15 +204,28 @@ const RegisterForm = ({ onSwitchToLogin }: RegisterFormProps) => {
               type="email"
               placeholder="Địa chỉ email"
               value={formData.email}
-              onChange={(e) =>
-                setFormData({ ...formData, email: e.target.value })
-              }
+              onChange={(e) => {
+                const v = e.target.value;
+                setFormData({ ...formData, email: v });
+                if (!v) {
+                  setEmailError("Vui lòng nhập email");
+                } else if (!isValidEmail(v)) {
+                  setEmailError("Email không hợp lệ");
+                } else {
+                  setEmailError(null);
+                }
+              }}
+              aria-invalid={!!emailError}
+              className={emailError ? "border-red-500 focus-visible:ring-red-500" : undefined}
               required
             />
+            {emailError && (
+              <p className="text-xs text-red-600 mt-1">{emailError}</p>
+            )}
             <Button
               type="submit"
               className="w-full h-11 bg-gradient-to-r from-orange-500 to-orange-400 text-white font-semibold rounded-lg"
-              disabled={loading}
+              disabled={loading || !!emailError || !formData.email}
             >
               {loading ? "Đang gửi..." : "Gửi mã xác minh"}
             </Button>
@@ -185,15 +267,23 @@ const RegisterForm = ({ onSwitchToLogin }: RegisterFormProps) => {
               </p>
             </div>
             <Label>Mã OTP</Label>
-            <Input
-              type="text"
-              placeholder="Nhập mã xác minh"
-              value={formData.otp}
-              onChange={(e) =>
-                setFormData({ ...formData, otp: e.target.value })
-              }
-              required
-            />
+            <div className="flex justify-center">
+              <InputOTP
+                maxLength={6}
+                value={formData.otp}
+                onChange={(val) => setFormData({ ...formData, otp: val })}
+                containerClassName="gap-2"
+              >
+                <InputOTPGroup>
+                  <InputOTPSlot index={0} />
+                  <InputOTPSlot index={1} />
+                  <InputOTPSlot index={2} />
+                  <InputOTPSlot index={3} />
+                  <InputOTPSlot index={4} />
+                  <InputOTPSlot index={5} />
+                </InputOTPGroup>
+              </InputOTP>
+            </div>
             <Button
               type="submit"
               className="w-full h-11 bg-gradient-to-r from-orange-500 to-orange-400 text-white font-semibold rounded-lg"
@@ -201,6 +291,17 @@ const RegisterForm = ({ onSwitchToLogin }: RegisterFormProps) => {
             >
               {loading ? "Đang xác thực..." : "Xác minh"}
             </Button>
+
+            <div className="text-center text-sm text-gray-600">
+              <button
+                type="button"
+                className="text-orange-500 hover:underline disabled:opacity-60"
+                onClick={handleResendOtp}
+                disabled={resendIn > 0 || resending}
+              >
+                {resendIn > 0 ? `Gửi lại mã sau ${resendIn}s` : resending ? "Đang gửi lại..." : "Gửi lại mã"}
+              </button>
+            </div>
           </motion.form>
         )}
       </AnimatePresence>
