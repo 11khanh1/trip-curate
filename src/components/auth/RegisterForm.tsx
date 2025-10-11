@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useUser } from "@/context/UserContext";
 
+
 interface RegisterFormProps {
   onSwitchToLogin: (email?: string) => void;
   onSuccess?: () => void;
@@ -37,6 +38,7 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }: RegisterFormProps) => {
     ? import.meta.env.VITE_API_BASE_URL_PROD
     : import.meta.env.VITE_API_BASE_URL;
   const { setCurrentUser } = useUser() as any;
+
 
   // Gửi mã OTP
   const isValidEmail = (value: string) => {
@@ -74,6 +76,51 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }: RegisterFormProps) => {
       }
     };
   }, []);
+
+  const startSocial = async (provider: "google" | "facebook") => {
+    try {
+      const res = await fetch(`${BASE_URL}/api/auth/social/${provider}/redirect`, {
+        method: "GET",
+        headers: { Accept: "application/json" },
+      });
+      const data = await res.json().catch(() => ({}));
+      const url = data?.url || `${BASE_URL}/api/auth/social/${provider}/redirect`;
+      const popup = window.open(url, `oauth-${provider}`, "width=520,height=600,menubar=no,location=no,status=no");
+      if (!popup) {
+        window.location.href = url;
+        return;
+      }
+      const onMessage = async (e: MessageEvent) => {
+        if (!e.data || e.data.type !== "oauth-success") return;
+        try {
+          const token = e.data.token as string;
+          localStorage.setItem("token", token);
+          const me = await fetch(`${BASE_URL}/api/user`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } }).catch(() => null);
+          if (me && me.ok) {
+            const user = await me.json().catch(() => null);
+            if (user) {
+              localStorage.setItem("user", JSON.stringify(user));
+              setCurrentUser(user);
+            }
+          }
+          alert("Đăng nhập thành công!");
+          if (onSuccess) onSuccess(); else onSwitchToLogin();
+        } finally {
+          window.removeEventListener("message", onMessage);
+          popup.close();
+        }
+      };
+      window.addEventListener("message", onMessage);
+      const timer = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(timer);
+          window.removeEventListener("message", onMessage);
+        }
+      }, 400);
+    } catch (e) {
+      alert("Không thể bắt đầu đăng nhập mạng xã hội.");
+    }
+  };
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -235,6 +282,7 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }: RegisterFormProps) => {
               <Button
                 variant="outline"
                 className="h-11 font-medium justify-start pl-4"
+                onClick={() => startSocial("google")}
               >
                 <img
                   src="https://www.svgrepo.com/show/355037/google.svg"
@@ -259,6 +307,7 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }: RegisterFormProps) => {
               </Button>
               <Button
                 className="relative h-11 font-medium justify-center bg-[#1877F2] hover:bg-[#166FE5] text-white rounded-lg shadow"
+                onClick={() => startSocial("facebook")}
               >
                 <FacebookIcon className="absolute left-4 w-5 h-5 text-white" />
                 Facebook

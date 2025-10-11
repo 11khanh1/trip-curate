@@ -28,6 +28,55 @@ const LoginForm = ({ onSwitchToRegister, onForgotPassword, onSuccess }: LoginFor
   const handleChange = (field: string, value: string) =>
     setFormData((prev) => ({ ...prev, [field]: value }));
 
+  const openSocialPopup = async (provider: "google" | "facebook") => {
+    try {
+      const res = await fetch(`${BASE_URL}/api/auth/social/${provider}/redirect`, {
+        method: "GET",
+        headers: { Accept: "application/json" },
+      });
+      const data = await res.json().catch(() => ({}));
+      const url = data?.url || `${BASE_URL}/api/auth/social/${provider}/redirect`;
+      const popup = window.open(url, `oauth-${provider}` , "width=520,height=600,menubar=no,location=no,status=no");
+      if (!popup) {
+        // Popup bị chặn → redirect toàn trang
+        window.location.href = url;
+        return;
+      }
+
+      const onMessage = async (e: MessageEvent) => {
+        if (!e.data || e.data.type !== "oauth-success") return;
+        try {
+          const token = e.data.token as string;
+          localStorage.setItem("token", token);
+          // Cố gắng lấy user info (tùy backend)
+          const me = await fetch(`${BASE_URL}/api/user`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } }).catch(() => null);
+          if (me && me.ok) {
+            const user = await me.json().catch(() => null);
+            if (user) {
+              localStorage.setItem("user", JSON.stringify(user));
+              setCurrentUser(user);
+            }
+          }
+          alert("Đăng nhập thành công!");
+          onSuccess();
+          navigate("/");
+        } finally {
+          window.removeEventListener("message", onMessage);
+          popup.close();
+        }
+      };
+      window.addEventListener("message", onMessage);
+      const timer = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(timer);
+          window.removeEventListener("message", onMessage);
+        }
+      }, 400);
+    } catch (err) {
+      alert("Không thể bắt đầu đăng nhập mạng xã hội.");
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -67,6 +116,7 @@ const LoginForm = ({ onSwitchToRegister, onForgotPassword, onSuccess }: LoginFor
               <Button
                 variant="outline"
                 className="h-11 font-medium justify-start pl-4"
+                onClick={() => openSocialPopup("google")}
               >
                 <img
                   src="https://www.svgrepo.com/show/355037/google.svg"
@@ -98,6 +148,7 @@ const LoginForm = ({ onSwitchToRegister, onForgotPassword, onSuccess }: LoginFor
               </Button>
               <Button
                 className="relative h-11 font-medium justify-center bg-[#1877F2] hover:bg-[#166FE5] text-white rounded-lg shadow"
+                onClick={() => openSocialPopup("facebook")}
               >
                 <FacebookIcon className="absolute left-4 w-5 h-5 text-white" />
                 Facebook

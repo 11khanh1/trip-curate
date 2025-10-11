@@ -21,7 +21,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, MapPin, List, Image, Calendar, Loader2, Eye, Send } from "lucide-react";
+import { Plus, Edit, Trash2, MapPin, List, Image, Calendar, Loader2, Eye, Send, X, ChevronLeft, ChevronRight } from "lucide-react";
 import axios from "axios";
 
 // ---------------------------- INTERFACES ----------------------------
@@ -80,7 +80,9 @@ export default function PartnerActivities() {
   const [editingTour, setEditingTour] = useState<Tour | null>(null);
   const [selectedTour, setSelectedTour] = useState<Tour | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isDetailLoading, setIsDetailLoading] = useState(false); // IMPROVEMENT: Thêm state loading cho dialog chi tiết
+  const [isDetailLoading, setIsDetailLoading] = useState(false); 
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  
 
   // Giả lập hàm toast để code chạy được
   const toast = ({ title, description, variant }: any) => {
@@ -105,6 +107,39 @@ export default function PartnerActivities() {
   };
 
   const [formData, setFormData] = useState<FormData>(initialFormData);
+
+  // Khi lightbox mở: khóa cuộn + điều hướng phím
+  useEffect(() => {
+    if (viewerIndex === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (viewerIndex === null) return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setViewerIndex(null);
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        setViewerIndex((prev) => {
+          if (prev === null) return prev;
+          const total = selectedTour?.media?.length || 0;
+          return total ? (prev > 0 ? prev - 1 : total - 1) : prev;
+        });
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        setViewerIndex((prev) => {
+          if (prev === null) return prev;
+          const total = selectedTour?.media?.length || 0;
+          return total ? (prev < total - 1 ? prev + 1 : 0) : prev;
+        });
+      }
+    };
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [viewerIndex, selectedTour]);
 
   // ---------------------------- UTILS & API ----------------------------
 
@@ -551,7 +586,7 @@ useEffect(() => { fetchTours(); }, []);
                     </div>
 
                     <Label htmlFor="imageUrlsString">Ảnh (URL, cách nhau dấu phẩy)</Label>
-                    <Textarea id="imageUrlsString" value={formData.imageUrlsString} onChange={handleInputChange} rows={2} placeholder="https://example.com/img1.jpg, https://example.com/img2.jpg" />
+                    <Textarea id="imageUrlsString" value={formData.imageUrlsString} onChange={handleInputChange} rows={2} placeholder="https://example.com/img1.jpg; https://example.com/img2.jpg" />
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
@@ -618,10 +653,91 @@ useEffect(() => { fetchTours(); }, []);
             </form>
           </DialogContent>
         </Dialog>
+
+        {/* Lightbox xem ảnh lớn, không ảnh hưởng Dialog chi tiết */}
+        {viewerIndex !== null && selectedTour && (
+          <div
+            className="fixed inset-0 z-[10000] bg-black/85 backdrop-blur-[1px] flex items-center justify-center p-4"
+            onClick={(e) => { if (e.target === e.currentTarget) setViewerIndex(null); }}
+            role="dialog"
+            aria-modal="true"
+          >
+            <button
+              type="button"
+              className="absolute top-4 right-4 text-white/90 hover:text-white"
+              onClick={() => setViewerIndex(null)}
+              aria-label="Đóng"
+            >
+              <X className="h-6 w-6" />
+            </button>
+
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 text-white/90 text-sm bg-white/10 px-3 py-1 rounded-full border border-white/20 shadow">
+              {(viewerIndex + 1)} / {selectedTour.media.length}
+            </div>
+
+            <div className="flex items-center gap-4 w-full max-w-6xl" onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                className="p-3 rounded-full bg-white/10 hover:bg-white/20 text-white focus:outline-none focus:ring-2 focus:ring-white"
+                onClick={() => setViewerIndex((prev) => {
+                  if (prev === null) return prev;
+                  const total = selectedTour.media.length;
+                  return prev > 0 ? prev - 1 : total - 1;
+                })}
+                aria-label="Ảnh trước"
+              >
+                <ChevronLeft className="h-8 w-8" />
+              </button>
+
+              <div className="flex-1">
+                <img
+                  src={selectedTour.media[viewerIndex]}
+                  alt={`Ảnh tour lớn ${viewerIndex + 1}`}
+                  className="max-h-[80vh] w-full object-contain rounded-lg shadow-2xl"
+                />
+              </div>
+
+              <button
+                type="button"
+                className="p-3 rounded-full bg-white/10 hover:bg-white/20 text-white focus:outline-none focus:ring-2 focus:ring-white"
+                onClick={() => setViewerIndex((prev) => {
+                  if (prev === null) return prev;
+                  const total = selectedTour.media.length;
+                  return prev < total - 1 ? prev + 1 : 0;
+                })}
+                aria-label="Ảnh tiếp"
+              >
+                <ChevronRight className="h-8 w-8" />
+              </button>
+            </div>
+
+            <div className="absolute bottom-4 left-0 right-0 mx-auto flex gap-2 justify-center max-w-6xl overflow-x-auto px-4">
+              {selectedTour.media.map((url, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  className={`h-14 w-20 rounded-md overflow-hidden border ${idx === viewerIndex ? 'ring-2 ring-white' : 'opacity-80 hover:opacity-100'}`}
+                  onClick={() => setViewerIndex(idx)}
+                  aria-label={`Xem ảnh ${idx + 1}`}
+                >
+                  <img src={url} alt={`thumb ${idx + 1}`} className="h-full w-full object-cover" />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
-      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto scrollbar-hide">
+        <Dialog open={isDetailOpen} onOpenChange={(open) => {
+          // Không cho đóng khi đang mở viewer
+          if (viewerIndex !== null && open === false) return;
+          setIsDetailOpen(open);
+        }}>
+            <DialogContent
+              className="max-w-4xl max-h-[90vh] overflow-y-auto scrollbar-hide"
+              onInteractOutside={(e) => { if (viewerIndex !== null) e.preventDefault(); }}
+              onEscapeKeyDown={(e) => { if (viewerIndex !== null) { e.preventDefault(); setViewerIndex(null); } }}
+            >
               <DialogHeader>
                   <DialogTitle>{selectedTour ? selectedTour.title : "Đang tải chi tiết..."}</DialogTitle>
                   <DialogDescription>
@@ -728,23 +844,30 @@ useEffect(() => { fetchTours(); }, []);
 
                       <Card>
                         <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Image className="h-4 w-4"/> Media</CardTitle></CardHeader>
-                        <CardContent className="flex flex-wrap gap-3">
-                          {(Array.isArray(selectedTour.media) && selectedTour.media.length > 0) ? (
-                            selectedTour.media
-                              .filter((u, idx, arr) => arr.indexOf(u) === idx)
-                              .map((url, i) => (
-                                <img
-                                  key={i}
-                                  src={url}
-                                  alt={`Ảnh tour ${i+1}`}
-                                  className="w-24 h-24 object-cover rounded-md border"
-                                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                                />
-                              ))
-                          ) : (
-                            <p className="text-sm text-muted-foreground">Chưa có ảnh nào cho tour này.</p>
-                          )}
-                        </CardContent>
+                          <CardContent className="flex flex-wrap gap-3">
+                            {(Array.isArray(selectedTour.media) && selectedTour.media.length > 0) ? (
+                              selectedTour.media
+                                .filter((u, idx, arr) => arr.indexOf(u) === idx)
+                                .map((url, i) => (
+                                  <button
+                                    type="button"
+                                    key={i}
+                                    onClick={() => setViewerIndex(i)}
+                                    className="group relative rounded-md overflow-hidden border hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                                    aria-label={`Xem ảnh ${i+1}`}
+                                  >
+                                    <img
+                                      src={url}
+                                      alt={`Ảnh tour ${i+1}`}
+                                      className="w-24 h-24 object-cover"
+                                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                                    />
+                                  </button>
+                                ))
+                            ) : (
+                              <p className="text-sm text-muted-foreground">Chưa có ảnh nào cho tour này.</p>
+                            )}
+                          </CardContent>
                       </Card>
                   </div>
               )}
