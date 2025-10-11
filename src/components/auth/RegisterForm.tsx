@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Mail, Phone, User, ShieldCheck } from "lucide-react";
+import { Mail, Phone, User, ShieldCheck, Facebook as FacebookIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -93,6 +93,7 @@ const RegisterForm = ({ onSwitchToLogin }: RegisterFormProps) => {
                 />
                 Google
               </Button>
+              
               <Button
                 variant="outline"
                 className="h-11 font-medium justify-start pl-4"
@@ -105,6 +106,12 @@ const RegisterForm = ({ onSwitchToLogin }: RegisterFormProps) => {
                 onClick={() => setStep("form")}
               >
                 <Mail className="w-5 h-5 mr-2" /> Email
+              </Button>
+              <Button
+                className="relative h-11 font-medium justify-center bg-[#1877F2] hover:bg-[#166FE5] text-white rounded-lg shadow"
+              >
+                <FacebookIcon className="absolute left-4 w-5 h-5 text-white" />
+                Facebook
               </Button>
             </div>
 
