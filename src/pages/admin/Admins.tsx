@@ -1,35 +1,153 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import {
+  fetchAdminStaff,
+  createAdminStaff,
+  updateAdminStaff,
+  deleteAdminStaff,
+  type AdminStaff,
+} from "@/services/adminApi";
 
 type Role = "Super Admin" | "Quản lý nội dung" | "Hỗ trợ khách hàng";
 
-interface AdminUser {
-  id: number;
+type StaffStatus = "active" | "inactive" | "suspended";
+
+const STATUS_LABELS: Record<StaffStatus, string> = {
+  active: "Đang hoạt động",
+  inactive: "Tạm ngưng",
+  suspended: "Khóa tạm thời",
+};
+
+type NormalizedStaff = {
+  id: string;
   name: string;
   email: string;
-  role: Role;
+  role: Role | string;
+  phone?: string;
+  status: StaffStatus;
   lastLogin: string;
-  active: boolean;
-}
+};
 
-const initialAdmins: AdminUser[] = [
-  { id: 1, name: "Nguyễn Thu Hà", email: "ha.nguyen@tripcurate.com", role: "Super Admin", lastLogin: "11/10/2025 09:12", active: true },
-  { id: 2, name: "Trần Gia Bảo", email: "bao.tran@tripcurate.com", role: "Quản lý nội dung", lastLogin: "10/10/2025 21:45", active: true },
-  { id: 3, name: "Phạm Minh Triết", email: "triet.pham@tripcurate.com", role: "Hỗ trợ khách hàng", lastLogin: "10/10/2025 18:05", active: false },
-];
+const normalizeStaff = (staff: AdminStaff): NormalizedStaff => ({
+  id: staff.id,
+  name: staff.name,
+  email: staff.email,
+  role: (staff.role as Role) || "Hỗ trợ khách hàng",
+  phone: staff.phone,
+  status: ((staff.status as StaffStatus) ?? "active") as StaffStatus,
+  lastLogin: staff.last_login_at ?? (staff as any)?.last_login ?? "",
+});
 
 export default function AdminAdmins() {
-  const [admins, setAdmins] = useState<AdminUser[]>(initialAdmins);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  const toggleActive = (id: number) => {
-    setAdmins((prev) =>
-      prev.map((admin) => (admin.id === id ? { ...admin, active: !admin.active } : admin)),
-    );
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    password: "",
+    password_confirmation: "",
+    status: "active" as StaffStatus,
+  });
+
+  const staffQuery = useQuery({
+    queryKey: ["admin-staff"],
+    queryFn: () => fetchAdminStaff(),
+  });
+
+  const staff = useMemo(() => {
+    const response = staffQuery.data as
+      | PaginatedResponse<AdminStaff>
+      | AdminStaff[]
+      | undefined;
+
+    if (!response) return [];
+    const list = Array.isArray(response) ? response : response.data ?? [];
+    return list.map(normalizeStaff);
+  }, [staffQuery.data]);
+
+  const createMutation = useMutation({
+    mutationFn: () =>
+      createAdminStaff({
+        ...form,
+        status: form.status,
+      }),
+    onSuccess: () => {
+      toast({ title: "Đã tạo tài khoản", description: "Nhân sự quản trị mới đã được thêm." });
+      setForm({ name: "", email: "", phone: "", password: "", password_confirmation: "", status: "active" });
+      queryClient.invalidateQueries({ queryKey: ["admin-staff"] });
+    },
+    onError: (err: any) => {
+      console.error("Create staff failed:", err);
+      toast({
+        title: "Không thể tạo tài khoản",
+        description: err?.response?.data?.message || "Vui lòng kiểm tra lại thông tin.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: StaffStatus }) =>
+      updateAdminStaff(id, { status }),
+    onSuccess: () => {
+      toast({ title: "Đã cập nhật", description: "Trạng thái nhân sự đã được cập nhật." });
+      queryClient.invalidateQueries({ queryKey: ["admin-staff"] });
+    },
+    onError: (err: any) => {
+      console.error("Update staff failed:", err);
+      toast({
+        title: "Không thể cập nhật trạng thái",
+        description: err?.response?.data?.message || "Vui lòng thử lại sau.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteAdminStaff(id),
+    onSuccess: () => {
+      toast({ title: "Đã xoá nhân sự", description: "Tài khoản quản trị đã được xoá." });
+      queryClient.invalidateQueries({ queryKey: ["admin-staff"] });
+    },
+    onError: (err: any) => {
+      console.error("Delete staff failed:", err);
+      toast({
+        title: "Không thể xoá tài khoản",
+        description: err?.response?.data?.message || "Vui lòng thử lại sau.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!form.password || form.password.length < 6) {
+      toast({
+        title: "Mật khẩu chưa hợp lệ",
+        description: "Mật khẩu cần tối thiểu 6 ký tự.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!form.password || form.password !== form.password_confirmation) {
+      toast({
+        title: "Mật khẩu không khớp",
+        description: "Vui lòng kiểm tra lại mật khẩu và xác nhận.",
+        variant: "destructive",
+      });
+      return;
+    }
+    createMutation.mutate();
   };
 
   return (
@@ -40,15 +158,74 @@ export default function AdminAdmins() {
           <CardDescription>Khởi tạo tài khoản nội bộ với phân quyền phù hợp</CardDescription>
         </CardHeader>
         <CardContent>
-          <form className="grid gap-4 md:grid-cols-3">
-            <Input placeholder="Họ và tên" />
-            <Input placeholder="Email nội bộ" type="email" />
-            <Input placeholder="Phân quyền (ví dụ: Hỗ trợ khách hàng)" />
+          <form className="grid gap-4 md:grid-cols-3" onSubmit={handleSubmit}>
+            <Input
+              placeholder="Họ và tên"
+              value={form.name}
+              onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+              required
+            />
+            <Input
+              placeholder="Email nội bộ"
+              type="email"
+              value={form.email}
+              onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
+              required
+            />
+            <Input
+              placeholder="Số điện thoại"
+              value={form.phone}
+              onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
+            />
+            <Input
+              placeholder="Mật khẩu tạm"
+              type="password"
+              value={form.password}
+              onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
+              required
+            />
+            <Input
+              placeholder="Xác nhận mật khẩu"
+              type="password"
+              value={form.password_confirmation}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, password_confirmation: e.target.value }))
+              }
+              required
+            />
+            <Select
+              value={form.status}
+              onValueChange={(value: StaffStatus) => setForm((prev) => ({ ...prev, status: value }))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Trạng thái" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active">Đang hoạt động</SelectItem>
+                <SelectItem value="inactive">Tạm ngưng</SelectItem>
+                <SelectItem value="suspended">Khóa tạm thời</SelectItem>
+              </SelectContent>
+            </Select>
             <div className="md:col-span-3 flex justify-end gap-2">
-              <Button type="reset" variant="outline">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() =>
+                  setForm({
+                    name: "",
+                    email: "",
+                    phone: "",
+                    password: "",
+                    password_confirmation: "",
+                    status: "active",
+                  })
+                }
+              >
                 Hủy
               </Button>
-              <Button type="submit">Tạo tài khoản</Button>
+              <Button type="submit" disabled={createMutation.isPending}>
+                {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Tạo tài khoản"}
+              </Button>
             </div>
           </form>
         </CardContent>
@@ -71,24 +248,70 @@ export default function AdminAdmins() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {admins.map((admin) => (
-                <TableRow key={admin.id}>
-                  <TableCell className="font-medium">{admin.name}</TableCell>
-                  <TableCell>{admin.email}</TableCell>
-                  <TableCell>
-                    <Badge variant={admin.role === "Super Admin" ? "default" : "secondary"}>{admin.role}</Badge>
-                  </TableCell>
-                  <TableCell>{admin.lastLogin}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-3">
-                      <Switch checked={admin.active} onCheckedChange={() => toggleActive(admin.id)} />
-                      <Button variant="outline" size="sm">
-                        Đặt lại mật khẩu
-                      </Button>
+              {staffQuery.isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center">
+                    <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Đang tải danh sách nhân sự...
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : staff.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground">
+                    Chưa có nhân sự quản trị nào.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                staff.map((admin) => (
+                  <TableRow key={admin.id}>
+                    <TableCell className="font-medium">{admin.name}</TableCell>
+                    <TableCell>{admin.email}</TableCell>
+                    <TableCell>
+                      <Badge variant={admin.role === "Super Admin" ? "default" : "secondary"}>{admin.role}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      {admin.lastLogin ? new Date(admin.lastLogin).toLocaleString("vi-VN") : "—"}
+                    </TableCell>
+                    <TableCell className="space-y-2 text-right">
+                      <div className="flex items-center justify-end gap-3">
+                        <Select
+                          defaultValue={admin.status}
+                          onValueChange={(value: StaffStatus) =>
+                            updateMutation.mutate({ id: admin.id, status: value })
+                          }
+                          disabled={updateMutation.isPending}
+                        >
+                          <SelectTrigger className="h-9 w-[160px] justify-between">
+                            <SelectValue placeholder="Chọn trạng thái" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="active">{STATUS_LABELS.active}</SelectItem>
+                            <SelectItem value="inactive">{STATUS_LABELS.inactive}</SelectItem>
+                            <SelectItem value="suspended">{STATUS_LABELS.suspended}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => deleteMutation.mutate(admin.id)}
+                          disabled={deleteMutation.isPending}
+                        >
+                          {deleteMutation.isPending ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            "Xóa"
+                          )}
+                        </Button>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        Trạng thái: {STATUS_LABELS[admin.status] ?? admin.status}
+                      </p>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>

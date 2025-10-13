@@ -1,51 +1,100 @@
 import type { ReactNode } from "react";
+import { useEffect, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { StatCard } from "@/components/admin/StatCard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Eye, Plane, TrendingUp, Users, Activity, Clock, Globe2, Sparkles } from "lucide-react";
+import { Eye, Plane, TrendingUp, Users, Clock, Sparkles, Loader2, Briefcase } from "lucide-react";
+import { fetchAdminDashboard } from "@/services/adminApi";
+import { useToast } from "@/hooks/use-toast";
 
-const recentBookings = [
-  { name: "Nguyễn Văn A", tour: "Tour Hà Giang 3N2Đ", revenue: "₫5,600,000", time: "5 phút trước" },
-  { name: "Trần Thị B", tour: "Combo Đà Nẵng - Hội An", revenue: "₫4,250,000", time: "12 phút trước" },
-  { name: "Phạm Quốc C", tour: "Du thuyền Vịnh Hạ Long", revenue: "₫7,120,000", time: "30 phút trước" },
-  { name: "Lê Mai D", tour: "Tour Singapore 4N3Đ", revenue: "₫12,340,000", time: "1 giờ trước" },
-];
+const pickNumber = (source: Record<string, unknown> | undefined, keys: string[], fallback = 0) => {
+  if (!source) return fallback;
+  for (const key of keys) {
+    if (key in source) {
+      const value = Number(source[key] as number | string);
+      if (!Number.isNaN(value)) return value;
+    }
+  }
+  return fallback;
+};
 
-const trafficSources = [
-  { channel: "Tìm kiếm tự nhiên", value: "8,420 phiên", change: "+12%" },
-  { channel: "Quảng cáo trả phí", value: "5,310 phiên", change: "+8%" },
-  { channel: "Đối tác liên kết", value: "2,240 phiên", change: "+4%" },
-  { channel: "Mạng xã hội", value: "1,980 phiên", change: "+16%" },
-];
+const formatNumber = (value: number) => value.toLocaleString("vi-VN");
 
 export default function Dashboard() {
+  const { toast } = useToast();
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["admin-dashboard"],
+    queryFn: fetchAdminDashboard,
+  });
+
+  useEffect(() => {
+    if (error) {
+      console.error("Fetch admin dashboard failed:", error);
+      toast({
+        title: "Không thể tải dữ liệu dashboard",
+        description: (error as any)?.response?.data?.message || "Vui lòng thử lại sau.",
+        variant: "destructive",
+      });
+    }
+  }, [error, toast]);
+
+  const summary = (data as any) ?? {};
+
+  const metrics = useMemo(() => {
+    const users = summary.users ?? {};
+    const partners = summary.partners ?? {};
+    const bookings = summary.bookings ?? {};
+    return {
+      totalUsers: pickNumber(users, ["total"], 0),
+      newUsers: pickNumber(users, ["new_last_7_days"], 0),
+      totalPartners: pickNumber(partners, ["total"], 0),
+      pendingPartners: pickNumber(partners, ["pending"], 0),
+      totalBookings: pickNumber(bookings, ["total"], 0),
+      bookingsLast30: pickNumber(bookings, ["last_30_days"], 0),
+    };
+  }, [summary]);
+
+  const topPartners = useMemo(() => {
+    const list = Array.isArray(summary.top_partners) ? summary.top_partners : [];
+    return list.map((item: any, index: number) => ({
+      id: item.id ?? index,
+      name: item.company_name ?? `Đối tác #${index + 1}`,
+      toursCount: item.tours_count ?? 0,
+    }));
+  }, [summary.top_partners]);
+
+  const toursSummary = summary.tours ?? {};
+  const bookingsSummary = summary.bookings ?? {};
+
+  const kpis = useMemo(
+    () => [
+      {
+        title: "Tour đang hoạt động",
+        value: formatNumber(pickNumber(toursSummary, ["active"], 0)),
+        note: `Tổng tour: ${formatNumber(pickNumber(toursSummary, ["total"], 0))}`,
+      },
+      {
+        title: "Đơn đặt tổng",
+        value: formatNumber(pickNumber(bookingsSummary, ["total"], 0)),
+        note: `${formatNumber(pickNumber(bookingsSummary, ["last_30_days"], 0))} trong 30 ngày`,
+      },
+    ],
+    [toursSummary, bookingsSummary],
+  );
+
   return (
     <div className="space-y-6">
+      {isLoading && (
+        <div className="flex items-center gap-2 rounded-lg border border-dashed border-muted-foreground/30 bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Đang tải dữ liệu dashboard...
+        </div>
+      )}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          title="Lượt truy cập (24h)"
-          value="18,420"
-          icon={Eye}
-          gradient
-          trend={{ value: "+12% so với ngày hôm qua", isPositive: true }}
-        />
-        <StatCard
-          title="Đăng ký mới"
-          value="356"
-          icon={Users}
-          trend={{ value: "+42 tài khoản", isPositive: true }}
-        />
-        <StatCard
-          title="Lượt đặt tour"
-          value="1,842"
-          icon={Plane}
-          trend={{ value: "+221 lượt đặt", isPositive: true }}
-        />
-        <StatCard
-          title="Tỷ lệ chuyển đổi"
-          value="9.6%"
-          icon={Activity}
-          trend={{ value: "+0.8 điểm %", isPositive: true }}
-        />
+        <StatCard title="Tổng người dùng" value={formatNumber(metrics.totalUsers)} icon={Users} gradient />
+        <StatCard title="Người dùng mới (7 ngày)" value={formatNumber(metrics.newUsers)} icon={Eye} />
+        <StatCard title="Đối tác" value={formatNumber(metrics.totalPartners)} icon={Briefcase} />
+        <StatCard title="Đơn đặt (30 ngày)" value={formatNumber(metrics.bookingsLast30)} icon={Plane} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -65,29 +114,29 @@ export default function Dashboard() {
         <Card>
           <CardHeader>
             <CardTitle>Bảng điều phối nhanh</CardTitle>
-            <CardDescription>Tình trạng hoạt động trong ngày</CardDescription>
+            <CardDescription>Trạng thái tổng quan của hệ thống</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div className="space-y-1">
-                <p className="text-sm font-medium">Đơn cần duyệt</p>
-                <p className="text-xs text-muted-foreground">Khách hàng chờ xác nhận thanh toán</p>
-              </div>
-              <BadgeDisplay value="12 đơn" variant="primary" />
-            </div>
-            <div className="flex items-center justify-between rounded-lg border p-3">
-              <div className="space-y-1">
-                <p className="text-sm font-medium">Yêu cầu hỗ trợ</p>
-                <p className="text-xs text-muted-foreground">Liên hệ mới trong trung tâm trợ giúp</p>
-              </div>
-              <BadgeDisplay value="7 ticket" variant="warning" />
-            </div>
-            <div className="flex items-center justify-between rounded-lg border p-3">
-              <div className="space-y-1">
                 <p className="text-sm font-medium">Đối tác chờ duyệt</p>
-                <p className="text-xs text-muted-foreground">Hồ sơ cần kiểm tra và kích hoạt</p>
+                <p className="text-xs text-muted-foreground">Hồ sơ đang chờ phê duyệt</p>
               </div>
-              <BadgeDisplay value="3 đối tác" variant="info" />
+              <BadgeDisplay value={`${formatNumber(metrics.pendingPartners)} đối tác`} variant="primary" />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Tour đang hoạt động</p>
+                <p className="text-xs text-muted-foreground">Tour đã được phê duyệt</p>
+              </div>
+              <BadgeDisplay value={`${formatNumber(pickNumber(summary.tours, ["active"], 0))} tour`} variant="info" />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Tổng đơn đặt</p>
+                <p className="text-xs text-muted-foreground">Tính đến thời điểm hiện tại</p>
+              </div>
+              <BadgeDisplay value={`${formatNumber(metrics.totalBookings)} đơn`} variant="warning" />
             </div>
           </CardContent>
         </Card>
@@ -96,43 +145,59 @@ export default function Dashboard() {
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Hoạt động đặt tour mới</CardTitle>
-            <CardDescription>Danh sách cập nhật theo thời gian thực</CardDescription>
+            <CardTitle>Top đối tác theo số tour</CardTitle>
+            <CardDescription>5 đối tác có số lượng tour nhiều nhất</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {recentBookings.map((booking) => (
-              <div
-                key={booking.tour}
-                className="flex items-center justify-between rounded-lg border p-4 transition hover:bg-muted/30"
-              >
-                <div>
-                  <p className="font-semibold">{booking.name}</p>
-                  <p className="text-xs text-muted-foreground">{booking.tour}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-semibold text-primary">{booking.revenue}</p>
-                  <p className="text-xs text-muted-foreground">{booking.time}</p>
-                </div>
+            {topPartners.length === 0 ? (
+              <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+                Chưa có dữ liệu đối tác nổi bật.
               </div>
-            ))}
+            ) : (
+              topPartners.map((partner) => (
+                <div
+                  key={partner.id}
+                  className="flex items-center justify-between rounded-lg border p-4 transition hover:bg-muted/30"
+                >
+                  <div>
+                    <p className="font-semibold">{partner.name}</p>
+                    <p className="text-xs text-muted-foreground">Tổng tour: {formatNumber(partner.toursCount)}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-semibold text-primary">{formatNumber(partner.toursCount)}</p>
+                    <p className="text-xs text-muted-foreground">tour đã tạo</p>
+                  </div>
+                </div>
+              ))
+            )}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
             <CardTitle>Nguồn truy cập</CardTitle>
-            <CardDescription>Top kênh mang lại khách truy cập</CardDescription>
+            <CardDescription>Đang chờ tích hợp số liệu marketing</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {trafficSources.map((source) => (
-              <div key={source.channel} className="rounded-lg border p-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium">{source.channel}</p>
-                  <span className="text-xs text-green-600">{source.change}</span>
-                </div>
-                <p className="text-xs text-muted-foreground">{source.value}</p>
+            {topPartners.length === 0 ? (
+              <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+                Chưa có dữ liệu truy cập.
               </div>
-            ))}
+            ) : (
+              topPartners.slice(0, 3).map((partner, index) => (
+              <div
+                key={partner.id}
+                className="rounded-lg border p-3"
+              >
+                <div>
+                  <p className="text-sm font-medium">
+                    Kênh #{index + 1}: {partner.name}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Ước lượng phiên truy cập đang cập nhật</p>
+                </div>
+              </div>
+              ))
+            )}
           </CardContent>
         </Card>
       </div>
@@ -143,10 +208,21 @@ export default function Dashboard() {
           <CardDescription>Kiểm soát SLA và chất lượng dịch vụ</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <KpiItem icon={<Clock className="h-5 w-5 text-primary" />} title="Thời gian phản hồi" value="12 phút" note="Avg. ticket 24h" />
-          <KpiItem icon={<Globe2 className="h-5 w-5 text-primary" />} title="Thị trường hoạt động" value="12 quốc gia" note="Mở rộng 2 khu vực mới" />
-          <KpiItem icon={<Sparkles className="h-5 w-5 text-primary" />} title="Điểm hài lòng" value="4.7 / 5" note="Theo phản hồi khách" />
-          <KpiItem icon={<Activity className="h-5 w-5 text-primary" />} title="Tỷ lệ hoàn tất" value="96%" note="Hoàn tất booking thành công" />
+          {kpis.map((item, index) => (
+            <KpiItem
+              key={index}
+              icon={
+                index % 2 === 0 ? (
+                  <Clock className="h-5 w-5 text-primary" />
+                ) : (
+                  <Sparkles className="h-5 w-5 text-primary" />
+                )
+              }
+              title={item.title}
+              value={item.value}
+              note={item.note || ""}
+            />
+          ))}
         </CardContent>
       </Card>
     </div>
