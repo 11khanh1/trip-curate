@@ -10,22 +10,46 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { fetchAdminUsers, patchAdminUserStatus, type AdminUser } from "@/services/adminApi";
 
-const normalizeUser = (user: AdminUser) => ({
-  id: user.id,
-  name: user.name ?? (user as any)?.full_name ?? "Không rõ tên",
-  email: user.email ?? (user as any)?.mail ?? "Không rõ email",
-  phone: user.phone ?? (user as any)?.phone_number ?? "",
-  createdAt: user.created_at ?? (user as any)?.createdAt ?? (user as any)?.created_at ?? "",
-  totalBookings: user.total_bookings ?? (user as any)?.orders_count ?? 0,
-  status: (user.status as "active" | "locked" | string) ?? "active",
-});
+const KNOWN_USER_STATUSES = ["active", "inactive"] as const;
+type UserStatus = (typeof KNOWN_USER_STATUSES)[number];
+
+const STATUS_LABELS: Record<UserStatus, string> = {
+  active: "Đang hoạt động",
+  inactive: "Tạm ngưng",
+};
+
+const TOGGLE_ACTION_LABELS: Record<UserStatus, string> = {
+  active: "Tạm ngưng tài khoản",
+  inactive: "Kích hoạt lại",
+};
+
+const isKnownStatus = (status: string): status is UserStatus =>
+  KNOWN_USER_STATUSES.includes(status as UserStatus);
+
+const normalizeUser = (user: AdminUser) => {
+  const rawStatus = (user.status as string | undefined) ?? (user as any)?.status;
+  const normalizedStatus =
+    rawStatus === "inactive" ? "inactive" : rawStatus === "active" ? "active" : rawStatus ?? "active";
+
+  return {
+    id: user.id,
+    name: user.name ?? (user as any)?.full_name ?? "Không rõ tên",
+    email: user.email ?? (user as any)?.mail ?? "Không rõ email",
+    phone: user.phone ?? (user as any)?.phone_number ?? "",
+    createdAt: user.created_at ?? (user as any)?.createdAt ?? (user as any)?.created_at ?? "",
+    totalBookings: user.total_bookings ?? (user as any)?.orders_count ?? 0,
+    status: normalizedStatus,
+  };
+};
+
+type NormalizedUser = ReturnType<typeof normalizeUser>;
 
 export default function AdminUsers() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [searchInput, setSearchInput] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"active" | "locked" | "all">("active");
+  const [statusFilter, setStatusFilter] = useState<UserStatus | "all">("active");
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-users", statusFilter, searchTerm],
@@ -43,11 +67,11 @@ export default function AdminUsers() {
     return (list as AdminUser[]).map(normalizeUser);
   }, [data]);
 
-  const activeUsers = users.filter((user) => user.status === "active").length;
-  const lockedUsers = users.filter((user) => user.status && user.status !== "active").length;
+  const inactiveUsers = users.filter((user) => user.status !== "active").length;
 
   const statusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: string | number; status: string }) => patchAdminUserStatus(id, status),
+    mutationFn: ({ id, status }: { id: string | number; status: UserStatus }) =>
+      patchAdminUserStatus(id, status),
     onSuccess: () => {
       toast({
         title: "Cập nhật thành công",
@@ -69,8 +93,8 @@ export default function AdminUsers() {
     setSearchTerm(searchInput.trim());
   };
 
-  const handleToggleStatus = (user: ReturnType<typeof normalizeUser>) => {
-    const nextStatus = user.status === "active" ? "locked" : "active";
+  const handleToggleStatus = (user: NormalizedUser) => {
+    const nextStatus: UserStatus = user.status === "active" ? "inactive" : "active";
     statusMutation.mutate({ id: user.id, status: nextStatus });
   };
 
@@ -102,10 +126,10 @@ export default function AdminUsers() {
           }
         />
         <StatCard
-          title="Tài khoản bị khóa"
-          value={lockedUsers}
+          title="Tài khoản tạm ngưng"
+          value={inactiveUsers}
           icon={ShieldOff}
-          trend={lockedUsers ? { value: `${lockedUsers} cần rà soát`, isPositive: false } : undefined}
+          trend={inactiveUsers ? { value: `${inactiveUsers} cần rà soát`, isPositive: false } : undefined}
         />
       </div>
 
@@ -119,13 +143,13 @@ export default function AdminUsers() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <div className="w-full sm:w-64">
                 <label className="mb-1 block text-xs font-medium text-muted-foreground">Bộ lọc trạng thái</label>
-                <Select value={statusFilter} onValueChange={(value: "active" | "locked" | "all") => setStatusFilter(value)}>
+                <Select value={statusFilter} onValueChange={(value: UserStatus | "all") => setStatusFilter(value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Chọn trạng thái" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="active">Đang hoạt động</SelectItem>
-                    <SelectItem value="locked">Đã khóa</SelectItem>
+                    <SelectItem value="active">{STATUS_LABELS.active}</SelectItem>
+                    <SelectItem value="inactive">{STATUS_LABELS.inactive}</SelectItem>
                     <SelectItem value="all">Tất cả</SelectItem>
                   </SelectContent>
                 </Select>
@@ -167,47 +191,55 @@ export default function AdminUsers() {
               ) : users.length === 0 ? (
                 <div className="py-10 text-center text-sm text-muted-foreground">Không có người dùng phù hợp.</div>
               ) : (
-                users.map((user) => (
-                  <div
-                    key={user.id}
-                    className="grid gap-4 px-4 py-4 md:grid-cols-[2fr,2fr,1.5fr,1fr,1fr] md:items-center"
-                  >
-                    <div className="space-y-1">
-                      <p className="font-medium">{user.name}</p>
-                      <p className="text-xs text-muted-foreground md:hidden">
-                        Đăng ký: {user.createdAt ? new Date(user.createdAt).toLocaleDateString("vi-VN") : "—"}
-                      </p>
-                      <p className="text-xs text-muted-foreground md:hidden">
-                        Lượt đặt: {user.totalBookings} tour
-                      </p>
+                users.map((user) => {
+                  const knownStatus = typeof user.status === "string" && isKnownStatus(user.status);
+                  const badgeVariant = knownStatus
+                    ? user.status === "active"
+                      ? "default"
+                      : "destructive"
+                    : "secondary";
+                  const badgeLabel = knownStatus ? STATUS_LABELS[user.status] : user.status || "Không xác định";
+                  const buttonLabel =
+                    user.status === "active" ? TOGGLE_ACTION_LABELS.active : TOGGLE_ACTION_LABELS.inactive;
+
+                  return (
+                    <div
+                      key={user.id}
+                      className="grid gap-4 px-4 py-4 md:grid-cols-[2fr,2fr,1.5fr,1fr,1fr] md:items-center"
+                    >
+                      <div className="space-y-1">
+                        <p className="font-medium">{user.name}</p>
+                        <p className="text-xs text-muted-foreground md:hidden">
+                          Đăng ký: {user.createdAt ? new Date(user.createdAt).toLocaleDateString("vi-VN") : "—"}
+                        </p>
+                        <p className="text-xs text-muted-foreground md:hidden">
+                          Lượt đặt: {user.totalBookings} tour
+                        </p>
+                      </div>
+                      <p className="text-sm text-muted-foreground">{user.email}</p>
+                      <p className="text-sm text-muted-foreground">{user.phone || "—"}</p>
+                      <div className="hidden text-sm text-muted-foreground md:block">
+                        {user.createdAt ? new Date(user.createdAt).toLocaleDateString("vi-VN") : "—"}
+                      </div>
+                      <div className="flex items-center justify-between md:block">
+                        <Badge variant={badgeVariant}>{badgeLabel}</Badge>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-2 md:mt-0"
+                          onClick={() => handleToggleStatus(user)}
+                          disabled={statusMutation.isPending}
+                        >
+                          {statusMutation.isPending ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            buttonLabel
+                          )}
+                        </Button>
+                      </div>
                     </div>
-                    <p className="text-sm text-muted-foreground">{user.email}</p>
-                    <p className="text-sm text-muted-foreground">{user.phone || "—"}</p>
-                    <div className="hidden text-sm text-muted-foreground md:block">
-                      {user.createdAt ? new Date(user.createdAt).toLocaleDateString("vi-VN") : "—"}
-                    </div>
-                    <div className="flex items-center justify-between md:block">
-                      <Badge variant={user.status === "active" ? "default" : "destructive"}>
-                        {user.status === "active" ? "Đang hoạt động" : "Đã khóa"}
-                      </Badge>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="mt-2 md:mt-0"
-                        onClick={() => handleToggleStatus(user)}
-                        disabled={statusMutation.isPending}
-                      >
-                        {statusMutation.isPending ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : user.status === "active" ? (
-                          "Khóa tài khoản"
-                        ) : (
-                          "Mở khóa"
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
