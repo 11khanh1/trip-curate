@@ -35,12 +35,13 @@ import TermsOfService from "./pages/support/TermsOfService";
 import AccountSettings from "./pages/AccountSettings";
 import AdminLayout from "./pages/admin/AdminLayout";
 import Dashboard from "./pages/admin/Dashboard";
-import Activities from "./pages/admin/Activities";
-import Bookings from "./pages/admin/Bookings";
-import Customers from "./pages/admin/Customers";
 import Promotions from "./pages/admin/Promotions";
-import Locations from "./pages/admin/Locations";
 import Settings from "./pages/admin/Settings";
+import AdminUsers from "./pages/admin/Users";
+import AdminPartners from "./pages/admin/Partners";
+import AdminCategories from "./pages/admin/Categories";
+import AdminReports from "./pages/admin/Reports";
+import AdminAdmins from "./pages/admin/Admins";
 import PartnerLayout from "./pages/partner/PartnerLayout";
 import PartnerDashboard from "./pages/partner/Dashboard";
 import PartnerActivities from "./pages/partner/Activities";
@@ -95,12 +96,13 @@ const App = () => (
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<Dashboard />} />
             <Route path="dashboard" element={<Dashboard />} />
-            <Route path="activities" element={<Activities />} />
-            <Route path="bookings" element={<Bookings />} />
-            <Route path="customers" element={<Customers />} />
+            <Route path="users" element={<AdminUsers />} />
+            <Route path="partners" element={<AdminPartners />} />
+            <Route path="categories" element={<AdminCategories />} />
             <Route path="promotions" element={<Promotions />} />
-            <Route path="locations" element={<Locations />} />
+            <Route path="reports" element={<AdminReports />} />
             <Route path="settings" element={<Settings />} />
+            <Route path="admins" element={<AdminAdmins />} />
           </Route>
 
            <Route path="/partner" element={<PartnerLayout />}>

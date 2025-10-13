@@ -1,121 +1,177 @@
+import type { ReactNode } from "react";
 import { StatCard } from "@/components/admin/StatCard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Calendar, DollarSign, MapPin, TrendingUp, Users } from "lucide-react";
+import { Eye, Plane, TrendingUp, Users, Activity, Clock, Globe2, Sparkles } from "lucide-react";
+
+const recentBookings = [
+  { name: "Nguyễn Văn A", tour: "Tour Hà Giang 3N2Đ", revenue: "₫5,600,000", time: "5 phút trước" },
+  { name: "Trần Thị B", tour: "Combo Đà Nẵng - Hội An", revenue: "₫4,250,000", time: "12 phút trước" },
+  { name: "Phạm Quốc C", tour: "Du thuyền Vịnh Hạ Long", revenue: "₫7,120,000", time: "30 phút trước" },
+  { name: "Lê Mai D", tour: "Tour Singapore 4N3Đ", revenue: "₫12,340,000", time: "1 giờ trước" },
+];
+
+const trafficSources = [
+  { channel: "Tìm kiếm tự nhiên", value: "8,420 phiên", change: "+12%" },
+  { channel: "Quảng cáo trả phí", value: "5,310 phiên", change: "+8%" },
+  { channel: "Đối tác liên kết", value: "2,240 phiên", change: "+4%" },
+  { channel: "Mạng xã hội", value: "1,980 phiên", change: "+16%" },
+];
 
 export default function Dashboard() {
   return (
     <div className="space-y-6">
-
-
-      {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          title="Tổng doanh thu"
-          value="₫45,231,890"
-          icon={DollarSign}
+          title="Lượt truy cập (24h)"
+          value="18,420"
+          icon={Eye}
           gradient
-          trend={{ value: "+20.1% so với tháng trước", isPositive: true }}
+          trend={{ value: "+12% so với ngày hôm qua", isPositive: true }}
         />
         <StatCard
-          title="Đơn đặt mới"
-          value="245"
-          icon={Calendar}
-          trend={{ value: "+12% so với tuần trước", isPositive: true }}
-        />
-        <StatCard
-          title="Hoạt động"
-          value="89"
-          icon={MapPin}
-          trend={{ value: "+3 hoạt động mới", isPositive: true }}
-        />
-        <StatCard
-          title="Khách hàng"
-          value="1,234"
+          title="Đăng ký mới"
+          value="356"
           icon={Users}
-          trend={{ value: "+15.3% so với tháng trước", isPositive: true }}
+          trend={{ value: "+42 tài khoản", isPositive: true }}
+        />
+        <StatCard
+          title="Lượt đặt tour"
+          value="1,842"
+          icon={Plane}
+          trend={{ value: "+221 lượt đặt", isPositive: true }}
+        />
+        <StatCard
+          title="Tỷ lệ chuyển đổi"
+          value="9.6%"
+          icon={Activity}
+          trend={{ value: "+0.8 điểm %", isPositive: true }}
         />
       </div>
 
-      {/* Charts & Tables */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        <Card className="col-span-4">
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Doanh thu theo tháng</CardTitle>
-            <CardDescription>
-              Biểu đồ doanh thu 12 tháng gần nhất
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pl-2">
-            <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-              <div className="text-center">
-                <TrendingUp className="h-12 w-12 mx-auto mb-2 text-primary" />
-                <p>Biểu đồ sẽ được hiển thị ở đây</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="col-span-3">
-          <CardHeader>
-            <CardTitle>Hoạt động gần đây</CardTitle>
-            <CardDescription>
-              Các đơn đặt mới nhất trong hệ thống
-            </CardDescription>
+            <CardTitle>Tổng quan hiệu suất</CardTitle>
+            <CardDescription>Số liệu thống kê 8 tuần gần nhất từ hệ thống</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {[
-                { name: "Nguyễn Văn A", activity: "Vịnh Kỳ Diệu", amount: "₫765,000", time: "5 phút trước" },
-                { name: "Trần Thị B", activity: "Đón tiễn sân bay", amount: "₫850,000", time: "15 phút trước" },
-                { name: "Lê Văn C", activity: "Tour Phú Quốc", amount: "₫1,250,000", time: "1 giờ trước" },
-                { name: "Phạm Thị D", activity: "Vinpearl Land", amount: "₫450,000", time: "2 giờ trước" },
-              ].map((booking, index) => (
-                <div key={index} className="flex items-center gap-4">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-primary text-white text-sm font-medium">
-                    {booking.name.charAt(0)}
-                  </div>
-                  <div className="flex-1 space-y-1">
-                    <p className="text-sm font-medium leading-none">{booking.name}</p>
-                    <p className="text-xs text-muted-foreground">{booking.activity}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium">{booking.amount}</p>
-                    <p className="text-xs text-muted-foreground">{booking.time}</p>
-                  </div>
-                </div>
-              ))}
+            <div className="flex h-64 flex-col items-center justify-center rounded-lg border border-dashed bg-muted/30 text-muted-foreground">
+              <TrendingUp className="mb-2 h-10 w-10 text-primary" />
+              <p className="text-sm">Biểu đồ lưu lượng - đăng ký - đặt tour sẽ hiển thị ở đây</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Bảng điều phối nhanh</CardTitle>
+            <CardDescription>Tình trạng hoạt động trong ngày</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Đơn cần duyệt</p>
+                <p className="text-xs text-muted-foreground">Khách hàng chờ xác nhận thanh toán</p>
+              </div>
+              <BadgeDisplay value="12 đơn" variant="primary" />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Yêu cầu hỗ trợ</p>
+                <p className="text-xs text-muted-foreground">Liên hệ mới trong trung tâm trợ giúp</p>
+              </div>
+              <BadgeDisplay value="7 ticket" variant="warning" />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Đối tác chờ duyệt</p>
+                <p className="text-xs text-muted-foreground">Hồ sơ cần kiểm tra và kích hoạt</p>
+              </div>
+              <BadgeDisplay value="3 đối tác" variant="info" />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Popular Activities */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Hoạt động phổ biến</CardTitle>
-          <CardDescription>Top hoạt động được đặt nhiều nhất</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {[
-              { name: "Dịch vụ đón tiễn sân bay", bookings: 1840, revenue: "₫28,520,000" },
-              { name: "Vé Công Viên Nước Vịnh Kỳ Diệu", bookings: 1234, revenue: "₫18,750,000" },
-              { name: "Tour Phú Quốc 3N2Đ", bookings: 987, revenue: "₫45,230,000" },
-              { name: "Vinpearl Land Nha Trang", bookings: 856, revenue: "₫12,340,000" },
-            ].map((activity, index) => (
-              <div key={index} className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0">
-                <div className="flex-1">
-                  <p className="font-medium">{activity.name}</p>
-                  <p className="text-sm text-muted-foreground">{activity.bookings} lượt đặt</p>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle>Hoạt động đặt tour mới</CardTitle>
+            <CardDescription>Danh sách cập nhật theo thời gian thực</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {recentBookings.map((booking) => (
+              <div
+                key={booking.tour}
+                className="flex items-center justify-between rounded-lg border p-4 transition hover:bg-muted/30"
+              >
+                <div>
+                  <p className="font-semibold">{booking.name}</p>
+                  <p className="text-xs text-muted-foreground">{booking.tour}</p>
                 </div>
                 <div className="text-right">
-                  <p className="font-semibold text-primary">{activity.revenue}</p>
+                  <p className="text-sm font-semibold text-primary">{booking.revenue}</p>
+                  <p className="text-xs text-muted-foreground">{booking.time}</p>
                 </div>
               </div>
             ))}
-          </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Nguồn truy cập</CardTitle>
+            <CardDescription>Top kênh mang lại khách truy cập</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {trafficSources.map((source) => (
+              <div key={source.channel} className="rounded-lg border p-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium">{source.channel}</p>
+                  <span className="text-xs text-green-600">{source.change}</span>
+                </div>
+                <p className="text-xs text-muted-foreground">{source.value}</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Hệ số vận hành chính</CardTitle>
+          <CardDescription>Kiểm soát SLA và chất lượng dịch vụ</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <KpiItem icon={<Clock className="h-5 w-5 text-primary" />} title="Thời gian phản hồi" value="12 phút" note="Avg. ticket 24h" />
+          <KpiItem icon={<Globe2 className="h-5 w-5 text-primary" />} title="Thị trường hoạt động" value="12 quốc gia" note="Mở rộng 2 khu vực mới" />
+          <KpiItem icon={<Sparkles className="h-5 w-5 text-primary" />} title="Điểm hài lòng" value="4.7 / 5" note="Theo phản hồi khách" />
+          <KpiItem icon={<Activity className="h-5 w-5 text-primary" />} title="Tỷ lệ hoàn tất" value="96%" note="Hoàn tất booking thành công" />
         </CardContent>
       </Card>
     </div>
   );
+}
+
+function KpiItem({ icon, title, value, note }: { icon: ReactNode; title: string; value: string; note: string }) {
+  return (
+    <div className="space-y-2 rounded-lg border p-4">
+      <div className="flex items-center gap-2 text-muted-foreground">
+        {icon}
+        <span className="text-xs font-medium uppercase tracking-wide">{title}</span>
+      </div>
+      <p className="text-xl font-semibold text-foreground">{value}</p>
+      <p className="text-xs text-muted-foreground">{note}</p>
+    </div>
+  );
+}
+
+function BadgeDisplay({ value, variant }: { value: string; variant: "primary" | "warning" | "info" }) {
+  const style =
+    variant === "primary"
+      ? "bg-primary/10 text-primary"
+      : variant === "warning"
+      ? "bg-amber-100 text-amber-600"
+      : "bg-sky-100 text-sky-600";
+  return <span className={`rounded-full px-3 py-1 text-xs font-medium ${style}`}>{value}</span>;
 }

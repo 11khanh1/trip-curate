@@ -1,12 +1,14 @@
 import { Outlet, NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
-  MapPin,
-  Calendar,
   Users,
-  Tag,
-  FileText,
+  Briefcase,
+  Layers,
+  Gift,
+  BarChart3,
   Settings,
+  Shield,
+  Search,
 } from "lucide-react";
 import {
   Sidebar,
@@ -24,17 +26,19 @@ import {
 } from "@/components/ui/sidebar";
 import { useUser } from "@/context/UserContext"; 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 // --- AdminSidebar Component ---
 
 const menuItems = [
   { title: "Dashboard", url: "/admin", icon: LayoutDashboard, exact: true },
-  { title: "Hoạt động", url: "/admin/activities", icon: MapPin },
-  { title: "Đơn đặt", url: "/admin/bookings", icon: Calendar },
-  { title: "Khách hàng", url: "/admin/customers", icon: Users },
-  { title: "Khuyến mãi", url: "/admin/promotions", icon: Tag },
-  { title: "Địa điểm", url: "/admin/locations", icon: FileText },
-  { title: "Cài đặt", url: "/admin/settings", icon: Settings },
+  { title: "Người dùng", url: "/admin/users", icon: Users },
+  { title: "Đối tác", url: "/admin/partners", icon: Briefcase },
+  { title: "Danh mục", url: "/admin/categories", icon: Layers },
+  { title: "Khuyến mãi", url: "/admin/promotions", icon: Gift },
+  { title: "Báo cáo", url: "/admin/reports", icon: BarChart3 },
+  { title: "Cài đặt hệ thống", url: "/admin/settings", icon: Settings },
+  { title: "Quản trị viên", url: "/admin/admins", icon: Shield },
 ];
 
 function AdminSidebar() {
@@ -133,18 +137,23 @@ export default function AdminLayout() {
   const navigate = useNavigate();
 
   const pageTitles: Record<string, { title: string; desc: string }> = {
-    "/admin": { title: "Tổng quan", desc: "Xem tổng quan hoạt động hệ thống" },
-    "/admin/activities": { title: "Hoạt động", desc: "Quản lý hoạt động du lịch" },
-    "/admin/bookings": { title: "Đơn đặt", desc: "Danh sách đơn đặt tour" },
-    "/admin/customers": { title: "Khách hàng", desc: "Thông tin khách hàng" },
-    "/admin/promotions": { title: "Khuyến mãi", desc: "Chiến dịch giảm giá, khuyến mãi" },
-    "/admin/locations": { title: "Địa điểm", desc: "Quản lý danh sách địa điểm du lịch" },
-    "/admin/settings": { title: "Cài đặt", desc: "Cấu hình hệ thống" },
-    "/admin/partner": { title: "Quản lý Tour - Đối tác", desc: "Quản lý danh sách tour của bạn" },
+    "/admin": { title: "Dashboard", desc: "Thống kê tổng quan hoạt động hệ thống" },
+    "/admin/users": { title: "Quản lý người dùng", desc: "Theo dõi và điều chỉnh tài khoản khách hàng" },
+    "/admin/partners": { title: "Quản lý đối tác", desc: "Duyệt và theo dõi hoạt động của đối tác" },
+    "/admin/categories": { title: "Danh mục nội dung", desc: "Điểm đến, chủ đề và thẻ tag hệ thống" },
+    "/admin/promotions": { title: "Khuyến mãi", desc: "Quản lý mã giảm giá và ưu đãi" },
+    "/admin/reports": { title: "Báo cáo", desc: "Phân tích dữ liệu và hiệu suất kinh doanh" },
+    "/admin/settings": { title: "Cài đặt hệ thống", desc: "Thiết lập vận hành và bảo mật" },
+    "/admin/admins": { title: "Quản trị viên", desc: "Quản lý đội ngũ admin nội bộ" },
   };
 
   const currentPage =
-    pageTitles[location.pathname] || {
+    Object.entries(pageTitles).find(([path]) => {
+      const exactMatch = location.pathname === path;
+      const nestedMatch = location.pathname.startsWith(`${path}/`);
+      return exactMatch || nestedMatch;
+    })?.[1] ??
+    {
       title: "Trang quản trị",
       desc: "Hệ thống quản lý VietTravel",
     };
@@ -155,42 +164,38 @@ export default function AdminLayout() {
         <AdminSidebar />
         <div className="flex-1 flex flex-col">
           {/* Header chính */}
-          <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-border bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/75 px-6">
-            
-            {/* 🔹 Bên trái: Trigger + Tiêu đề trang */}
+          <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-4 border-b border-border bg-white/95 px-4 pr-6 backdrop-blur supports-[backdrop-filter]:bg-white/75">
             <div className="flex items-center gap-4">
-              <SidebarTrigger />
-              
-              {/* Tiêu đề trang (Sát nút toggle) */}
-              <div>
-                <h1 className="text-lg font-semibold text-foreground">
-                  {currentPage.title}
-                </h1>
+              <SidebarTrigger className="text-muted-foreground" />
+              <div className="space-y-0.5">
+                <h1 className="text-lg font-semibold text-foreground">{currentPage.title}</h1>
                 <p className="text-xs text-muted-foreground">{currentPage.desc}</p>
               </div>
             </div>
 
-            {/* Bên phải: Thông tin user + nút (Giữ nguyên) */}
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <div className="text-right leading-tight">
-                  <p className="text-sm font-medium">
-                    {currentUser?.name || "Người dùng"}
-                  </p>
+            <div className="flex flex-1 items-center justify-end gap-4">
+              <div className="relative hidden md:block w-full max-w-md">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Tìm kiếm trong bảng điều khiển..."
+                  className="pl-9"
+                />
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="hidden md:flex flex-col items-end leading-tight">
+                  <p className="text-sm font-medium">{currentUser?.name || "Người dùng"}</p>
                   <p className="text-xs text-muted-foreground">
                     {currentUser?.email || "Chưa có email"}
                   </p>
                 </div>
-                <div className="h-8 w-8 rounded-full bg-gradient-primary flex items-center justify-center text-white text-sm font-semibold">
-                  {currentUser?.name
-                    ? currentUser.name.charAt(0).toUpperCase()
-                    : "A"}
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-primary text-sm font-semibold text-white">
+                  {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : "A"}
                 </div>
+                <Button size="sm" variant="outline" onClick={() => navigate("/")}>
+                  Trang chủ
+                </Button>
               </div>
-
-              <Button size="sm" onClick={() => navigate("/")}>
-                Về trang chủ
-              </Button>
             </div>
           </header>
 
