@@ -1,5 +1,5 @@
-import { useMemo, useState, type FormEvent } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState, type FormEvent } from "react";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -89,21 +89,24 @@ export default function AdminAdmins() {
   const [editingStaff, setEditingStaff] = useState<NormalizedStaff | null>(null);
   const [editForm, setEditForm] = useState<EditFormState>({ ...EMPTY_EDIT_FORM });
 
-  const staffQuery = useQuery({
+  const authToken = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+
+  const staffQuery = useQuery<
+    PaginatedResponse<AdminStaff>,
+    Error,
+    NormalizedStaff[]
+  >({
     queryKey: ["admin-staff"],
-    queryFn: () => fetchAdminStaff(),
+    queryFn: () => fetchAdminStaff({ per_page: 20 }),
+    enabled: Boolean(authToken),
+    placeholderData: keepPreviousData,
+    select: (response) => {
+      const list = response?.data ?? [];
+      return list.map(normalizeStaff);
+    },
   });
 
-  const staff = useMemo(() => {
-    const response = staffQuery.data as
-      | PaginatedResponse<AdminStaff>
-      | AdminStaff[]
-      | undefined;
-
-    if (!response) return [];
-    const list = Array.isArray(response) ? response : response.data ?? [];
-    return list.map(normalizeStaff);
-  }, [staffQuery.data]);
+  const staff = staffQuery.data ?? [];
 
   const openEditDialog = (staffMember: NormalizedStaff) => {
     setEditingStaff(staffMember);
@@ -131,7 +134,7 @@ export default function AdminAdmins() {
     onSuccess: () => {
       toast({ title: "Đã tạo tài khoản", description: "Nhân sự quản trị mới đã được thêm." });
       setForm({ name: "", email: "", phone: "", password: "", password_confirmation: "", status: "active" });
-      queryClient.invalidateQueries({ queryKey: ["admin-staff"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-staff"], exact: false });
     },
     onError: (err: any) => {
       console.error("Create staff failed:", err);
@@ -148,7 +151,7 @@ export default function AdminAdmins() {
       updateAdminStaff(id, { status }),
     onSuccess: () => {
       toast({ title: "Đã cập nhật", description: "Trạng thái nhân sự đã được cập nhật." });
-      queryClient.invalidateQueries({ queryKey: ["admin-staff"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-staff"], exact: false });
     },
     onError: (err: any) => {
       console.error("Update staff failed:", err);
@@ -164,7 +167,7 @@ export default function AdminAdmins() {
     mutationFn: (id: string) => deleteAdminStaff(id),
     onSuccess: () => {
       toast({ title: "Đã xoá nhân sự", description: "Tài khoản quản trị đã được xoá." });
-      queryClient.invalidateQueries({ queryKey: ["admin-staff"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-staff"], exact: false });
     },
     onError: (err: any) => {
       console.error("Delete staff failed:", err);
@@ -180,7 +183,7 @@ export default function AdminAdmins() {
     mutationFn: ({ id, data }: { id: string; data: StaffUpdatePayload }) => updateAdminStaff(id, data),
     onSuccess: () => {
       toast({ title: "Đã cập nhật nhân sự", description: "Thông tin tài khoản đã được lưu." });
-      queryClient.invalidateQueries({ queryKey: ["admin-staff"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-staff"], exact: false });
       closeEditDialog();
     },
     onError: (err: any) => {

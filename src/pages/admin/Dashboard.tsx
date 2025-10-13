@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useEffect, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { StatCard } from "@/components/admin/StatCard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Eye, Plane, TrendingUp, Users, Clock, Sparkles, Loader2, Briefcase } from "lucide-react";
@@ -22,9 +22,12 @@ const formatNumber = (value: number) => value.toLocaleString("vi-VN");
 
 export default function Dashboard() {
   const { toast } = useToast();
+  const authToken = typeof window !== "undefined" ? localStorage.getItem("token") : null;
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin-dashboard"],
     queryFn: fetchAdminDashboard,
+    enabled: Boolean(authToken),
+    placeholderData: keepPreviousData,
   });
 
   useEffect(() => {

@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -98,16 +98,24 @@ export default function Promotions() {
   const [formData, setFormData] = useState<PromotionForm>(initialFormData);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const promotionsQuery = useQuery({
+  const authToken = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+
+  const promotionsQuery = useQuery<
+    PaginatedResponse<AdminPromotion>,
+    Error,
+    { list: NormalizedPromotion[]; meta: Record<string, unknown> }
+  >({
     queryKey: ["admin-promotions"],
-    queryFn: () => fetchAdminPromotions(),
+    queryFn: () => fetchAdminPromotions({ per_page: 20 }),
+    enabled: Boolean(authToken),
+    placeholderData: keepPreviousData,
+    select: (response) => ({
+      list: (response?.data ?? []).map(normalizePromotion),
+      meta: response?.meta ?? {},
+    }),
   });
 
-  const promotions = useMemo(() => {
-    const response = promotionsQuery.data as PaginatedResponse<AdminPromotion> | undefined;
-    const list = response?.data ?? [];
-    return list.map(normalizePromotion);
-  }, [promotionsQuery.data]);
+  const promotions = promotionsQuery.data?.list ?? [];
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -124,7 +132,7 @@ export default function Promotions() {
       toast({ title: "Đã tạo khuyến mãi", description: "Mã khuyến mãi mới đã được thêm." });
       setIsDialogOpen(false);
       setFormData(initialFormData);
-      queryClient.invalidateQueries({ queryKey: ["admin-promotions"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-promotions"], exact: false });
     },
     onError: (err: any) => {
       console.error("Create promotion failed:", err);
@@ -153,7 +161,7 @@ export default function Promotions() {
       setEditingPromo(null);
       setIsDialogOpen(false);
       setFormData(initialFormData);
-      queryClient.invalidateQueries({ queryKey: ["admin-promotions"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-promotions"], exact: false });
     },
     onError: (err: any) => {
       console.error("Update promotion failed:", err);
@@ -230,7 +238,7 @@ export default function Promotions() {
     },
     onSuccess: () => {
       toast({ title: "Đã xoá khuyến mãi", description: "Mã khuyến mãi đã được xoá khỏi hệ thống." });
-      queryClient.invalidateQueries({ queryKey: ["admin-promotions"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-promotions"], exact: false });
     },
     onError: (err: any) => {
       console.error("Delete promotion failed:", err);

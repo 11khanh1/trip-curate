@@ -1,15 +1,5 @@
 import { Outlet, NavLink, useLocation, useNavigate } from "react-router-dom";
-import {
-  LayoutDashboard,
-  Users,
-  Briefcase,
-  Layers,
-  Gift,
-  BarChart3,
-  Settings,
-  Shield,
-  Search,
-} from "lucide-react";
+import { LayoutDashboard, Users, Briefcase, Layers, Gift, BarChart3, Settings, Shield, Search, MapPin } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -34,6 +24,7 @@ const menuItems = [
   { title: "Dashboard", url: "/admin", icon: LayoutDashboard, exact: true },
   { title: "Người dùng", url: "/admin/users", icon: Users },
   { title: "Đối tác", url: "/admin/partners", icon: Briefcase },
+  { title: "Tour đối tác", url: "/admin/tours", icon: MapPin },
   { title: "Danh mục", url: "/admin/categories", icon: Layers },
   { title: "Khuyến mãi", url: "/admin/promotions", icon: Gift },
   { title: "Báo cáo", url: "/admin/reports", icon: BarChart3 },
@@ -140,6 +131,7 @@ export default function AdminLayout() {
     "/admin": { title: "Dashboard", desc: "Thống kê tổng quan hoạt động hệ thống" },
     "/admin/users": { title: "Quản lý người dùng", desc: "Theo dõi và điều chỉnh tài khoản khách hàng" },
     "/admin/partners": { title: "Quản lý đối tác", desc: "Duyệt và theo dõi hoạt động của đối tác" },
+    "/admin/tours": { title: "Tour đối tác", desc: "Phê duyệt và quản lý tour do đối tác đăng tải" },
     "/admin/categories": { title: "Danh mục nội dung", desc: "Điểm đến, chủ đề và thẻ tag hệ thống" },
     "/admin/promotions": { title: "Khuyến mãi", desc: "Quản lý mã giảm giá và ưu đãi" },
     "/admin/reports": { title: "Báo cáo", desc: "Phân tích dữ liệu và hiệu suất kinh doanh" },

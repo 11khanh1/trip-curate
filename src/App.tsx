@@ -1,9 +1,7 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { UserProvider } from "@/context/UserContext";
 import Index from "./pages/Index";
 import AllActivities from "./pages/AllActivities";
 import ActivityDetail from "./pages/ActivityDetail";
@@ -39,6 +37,7 @@ import Promotions from "./pages/admin/Promotions";
 import Settings from "./pages/admin/Settings";
 import AdminUsers from "./pages/admin/Users";
 import AdminPartners from "./pages/admin/Partners";
+import AdminTours from "./pages/admin/Tours";
 import AdminCategories from "./pages/admin/Categories";
 import AdminReports from "./pages/admin/Reports";
 import AdminAdmins from "./pages/admin/Admins";
@@ -52,75 +51,66 @@ import PartnerSettings from "./pages/partner/Settings";
 import AuthCallback from "./pages/AuthCallback";
 import ResultSearch from "./pages/ResultSearch";
 
-
-const queryClient = new QueryClient();
-
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <UserProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-      
-          <Route path="/activities" element={<AllActivities />} />
-          <Route path="/activity/:id" element={<ActivityDetail />} />
-          <Route path="/regions/vietnam" element={<Vietnam />} />
-          <Route path="/regions/japan" element={<Japan />} />
-          <Route path="/regions/singapore" element={<Singapore />} />
-          <Route path="/regions/thailand" element={<Thailand />} />
-          <Route path="/regions/china" element={<China />} />
-          <Route path="/regions/south-korea" element={<SouthKorea />} />
-          <Route path="/regions/australia" element={<Australia />} />
-          <Route path="/regions/uk" element={<UK />} />
-          <Route path="/regions/switzerland" element={<Switzerland />} />
-          <Route path="/regions/usa" element={<USA />} />
-          <Route path="/regions/malaysia" element={<Malaysia />} />
-          <Route path="/regions/indonesia" element={<Indonesia />} />
-          <Route path="/deals" element={<Deals />} />
-          <Route path="/resultsearch" element={<ResultSearch />} />
-          <Route path="/account-settings" element={<AccountSettings />} />          
-          <Route path="/auth/callback" element={<AuthCallback />} />
-          <Route path="/about/our-story" element={<OurStory />} />
-          <Route path="/about/careers" element={<Careers />} />
-          <Route path="/about/press" element={<Press />} />
-          <Route path="/about/partnership" element={<Partnership />} />
-          <Route path="/about/affiliate" element={<Affiliate />} />
-          <Route path="/support/help-center" element={<HelpCenter />} />
-          <Route path="/support/contact" element={<ContactUs />} />
-          <Route path="/support/cancellation-policy" element={<CancellationPolicy />} />
-          <Route path="/support/privacy-policy" element={<PrivacyPolicy />} />
-          <Route path="/support/terms-of-service" element={<TermsOfService />} />
-          <Route path="/admin" element={<AdminLayout />}>
-            <Route index element={<Dashboard />} />
-            <Route path="dashboard" element={<Dashboard />} />
-            <Route path="users" element={<AdminUsers />} />
+  <TooltipProvider>
+    <Toaster />
+    <Sonner />
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Index />} />
+        <Route path="/activities" element={<AllActivities />} />
+        <Route path="/activity/:id" element={<ActivityDetail />} />
+        <Route path="/regions/vietnam" element={<Vietnam />} />
+        <Route path="/regions/japan" element={<Japan />} />
+        <Route path="/regions/singapore" element={<Singapore />} />
+        <Route path="/regions/thailand" element={<Thailand />} />
+        <Route path="/regions/china" element={<China />} />
+        <Route path="/regions/south-korea" element={<SouthKorea />} />
+        <Route path="/regions/australia" element={<Australia />} />
+        <Route path="/regions/uk" element={<UK />} />
+        <Route path="/regions/switzerland" element={<Switzerland />} />
+        <Route path="/regions/usa" element={<USA />} />
+        <Route path="/regions/malaysia" element={<Malaysia />} />
+        <Route path="/regions/indonesia" element={<Indonesia />} />
+        <Route path="/deals" element={<Deals />} />
+        <Route path="/resultsearch" element={<ResultSearch />} />
+        <Route path="/account-settings" element={<AccountSettings />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
+        <Route path="/about/our-story" element={<OurStory />} />
+        <Route path="/about/careers" element={<Careers />} />
+        <Route path="/about/press" element={<Press />} />
+        <Route path="/about/partnership" element={<Partnership />} />
+        <Route path="/about/affiliate" element={<Affiliate />} />
+        <Route path="/support/help-center" element={<HelpCenter />} />
+        <Route path="/support/contact" element={<ContactUs />} />
+        <Route path="/support/cancellation-policy" element={<CancellationPolicy />} />
+        <Route path="/support/privacy-policy" element={<PrivacyPolicy />} />
+        <Route path="/support/terms-of-service" element={<TermsOfService />} />
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<Dashboard />} />
+          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="users" element={<AdminUsers />} />
             <Route path="partners" element={<AdminPartners />} />
-            <Route path="categories" element={<AdminCategories />} />
-            <Route path="promotions" element={<Promotions />} />
-            <Route path="reports" element={<AdminReports />} />
-            <Route path="settings" element={<Settings />} />
-            <Route path="admins" element={<AdminAdmins />} />
-          </Route>
-
-           <Route path="/partner" element={<PartnerLayout />}>
-            <Route index element={<PartnerDashboard />} />
-            
-            <Route path="activities" element={<PartnerActivities />} />
-            <Route path="bookings" element={<PartnerBookings />} />
-            <Route path="revenue" element={<PartnerRevenue />} />
-            <Route path="analytics" element={<PartnerAnalytics />} />
-            <Route path="settings" element={<PartnerSettings />} />
-          </Route>
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-      </UserProvider>
-    </TooltipProvider>
-  </QueryClientProvider>
+            <Route path="tours" element={<AdminTours />} />
+          <Route path="categories" element={<AdminCategories />} />
+          <Route path="promotions" element={<Promotions />} />
+          <Route path="reports" element={<AdminReports />} />
+          <Route path="settings" element={<Settings />} />
+          <Route path="admins" element={<AdminAdmins />} />
+        </Route>
+        <Route path="/partner" element={<PartnerLayout />}>
+          <Route index element={<PartnerDashboard />} />
+          <Route path="activities" element={<PartnerActivities />} />
+          <Route path="bookings" element={<PartnerBookings />} />
+          <Route path="revenue" element={<PartnerRevenue />} />
+          <Route path="analytics" element={<PartnerAnalytics />} />
+          <Route path="settings" element={<PartnerSettings />} />
+        </Route>
+        {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </BrowserRouter>
+  </TooltipProvider>
 );
 
 export default App;

@@ -89,12 +89,14 @@ export interface AdminUsersParams {
 }
 
 // Partners
+export type PartnerStatus = "pending" | "approved" | "rejected";
+
 export interface AdminPartner {
   id: string | number;
   company_name: string;
   tax_code?: string | null;
   address?: string | null;
-  status?: "pending" | "approved" | "rejected" | string;
+  status?: PartnerStatus | string;
   user?: {
     id: string | number;
     name: string;
@@ -121,14 +123,49 @@ export interface PartnerPayload {
   company_name: string;
   tax_code?: string | null;
   address?: string | null;
-  status: "pending" | "approved" | "rejected";
+  status: PartnerStatus;
 }
 
 export interface PartnerUpdatePayload {
   company_name?: string;
   tax_code?: string | null;
   address?: string | null;
-  status?: "pending" | "approved" | "rejected";
+  status?: PartnerStatus;
+  name?: string;
+  email?: string;
+  phone?: string;
+}
+
+// Tours
+export type AdminTourStatus = "pending" | "approved" | "rejected";
+
+export interface AdminTour {
+  id: string;
+  name: string;
+  code?: string;
+  slug?: string;
+  status?: AdminTourStatus | string;
+  partner?: AdminPartner;
+  partner_id?: string | number;
+  price?: number;
+  currency?: string;
+  location?: string;
+  category?: string;
+  duration?: string;
+  start_date?: string;
+  end_date?: string;
+  created_at?: string;
+  updated_at?: string;
+  thumbnail_url?: string | null;
+  [key: string]: unknown;
+}
+
+export interface AdminTourParams {
+  status?: string;
+  search?: string;
+  partner_id?: string | number;
+  page?: number;
+  per_page?: number;
 }
 
 // Categories
@@ -259,13 +296,76 @@ export async function fetchAdminPartner(id: string | number): Promise<AdminPartn
   return extractData<AdminPartnerDetail>(res);
 }
 
+const sanitizeOptionalString = (value: string | null | undefined) => {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+const sanitizeRequiredString = (value: string) => value.trim();
+
 export async function createAdminPartner(payload: PartnerPayload) {
-  const res = await apiClient.post("/api/admin/partners", payload);
+  const body: Record<string, unknown> = {
+    name: sanitizeRequiredString(payload.name),
+    email: sanitizeRequiredString(payload.email),
+    password: payload.password,
+    password_confirmation: payload.password_confirmation,
+    company_name: sanitizeRequiredString(payload.company_name),
+    status: payload.status,
+  };
+
+  const phone = sanitizeOptionalString(payload.phone);
+  if (phone !== undefined) body.phone = phone;
+
+  body.tax_code = sanitizeOptionalString(payload.tax_code) ?? null;
+  body.address = sanitizeOptionalString(payload.address) ?? null;
+
+  const res = await apiClient.post("/api/admin/partners", body);
   return extractData(res);
 }
 
 export async function updateAdminPartner(id: string | number, payload: PartnerUpdatePayload) {
-  const res = await apiClient.put(`/api/admin/partners/${id}`, payload);
+  const body: Record<string, unknown> = {};
+
+  if (payload.company_name !== undefined) {
+    const companyName = sanitizeOptionalString(payload.company_name);
+    body.company_name = companyName ?? null;
+  }
+  if (payload.tax_code !== undefined) {
+    body.tax_code = sanitizeOptionalString(payload.tax_code) ?? null;
+  }
+  if (payload.address !== undefined) {
+    body.address = sanitizeOptionalString(payload.address) ?? null;
+  }
+  if (payload.status !== undefined) {
+    body.status = payload.status;
+  }
+  if (payload.name !== undefined) {
+    body.name = sanitizeOptionalString(payload.name);
+  }
+  if (payload.email !== undefined) {
+    body.email = sanitizeOptionalString(payload.email);
+  }
+  if (payload.phone !== undefined) {
+    body.phone = sanitizeOptionalString(payload.phone);
+  }
+
+  const res = await apiClient.patch(`/api/admin/partners/${id}`, body);
+  return extractData(res);
+}
+
+export async function updateAdminPartnerStatus(id: string | number, status: PartnerStatus) {
+  return updateAdminPartner(id, { status });
+}
+
+export async function fetchAdminTours(params: AdminTourParams = {}): Promise<PaginatedResponse<AdminTour>> {
+  const res = await apiClient.get("/api/admin/tours", { params });
+  return extractPaginated<AdminTour>(res);
+}
+
+export async function updateAdminTourStatus(id: string, status: AdminTourStatus) {
+  const res = await apiClient.patch(`/api/admin/tours/${id}/status`, { status });
   return extractData(res);
 }
 

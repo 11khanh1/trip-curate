@@ -1,13 +1,5 @@
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import {
-  LayoutDashboard,
-  MapPin,
-  Calendar,
-  DollarSign,
-  Settings,
-  BarChart3,
-  Menu,
-} from "lucide-react";
+import { LayoutDashboard, MapPin, Calendar, DollarSign, Settings, BarChart3, Search } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -23,6 +15,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 // DỰ ĐOÁN: Bạn sẽ có một UserContext cho Partner User.
 // Đảm bảo đường dẫn import này chính xác hoặc thay thế bằng context của bạn.
@@ -61,11 +54,11 @@ function PartnerPortalSidebar() {
         {!collapsed ? (
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-primary to-orange-500 shadow-sm">
-              <span className="text-lg font-bold text-white">TC</span>
+              <span className="text-lg font-bold text-white">VT</span>
             </div>
             <div>
               <h2 className="text-sm font-semibold text-gray-800 leading-tight">
-                TripCurate
+                VietTravel
               </h2>
               <p className="text-xs text-gray-500">Partner Portal</p>
             </div>
@@ -118,7 +111,7 @@ function PartnerPortalSidebar() {
       </SidebarContent>
       
       <div className="border-t border-gray-200 p-4 text-center text-xs text-gray-400">
-        {!collapsed && "© 2025 TripCurate"}
+        {!collapsed && "© 2025 VietTravel"}
       </div>
     </Sidebar>
   );
@@ -167,40 +160,32 @@ export default function PartnerLayout() {
         <PartnerPortalSidebar />
         
         <div className="flex-1 flex flex-col">
-          <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-border bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/75 px-6">
-            
+          <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-4 border-b border-border bg-white/95 px-4 pr-6 backdrop-blur supports-[backdrop-filter]:bg-white/75">
             <div className="flex items-center gap-4">
-              <SidebarTrigger /> 
-              
-              <div>
-                <h1 className="text-lg font-semibold text-foreground">
-                  {currentPage.title}
-                </h1>
+              <SidebarTrigger className="text-muted-foreground" />
+              <div className="space-y-0.5">
+                <h1 className="text-lg font-semibold text-foreground">{currentPage.title}</h1>
                 <p className="text-xs text-muted-foreground">{currentPage.desc}</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <div className="text-right leading-tight">
-                  <p className="text-sm font-medium">
-                    {/* Hiển thị tên người dùng từ currentUser */}
-                    {currentUser?.name || "Partner User"}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {/* Hiển thị email người dùng từ currentUser */}
-                    {currentUser?.email || "Chưa có email"}
-                  </p>
+            <div className="flex flex-1 items-center justify-end gap-4">
+              <div className="relative hidden w-full max-w-md md:block">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input placeholder="Tìm kiếm trong trang đối tác..." className="pl-9" />
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="hidden flex-col items-end leading-tight md:flex">
+                  <p className="text-sm font-medium">{currentUser?.name || "Partner User"}</p>
+                  <p className="text-xs text-muted-foreground">{currentUser?.email || "Chưa có email"}</p>
                 </div>
-                <div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary to-orange-500 flex items-center justify-center text-white text-sm font-semibold">
-                  {/* Hiển thị chữ cái đầu tiên của tên người dùng */}
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-primary text-sm font-semibold text-white">
                   {userInitial}
                 </div>
+                <Button size="sm" variant="outline" onClick={() => navigate("/")}>
+                  Trang chủ
+                </Button>
               </div>
-
-              <Button size="sm" onClick={() => navigate("/")}>
-                Xem trang chủ
-              </Button>
             </div>
           </header>
           

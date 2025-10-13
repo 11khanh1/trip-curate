@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,17 +66,23 @@ export default function AdminCategories() {
   const [editingCategory, setEditingCategory] = useState<NormalizedCategory | null>(null);
   const [editForm, setEditForm] = useState({ name: "", slug: "", parent_id: NO_PARENT_VALUE });
 
-  const categoriesQuery = useQuery({
+  const authToken = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const categoriesQuery = useQuery<
+    PaginatedResponse<AdminCategory>,
+    Error,
+    NormalizedCategory[]
+  >({
     queryKey: ["admin-categories"],
-    queryFn: () => fetchAdminCategories(),
+    queryFn: () => fetchAdminCategories({ per_page: 50 }),
+    enabled: Boolean(authToken),
+    placeholderData: keepPreviousData,
+    select: (response) => {
+      const list = response?.data ?? [];
+      return list.map(normalizeCategory);
+    },
   });
 
-  const categoriesResponse = categoriesQuery.data as PaginatedResponse<AdminCategory> | undefined;
-
-  const categories = useMemo(() => {
-    const list = categoriesResponse?.data ?? [];
-    return list.map(normalizeCategory);
-  }, [categoriesResponse]);
+  const categories = categoriesQuery.data ?? [];
 
   const rootCategories = useMemo(
     () => categories.filter((category) => category.parentId === null),
@@ -101,7 +107,7 @@ export default function AdminCategories() {
         description: "Danh mục mới đã được thêm vào hệ thống.",
       });
       setCreateForm({ name: "", slug: "", parent_id: NO_PARENT_VALUE });
-      queryClient.invalidateQueries({ queryKey: ["admin-categories"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-categories"], exact: false });
     },
     onError: (err: any) => {
       console.error("Create category failed:", err);
@@ -128,7 +134,7 @@ export default function AdminCategories() {
         description: "Thông tin danh mục đã được cập nhật.",
       });
       setEditingCategory(null);
-      queryClient.invalidateQueries({ queryKey: ["admin-categories"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-categories"], exact: false });
     },
     onError: (err: any) => {
       console.error("Update category failed:", err);
@@ -147,7 +153,7 @@ export default function AdminCategories() {
         title: "Đã xóa danh mục",
         description: "Danh mục đã được xóa khỏi hệ thống.",
       });
-      queryClient.invalidateQueries({ queryKey: ["admin-categories"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-categories"], exact: false });
     },
     onError: (err: any) => {
       console.error("Delete category failed:", err);

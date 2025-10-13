@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,15 @@ import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/admin/StatCard";
 import { Users, UserPlus, ShieldOff, Loader2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import { useToast } from "@/hooks/use-toast";
 import {
   fetchAdminUsers,
@@ -28,8 +37,7 @@ const TOGGLE_ACTION_LABELS: Record<UserStatus, string> = {
   inactive: "Kích hoạt lại",
 };
 
-const isKnownStatus = (status: any): status is UserStatus =>
-  KNOWN_USER_STATUSES.includes(status);
+const PER_PAGE_OPTIONS = [10, 20, 50] as const;
 
 // ✨ TỐI ƯU 1: Xử lý status mặc định an toàn hơn
 const normalizeUser = (user: AdminUser) => {
@@ -56,33 +64,85 @@ export default function AdminUsers() {
   const [searchInput, setSearchInput] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<UserStatus | "all">("all");
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState<number>(PER_PAGE_OPTIONS[1]);
 
-  // ✨ TỐI ƯU 3: Định nghĩa queryKey một lần cho sạch và nhất quán
-  const queryKey = ["admin-users", statusFilter, searchTerm];
+  const queryKey = ["admin-users", statusFilter, searchTerm, page, perPage];
+  const authToken = typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
-  const { data, isLoading } = useQuery({
-    queryKey: queryKey,
+  const usersQuery = useQuery<
+    PaginatedResponse<AdminUser>,
+    Error,
+    { list: NormalizedUser[]; meta: Record<string, unknown> }
+  >({
+    queryKey,
     queryFn: () =>
       fetchAdminUsers({
         role: "customer",
         status: statusFilter === "all" ? undefined : statusFilter,
         search: searchTerm || undefined,
-        per_page: 20,
+        page,
+        per_page: perPage,
       }),
+    enabled: Boolean(authToken),
+    placeholderData: keepPreviousData,
+    select: (response: PaginatedResponse<AdminUser>) => ({
+      list: (response?.data ?? []).map(normalizeUser),
+      meta: response?.meta ?? {},
+    }),
   });
 
-  const usersResponse = data as PaginatedResponse<AdminUser> | undefined;
-  const usersMeta = (usersResponse?.meta ?? {}) as Record<string, unknown>;
-  const userStatsMeta = usersMeta as {
+  const users = usersQuery.data?.list ?? [];
+  const userStatsMeta = (usersQuery.data?.meta ?? {}) as {
     total_new?: number | string;
     registrations_week?: number | string;
     registrations_change?: number | string;
+    current_page?: number | string;
+    per_page?: number | string;
+    last_page?: number | string;
+    total?: number | string;
+    from?: number | string;
+    to?: number | string;
   };
 
-  const users = useMemo(() => {
-    const list = usersResponse?.data ?? [];
-    return list.map(normalizeUser);
-  }, [usersResponse]);
+  const currentPage = Number(userStatsMeta.current_page ?? page) || 1;
+  const serverPerPage = Number(userStatsMeta.per_page ?? perPage) || perPage;
+  const totalUsers = Number(userStatsMeta.total ?? users.length) || users.length;
+  const lastPage = Number(userStatsMeta.last_page ?? Math.max(1, Math.ceil(totalUsers / serverPerPage))) || 1;
+  const rangeStart = Number(userStatsMeta.from ?? (currentPage - 1) * serverPerPage + 1) || 0;
+  const rangeEnd = Number(userStatsMeta.to ?? Math.min(totalUsers, currentPage * serverPerPage)) || 0;
+  const isFirstPage = currentPage <= 1;
+  const isLastPage = currentPage >= lastPage;
+  const displayStart = totalUsers === 0 ? 0 : Math.max(1, Math.min(rangeStart || 1, totalUsers));
+  const displayEnd = totalUsers === 0 ? 0 : Math.min(rangeEnd || displayStart, totalUsers);
+
+  const paginationRange = useMemo<(number | "ellipsis")[]>(() => {
+    const totalPages = lastPage;
+    const current = Math.min(Math.max(1, currentPage), totalPages);
+    if (totalPages <= 5) {
+      return Array.from({ length: totalPages }, (_, index) => index + 1);
+    }
+
+    const range: (number | "ellipsis")[] = [1];
+    const siblings = 1;
+    const start = Math.max(2, current - siblings);
+    const end = Math.min(totalPages - 1, current + siblings);
+
+    if (start > 2) {
+      range.push("ellipsis");
+    }
+
+    for (let i = start; i <= end; i++) {
+      range.push(i);
+    }
+
+    if (end < totalPages - 1) {
+      range.push("ellipsis");
+    }
+
+    range.push(totalPages);
+    return range;
+  }, [currentPage, lastPage]);
 
   const inactiveUsers = users.filter((user) => user.status !== "active").length;
 
@@ -94,8 +154,7 @@ export default function AdminUsers() {
         title: "Cập nhật thành công",
         description: "Trạng thái người dùng đã được cập nhật.",
       });
-      // Invalidate đúng query key đang được sử dụng
-      queryClient.invalidateQueries({ queryKey: queryKey });
+      queryClient.invalidateQueries({ queryKey: ["admin-users"], exact: false });
     },
     onError: (err: any) => {
       console.error("Update user status failed:", err);
@@ -107,18 +166,34 @@ export default function AdminUsers() {
     },
   });
 
-  const handleSearchSubmit = () => {
-    setSearchTerm(searchInput.trim());
+  const handleStatusFilterChange = (value: UserStatus | "all") => {
+    setStatusFilter(value);
+    setPage(1);
   };
 
-  // ✨ TỐI ƯU 2: Logic xử lý chính để tránh "mất" người dùng
+  const handlePerPageChange = (value: string) => {
+    const parsed = Number(value);
+    setPerPage((prev) => (Number.isFinite(parsed) && parsed > 0 ? parsed : prev));
+    setPage(1);
+  };
+
+  const handleSearchSubmit = () => {
+    setSearchTerm(searchInput.trim());
+    setPage(1);
+  };
+
+  const handlePageChange = (nextPage: number) => {
+    if (!Number.isFinite(nextPage)) return;
+    const clamped = Math.min(Math.max(1, Math.trunc(nextPage)), lastPage || 1);
+    if (clamped === page) return;
+    setPage(clamped);
+  };
+
   const handleToggleStatus = (user: NormalizedUser) => {
     const nextStatus: UserStatus = user.status === "active" ? "inactive" : "active";
-
-    // Nếu bộ lọc hiện tại không phải là "Tất cả" VÀ trạng thái mới của người dùng
-    // không khớp với bộ lọc hiện tại, thì chuyển bộ lọc về "Tất cả".
     if (statusFilter !== "all" && nextStatus !== statusFilter) {
       setStatusFilter("all");
+      setPage(1);
     }
 
     statusMutation.mutate({ id: user.id, status: nextStatus });
@@ -126,7 +201,6 @@ export default function AdminUsers() {
 
   return (
     <div className="space-y-6">
-      {/* Phần StatCard không thay đổi */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard
           title="Tổng người dùng"
@@ -161,7 +235,6 @@ export default function AdminUsers() {
       </div>
 
       <Card>
-        {/* Phần CardHeader không thay đổi */}
         <CardHeader>
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
@@ -171,7 +244,7 @@ export default function AdminUsers() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <div className="w-full sm:w-64">
                 <label className="mb-1 block text-xs font-medium text-muted-foreground">Bộ lọc trạng thái</label>
-                <Select value={statusFilter} onValueChange={(value: UserStatus | "all") => setStatusFilter(value)}>
+                <Select value={statusFilter} onValueChange={(value) => handleStatusFilterChange(value as UserStatus | "all")}>
                   <SelectTrigger>
                     <SelectValue placeholder="Chọn trạng thái" />
                   </SelectTrigger>
@@ -198,11 +271,25 @@ export default function AdminUsers() {
                   </Button>
                 </div>
               </div>
+              <div className="w-full sm:w-40">
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">Số dòng / trang</label>
+                <Select value={String(perPage)} onValueChange={handlePerPageChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Chọn số dòng" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PER_PAGE_OPTIONS.map((option) => (
+                      <SelectItem key={option} value={String(option)}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
         </CardHeader>
         
-        {/* Phần CardContent và danh sách không thay đổi */}
         <CardContent>
           <div className="rounded-lg border">
             <div className="hidden grid-cols-[2fr,2fr,1.5fr,1fr,1fr] bg-muted/60 px-4 py-3 text-sm font-medium text-muted-foreground md:grid">
@@ -213,7 +300,7 @@ export default function AdminUsers() {
               <span>Trạng thái</span>
             </div>
             <div className="divide-y">
-              {isLoading ? (
+              {usersQuery.isLoading ? (
                 <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Đang tải dữ liệu người dùng...
@@ -226,8 +313,7 @@ export default function AdminUsers() {
                   const badgeLabel = STATUS_LABELS[user.status];
                   const buttonLabel = TOGGLE_ACTION_LABELS[user.status];
 
-                  // ✨ THAY ĐỔI CHÍNH NẰM Ở ĐÂY
-                  // Kiểm tra xem mutation có đang chạy cho ĐÚNG user này không
+
                   const isUpdatingThisUser = 
                     statusMutation.isPending && statusMutation.variables?.id === user.id;
 
@@ -236,7 +322,6 @@ export default function AdminUsers() {
                       key={user.id}
                       className="grid gap-4 px-4 py-4 md:grid-cols-[2fr,2fr,1.5fr,1fr,1fr] md:items-center"
                     >
-                      {/* ... các thẻ p và div khác ... */}
                       <div className="space-y-1">
                         <p className="font-medium">{user.name}</p>
                         <p className="text-xs text-muted-foreground md:hidden">
@@ -274,6 +359,61 @@ export default function AdminUsers() {
               )}
             </div>
           </div>
+          {totalUsers > 0 ? (
+            <div className="flex flex-col gap-4 px-4 py-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+              <span>
+                Hiển thị {displayStart}-{displayEnd} trên tổng {totalUsers} người dùng
+              </span>
+              <Pagination className="w-auto gap-2 md:mx-0 md:justify-end">
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      href="#"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        if (isFirstPage) return;
+                        handlePageChange(currentPage - 1);
+                      }}
+                      className={isFirstPage ? "pointer-events-none opacity-50" : undefined}
+                      aria-disabled={isFirstPage}
+                      tabIndex={isFirstPage ? -1 : undefined}
+                    />
+                  </PaginationItem>
+                  {paginationRange.map((item, index) => (
+                    <PaginationItem key={`${item}-${index}`}>
+                      {item === "ellipsis" ? (
+                        <PaginationEllipsis />
+                      ) : (
+                        <PaginationLink
+                          href="#"
+                          isActive={item === currentPage}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            handlePageChange(item);
+                          }}
+                        >
+                          {item}
+                        </PaginationLink>
+                      )}
+                    </PaginationItem>
+                  ))}
+                  <PaginationItem>
+                    <PaginationNext
+                      href="#"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        if (isLastPage) return;
+                        handlePageChange(currentPage + 1);
+                      }}
+                      className={isLastPage ? "pointer-events-none opacity-50" : undefined}
+                      aria-disabled={isLastPage}
+                      tabIndex={isLastPage ? -1 : undefined}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
     </div>

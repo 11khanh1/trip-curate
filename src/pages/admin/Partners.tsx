@@ -1,31 +1,35 @@
-import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/admin/StatCard";
 import { Briefcase, UserPlus, BarChart3, Loader2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
   fetchAdminPartners,
   createAdminPartner,
   updateAdminPartner,
+  updateAdminPartnerStatus,
   type AdminPartner,
   type PaginatedResponse,
+  type PartnerStatus,
 } from "@/services/adminApi";
-
-type PartnerStatus = "pending" | "approved" | "rejected";
 
 const STATUS_OPTIONS: { value: PartnerStatus; label: string }[] = [
   { value: "pending", label: "Chờ duyệt" },
   { value: "approved", label: "Đã duyệt" },
   { value: "rejected", label: "Từ chối" },
 ];
-
-const statusLabel = (status: PartnerStatus) =>
-  STATUS_OPTIONS.find((option) => option.value === status)?.label ?? status;
 
 const normalizePartner = (partner: AdminPartner) => {
   const status = (partner.status as PartnerStatus | undefined) ?? "pending";
@@ -44,8 +48,11 @@ const normalizePartner = (partner: AdminPartner) => {
     toursCount,
     bookingsCount,
     userStatus: partner.user?.status ?? "",
+    raw: partner,
   };
 };
+
+type NormalizedPartner = ReturnType<typeof normalizePartner>;
 
 type FormState = {
   name: string;
@@ -71,21 +78,70 @@ const INITIAL_FORM: FormState = {
   status: "pending",
 };
 
+type EditFormState = {
+  company_name: string;
+  name: string;
+  email: string;
+  phone: string;
+  tax_code: string;
+  address: string;
+  status: PartnerStatus;
+};
+
+const INITIAL_EDIT_FORM: EditFormState = {
+  company_name: "",
+  name: "",
+  email: "",
+  phone: "",
+  tax_code: "",
+  address: "",
+  status: "pending",
+};
+
 export default function AdminPartners() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
+  const [editingPartner, setEditingPartner] = useState<NormalizedPartner | null>(null);
+  const [editForm, setEditForm] = useState<EditFormState>(INITIAL_EDIT_FORM);
 
-  const { data, isLoading } = useQuery({
+  const authToken = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+
+  const handleEditOpen = (partner: NormalizedPartner) => {
+    setEditingPartner(partner);
+    setEditForm({
+      company_name: partner.companyName ?? "",
+      name: partner.contactName ?? "",
+      email: partner.email ?? "",
+      phone: partner.phone ?? "",
+      tax_code: partner.taxCode ?? "",
+      address: partner.address ?? "",
+      status: partner.status,
+    });
+  };
+
+  const handleEditClose = () => {
+    setEditingPartner(null);
+    setEditForm(INITIAL_EDIT_FORM);
+  };
+
+  const partnersQuery = useQuery<
+    PaginatedResponse<AdminPartner>,
+    Error,
+    { list: NormalizedPartner[]; meta: Record<string, unknown> }
+  >({
     queryKey: ["admin-partners"],
-    queryFn: () => fetchAdminPartners(),
+    queryFn: () => fetchAdminPartners({ per_page: 20 }),
+    enabled: Boolean(authToken),
+    placeholderData: keepPreviousData,
+    select: (response) => ({
+      list: (response?.data ?? []).map(normalizePartner),
+      meta: response?.meta ?? {},
+    }),
   });
 
-  const partnersResponse = data as PaginatedResponse<AdminPartner> | undefined;
-  const partners = useMemo(() => {
-    const list = partnersResponse?.data ?? [];
-    return list.map(normalizePartner);
-  }, [partnersResponse]);
+  const partners = partnersQuery.data?.list ?? [];
+  const partnersMeta = partnersQuery.data?.meta ?? {};
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -99,7 +155,7 @@ export default function AdminPartners() {
         title: "Đã tạo đối tác",
         description: "Tài khoản đối tác mới đã được khởi tạo.",
       });
-      queryClient.invalidateQueries({ queryKey: ["admin-partners"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-partners"], exact: false });
       setForm(INITIAL_FORM);
     },
     onError: (err: any) => {
@@ -112,21 +168,52 @@ export default function AdminPartners() {
     },
   });
 
-  const updateMutation = useMutation({
+  const updateStatusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string | number; status: PartnerStatus }) =>
-      updateAdminPartner(id, { status }),
+      updateAdminPartnerStatus(id, status),
     onSuccess: () => {
       toast({
         title: "Đã cập nhật đối tác",
         description: "Trạng thái đối tác đã được thay đổi.",
       });
-      queryClient.invalidateQueries({ queryKey: ["admin-partners"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-partners"], exact: false });
     },
     onError: (err: any) => {
       console.error("Update partner failed:", err);
       toast({
         title: "Không thể cập nhật",
         description: err?.response?.data?.message || "Vui lòng thử lại sau.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateInfoMutation = useMutation({
+    mutationFn: () => {
+      if (!editingPartner) return Promise.resolve(null);
+      return updateAdminPartner(editingPartner.id, {
+        company_name: editForm.company_name.trim(),
+        tax_code: editForm.tax_code.trim(),
+        address: editForm.address.trim(),
+        status: editForm.status,
+        name: editForm.name.trim(),
+        email: editForm.email.trim(),
+        phone: editForm.phone.trim(),
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Đã lưu thông tin",
+        description: "Thông tin đối tác đã được cập nhật.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["admin-partners"], exact: false });
+      handleEditClose();
+    },
+    onError: (err: any) => {
+      console.error("Update partner info failed:", err);
+      toast({
+        title: "Không thể cập nhật",
+        description: err?.response?.data?.message || "Vui lòng kiểm tra lại dữ liệu.",
         variant: "destructive",
       });
     },
@@ -169,7 +256,35 @@ export default function AdminPartners() {
     createMutation.mutate();
   };
 
-  const totalPartners = (partnersResponse?.meta?.total as number | undefined) ?? partners.length;
+  const handleEditSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!editingPartner) return;
+    if (!editForm.company_name.trim() || !editForm.name.trim()) {
+      toast({
+        title: "Thiếu thông tin",
+        description: "Vui lòng nhập tên công ty và người liên hệ.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!editForm.email.trim()) {
+      toast({
+        title: "Thiếu email",
+        description: "Vui lòng nhập email của đối tác.",
+        variant: "destructive",
+      });
+      return;
+    }
+    updateInfoMutation.mutate();
+  };
+
+  const totalPartnersValue =
+    typeof partnersMeta.total === "number"
+      ? partnersMeta.total
+      : Number.isFinite(Number(partnersMeta.total))
+        ? Number(partnersMeta.total)
+        : undefined;
+  const totalPartners = totalPartnersValue ?? partners.length;
   const approvedPartners = partners.filter((partner) => partner.status === "approved").length;
   const rejectedPartners = partners.filter((partner) => partner.status === "rejected").length;
 
@@ -312,7 +427,7 @@ export default function AdminPartners() {
               <span>Trạng thái</span>
             </div>
             <div className="divide-y">
-              {isLoading ? (
+              {partnersQuery.isLoading ? (
                 <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Đang tải danh sách đối tác...
@@ -337,24 +452,21 @@ export default function AdminPartners() {
                     <div className="text-sm text-muted-foreground">
                       {partner.toursCount} tour • {partner.bookingsCount} lượt đặt
                     </div>
-                    <div className="flex flex-col gap-2 md:items-start">
-                      <Badge
-                        variant={
-                          partner.status === "approved"
-                            ? "default"
-                            : partner.status === "pending"
-                              ? "secondary"
-                              : "destructive"
-                        }
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEditOpen(partner)}
+                        disabled={updateInfoMutation.isPending && editingPartner?.id === partner.id}
                       >
-                        {statusLabel(partner.status)}
-                      </Badge>
+                        Chỉnh sửa
+                      </Button>
                       <Select
                         defaultValue={partner.status}
-                        onValueChange={(status) => updateMutation.mutate({ id: partner.id, status: status as PartnerStatus })}
-                        disabled={updateMutation.isPending}
+                        onValueChange={(status) => updateStatusMutation.mutate({ id: partner.id, status: status as PartnerStatus })}
+                        disabled={updateStatusMutation.isPending}
                       >
-                        <SelectTrigger className="h-9 w-[160px] justify-between">
+                        <SelectTrigger className="h-9 min-w-[160px] justify-between sm:w-auto">
                           <SelectValue placeholder="Cập nhật trạng thái" />
                         </SelectTrigger>
                         <SelectContent>
@@ -365,6 +477,7 @@ export default function AdminPartners() {
                           ))}
                         </SelectContent>
                       </Select>
+                      
                     </div>
                   </div>
                 ))
@@ -373,6 +486,96 @@ export default function AdminPartners() {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog
+        open={Boolean(editingPartner)}
+        onOpenChange={(open) => {
+          if (!open) handleEditClose();
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cập nhật thông tin đối tác</DialogTitle>
+            <DialogDescription>Chỉnh sửa dữ liệu liên hệ và trạng thái hoạt động.</DialogDescription>
+          </DialogHeader>
+          <form className="space-y-4" onSubmit={handleEditSubmit}>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-sm font-medium text-foreground">Tên doanh nghiệp</label>
+                <Input
+                  value={editForm.company_name}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, company_name: e.target.value }))}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Tên người liên hệ</label>
+                <Input
+                  value={editForm.name}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Email</label>
+                <Input
+                  type="email"
+                  value={editForm.email}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, email: e.target.value }))}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Số điện thoại</label>
+                <Input
+                  value={editForm.phone}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, phone: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Mã số thuế</label>
+                <Input
+                  value={editForm.tax_code}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, tax_code: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-sm font-medium text-foreground">Địa chỉ</label>
+                <Input
+                  value={editForm.address}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, address: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Trạng thái</label>
+                <Select
+                  value={editForm.status}
+                  onValueChange={(value: PartnerStatus) => setEditForm((prev) => ({ ...prev, status: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Chọn trạng thái" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STATUS_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={handleEditClose} disabled={updateInfoMutation.isPending}>
+                Hủy
+              </Button>
+              <Button type="submit" disabled={updateInfoMutation.isPending}>
+                {updateInfoMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Lưu thay đổi"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
