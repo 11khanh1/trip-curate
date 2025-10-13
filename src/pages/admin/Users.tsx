@@ -8,7 +8,12 @@ import { StatCard } from "@/components/admin/StatCard";
 import { Users, UserPlus, ShieldOff, Loader2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { fetchAdminUsers, patchAdminUserStatus, type AdminUser } from "@/services/adminApi";
+import {
+  fetchAdminUsers,
+  patchAdminUserStatus,
+  type AdminUser,
+  type PaginatedResponse,
+} from "@/services/adminApi";
 
 const KNOWN_USER_STATUSES = ["active", "inactive"] as const;
 type UserStatus = (typeof KNOWN_USER_STATUSES)[number];
@@ -23,13 +28,14 @@ const TOGGLE_ACTION_LABELS: Record<UserStatus, string> = {
   inactive: "Kích hoạt lại",
 };
 
-const isKnownStatus = (status: string): status is UserStatus =>
-  KNOWN_USER_STATUSES.includes(status as UserStatus);
+const isKnownStatus = (status: any): status is UserStatus =>
+  KNOWN_USER_STATUSES.includes(status);
 
+// ✨ TỐI ƯU 1: Xử lý status mặc định an toàn hơn
 const normalizeUser = (user: AdminUser) => {
   const rawStatus = (user.status as string | undefined) ?? (user as any)?.status;
-  const normalizedStatus =
-    rawStatus === "inactive" ? "inactive" : rawStatus === "active" ? "active" : rawStatus ?? "active";
+  // Chỉ khi status là "active" mới coi là active, còn lại (null, undefined, "inactive",...) đều là inactive.
+  const normalizedStatus: UserStatus = rawStatus === "active" ? "active" : "inactive";
 
   return {
     id: user.id,
@@ -49,23 +55,34 @@ export default function AdminUsers() {
   const queryClient = useQueryClient();
   const [searchInput, setSearchInput] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<UserStatus | "all">("active");
+  const [statusFilter, setStatusFilter] = useState<UserStatus | "all">("all");
+
+  // ✨ TỐI ƯU 3: Định nghĩa queryKey một lần cho sạch và nhất quán
+  const queryKey = ["admin-users", statusFilter, searchTerm];
 
   const { data, isLoading } = useQuery({
-    queryKey: ["admin-users", statusFilter, searchTerm],
+    queryKey: queryKey,
     queryFn: () =>
       fetchAdminUsers({
         role: "customer",
         status: statusFilter === "all" ? undefined : statusFilter,
         search: searchTerm || undefined,
+        per_page: 20,
       }),
   });
 
+  const usersResponse = data as PaginatedResponse<AdminUser> | undefined;
+  const usersMeta = (usersResponse?.meta ?? {}) as Record<string, unknown>;
+  const userStatsMeta = usersMeta as {
+    total_new?: number | string;
+    registrations_week?: number | string;
+    registrations_change?: number | string;
+  };
+
   const users = useMemo(() => {
-    if (!data) return [];
-    const list = Array.isArray(data) ? data : (data as any)?.data || [];
-    return (list as AdminUser[]).map(normalizeUser);
-  }, [data]);
+    const list = usersResponse?.data ?? [];
+    return list.map(normalizeUser);
+  }, [usersResponse]);
 
   const inactiveUsers = users.filter((user) => user.status !== "active").length;
 
@@ -77,7 +94,8 @@ export default function AdminUsers() {
         title: "Cập nhật thành công",
         description: "Trạng thái người dùng đã được cập nhật.",
       });
-      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      // Invalidate đúng query key đang được sử dụng
+      queryClient.invalidateQueries({ queryKey: queryKey });
     },
     onError: (err: any) => {
       console.error("Update user status failed:", err);
@@ -93,13 +111,22 @@ export default function AdminUsers() {
     setSearchTerm(searchInput.trim());
   };
 
+  // ✨ TỐI ƯU 2: Logic xử lý chính để tránh "mất" người dùng
   const handleToggleStatus = (user: NormalizedUser) => {
     const nextStatus: UserStatus = user.status === "active" ? "inactive" : "active";
+
+    // Nếu bộ lọc hiện tại không phải là "Tất cả" VÀ trạng thái mới của người dùng
+    // không khớp với bộ lọc hiện tại, thì chuyển bộ lọc về "Tất cả".
+    if (statusFilter !== "all" && nextStatus !== statusFilter) {
+      setStatusFilter("all");
+    }
+
     statusMutation.mutate({ id: user.id, status: nextStatus });
   };
 
   return (
     <div className="space-y-6">
+      {/* Phần StatCard không thay đổi */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard
           title="Tổng người dùng"
@@ -107,20 +134,20 @@ export default function AdminUsers() {
           icon={Users}
           gradient
           trend={
-            data && (data as any)?.total_new
-              ? { value: `+${(data as any).total_new} so với tháng trước`, isPositive: true }
+            userStatsMeta.total_new !== undefined
+              ? { value: `+${userStatsMeta.total_new} so với tháng trước`, isPositive: true }
               : undefined
           }
         />
         <StatCard
           title="Đăng ký mới (7 ngày)"
-          value={(data as any)?.registrations_week ?? "N/A"}
+          value={userStatsMeta.registrations_week ?? "N/A"}
           icon={UserPlus}
           trend={
-            (data as any)?.registrations_change
+            userStatsMeta.registrations_change
               ? {
-                  value: String((data as any).registrations_change),
-                  isPositive: String((data as any).registrations_change).includes("+"),
+                  value: String(userStatsMeta.registrations_change),
+                  isPositive: String(userStatsMeta.registrations_change).includes("+"),
                 }
               : undefined
           }
@@ -134,6 +161,7 @@ export default function AdminUsers() {
       </div>
 
       <Card>
+        {/* Phần CardHeader không thay đổi */}
         <CardHeader>
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
@@ -173,6 +201,8 @@ export default function AdminUsers() {
             </div>
           </div>
         </CardHeader>
+        
+        {/* Phần CardContent và danh sách không thay đổi */}
         <CardContent>
           <div className="rounded-lg border">
             <div className="hidden grid-cols-[2fr,2fr,1.5fr,1fr,1fr] bg-muted/60 px-4 py-3 text-sm font-medium text-muted-foreground md:grid">
@@ -192,21 +222,21 @@ export default function AdminUsers() {
                 <div className="py-10 text-center text-sm text-muted-foreground">Không có người dùng phù hợp.</div>
               ) : (
                 users.map((user) => {
-                  const knownStatus = typeof user.status === "string" && isKnownStatus(user.status);
-                  const badgeVariant = knownStatus
-                    ? user.status === "active"
-                      ? "default"
-                      : "destructive"
-                    : "secondary";
-                  const badgeLabel = knownStatus ? STATUS_LABELS[user.status] : user.status || "Không xác định";
-                  const buttonLabel =
-                    user.status === "active" ? TOGGLE_ACTION_LABELS.active : TOGGLE_ACTION_LABELS.inactive;
+                  const badgeVariant = user.status === "active" ? "default" : "destructive";
+                  const badgeLabel = STATUS_LABELS[user.status];
+                  const buttonLabel = TOGGLE_ACTION_LABELS[user.status];
+
+                  // ✨ THAY ĐỔI CHÍNH NẰM Ở ĐÂY
+                  // Kiểm tra xem mutation có đang chạy cho ĐÚNG user này không
+                  const isUpdatingThisUser = 
+                    statusMutation.isPending && statusMutation.variables?.id === user.id;
 
                   return (
                     <div
                       key={user.id}
                       className="grid gap-4 px-4 py-4 md:grid-cols-[2fr,2fr,1.5fr,1fr,1fr] md:items-center"
                     >
+                      {/* ... các thẻ p và div khác ... */}
                       <div className="space-y-1">
                         <p className="font-medium">{user.name}</p>
                         <p className="text-xs text-muted-foreground md:hidden">
@@ -221,16 +251,17 @@ export default function AdminUsers() {
                       <div className="hidden text-sm text-muted-foreground md:block">
                         {user.createdAt ? new Date(user.createdAt).toLocaleDateString("vi-VN") : "—"}
                       </div>
-                      <div className="flex items-center justify-between md:block">
+                      <div className="flex items-center justify-between gap-2 md:block">
                         <Badge variant={badgeVariant}>{badgeLabel}</Badge>
                         <Button
                           variant="outline"
                           size="sm"
                           className="mt-2 md:mt-0"
                           onClick={() => handleToggleStatus(user)}
+                          // Vẫn disable tất cả các nút khi một mutation đang chạy
                           disabled={statusMutation.isPending}
                         >
-                          {statusMutation.isPending ? (
+                          {isUpdatingThisUser ? ( // ✨ CHỈ HIỂN THỊ LOADER CHO ĐÚNG NÚT NÀY
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
                           ) : (
                             buttonLabel

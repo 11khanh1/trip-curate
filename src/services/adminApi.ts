@@ -222,12 +222,19 @@ export async function fetchAdminDashboard(): Promise<DashboardResponse> {
   return data;
 }
 
-export async function fetchAdminUsers(params: AdminUsersParams = {}): Promise<AdminUser[]> {
+export async function fetchAdminUsers(params: AdminUsersParams = {}): Promise<PaginatedResponse<AdminUser>> {
   const res = await apiClient.get("/api/admin/users", { params });
-  return extractData<AdminUser[]>(res);
+  return extractPaginated<AdminUser>(res);
 }
 
-export async function patchAdminUserStatus(id: string | number, status: string) {
+export async function fetchAdminUser(id: string | number): Promise<AdminUser> {
+  const res = await apiClient.get(`/api/admin/users/${id}`);
+  return extractData<AdminUser>(res);
+}
+
+export type AdminUserStatus = "active" | "inactive";
+
+export async function patchAdminUserStatus(id: string | number, status: AdminUserStatus) {
   const res = await apiClient.patch(`/api/admin/users/${id}/status`, { status });
   return extractData(res);
 }
@@ -235,6 +242,21 @@ export async function patchAdminUserStatus(id: string | number, status: string) 
 export async function fetchAdminPartners(params?: { page?: number; per_page?: number; status?: string }): Promise<PaginatedResponse<AdminPartner>> {
   const res = await apiClient.get("/api/admin/partners", { params });
   return extractPaginated<AdminPartner>(res);
+}
+
+export interface AdminPartnerDetail {
+  partner: AdminPartner;
+  stats?: {
+    tours_count?: number;
+    bookings_count?: number;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
+export async function fetchAdminPartner(id: string | number): Promise<AdminPartnerDetail> {
+  const res = await apiClient.get(`/api/admin/partners/${id}`);
+  return extractData<AdminPartnerDetail>(res);
 }
 
 export async function createAdminPartner(payload: PartnerPayload) {
