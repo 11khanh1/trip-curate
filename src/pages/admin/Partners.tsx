@@ -1,11 +1,21 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/admin/StatCard";
 import { Briefcase, UserPlus, BarChart3, Loader2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import {
   Dialog,
   DialogContent,
@@ -17,10 +27,12 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import {
   fetchAdminPartners,
+  fetchAdminPartner,
   createAdminPartner,
   updateAdminPartner,
   updateAdminPartnerStatus,
   type AdminPartner,
+  type AdminPartnerDetail,
   type PaginatedResponse,
   type PartnerStatus,
 } from "@/services/adminApi";
@@ -30,6 +42,24 @@ const STATUS_OPTIONS: { value: PartnerStatus; label: string }[] = [
   { value: "approved", label: "Đã duyệt" },
   { value: "rejected", label: "Từ chối" },
 ];
+
+const STATUS_LABEL_MAP = STATUS_OPTIONS.reduce(
+  (acc, option) => ({ ...acc, [option.value]: option.label }),
+  {} as Record<PartnerStatus, string>,
+);
+
+const getPartnerStatusBadgeVariant = (status: PartnerStatus) => {
+  switch (status) {
+    case "approved":
+      return "default";
+    case "rejected":
+      return "destructive";
+    default:
+      return "secondary";
+  }
+};
+
+const PER_PAGE_OPTIONS = [10, 20, 50] as const;
 
 const normalizePartner = (partner: AdminPartner) => {
   const status = (partner.status as PartnerStatus | undefined) ?? "pending";
@@ -98,12 +128,59 @@ const INITIAL_EDIT_FORM: EditFormState = {
   status: "pending",
 };
 
+const parseMetaNumber = (value: unknown) => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const numeric = typeof value === "string" ? Number(value) : Number(value);
+  return Number.isFinite(numeric) ? numeric : undefined;
+};
+
+const extractErrorMessage = (error: unknown, fallback: string) => {
+  if (!error) return fallback;
+  if (error instanceof Error && typeof error.message === "string" && error.message.trim().length > 0) {
+    return error.message;
+  }
+  if (typeof error === "object" && error !== null) {
+    const maybeResponse = (error as { response?: unknown }).response;
+    if (typeof maybeResponse === "object" && maybeResponse !== null) {
+      const maybeData = (maybeResponse as { data?: unknown }).data;
+      if (typeof maybeData === "object" && maybeData !== null) {
+        const maybeMessage = (maybeData as { message?: unknown }).message;
+        if (typeof maybeMessage === "string" && maybeMessage.trim().length > 0) {
+          return maybeMessage;
+        }
+      }
+    }
+    const maybeMessage = (error as { message?: unknown }).message;
+    if (typeof maybeMessage === "string" && maybeMessage.trim().length > 0) {
+      return maybeMessage;
+    }
+  }
+  return fallback;
+};
+
+type PartnerDetailQueryData = {
+  normalized: NormalizedPartner;
+  stats: {
+    toursCount: number;
+    bookingsCount: number;
+  };
+  raw: AdminPartnerDetail;
+};
+
 export default function AdminPartners() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
   const [editingPartner, setEditingPartner] = useState<NormalizedPartner | null>(null);
   const [editForm, setEditForm] = useState<EditFormState>(INITIAL_EDIT_FORM);
+  const [searchInput, setSearchInput] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<PartnerStatus | "all">("all");
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState<number>(PER_PAGE_OPTIONS[1]);
+  const [detailPartnerId, setDetailPartnerId] = useState<string | number | null>(null);
+  const [detailPartner, setDetailPartner] = useState<NormalizedPartner | null>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
 
   const authToken = typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
@@ -125,13 +202,21 @@ export default function AdminPartners() {
     setEditForm(INITIAL_EDIT_FORM);
   };
 
+  const partnersQueryKey = ["admin-partners", statusFilter, searchTerm, page, perPage] as const;
+
   const partnersQuery = useQuery<
     PaginatedResponse<AdminPartner>,
     Error,
     { list: NormalizedPartner[]; meta: Record<string, unknown> }
   >({
-    queryKey: ["admin-partners"],
-    queryFn: () => fetchAdminPartners({ per_page: 20 }),
+    queryKey: partnersQueryKey,
+    queryFn: () =>
+      fetchAdminPartners({
+        status: statusFilter === "all" ? undefined : statusFilter,
+        search: searchTerm || undefined,
+        page,
+        per_page: perPage,
+      }),
     enabled: Boolean(authToken),
     placeholderData: keepPreviousData,
     select: (response) => ({
@@ -158,19 +243,18 @@ export default function AdminPartners() {
       queryClient.invalidateQueries({ queryKey: ["admin-partners"], exact: false });
       setForm(INITIAL_FORM);
     },
-    onError: (err: any) => {
-      console.error("Create partner failed:", err);
+    onError: (error: unknown) => {
+      console.error("Create partner failed:", error);
       toast({
         title: "Không thể tạo đối tác",
-        description: err?.response?.data?.message || "Vui lòng kiểm tra lại thông tin.",
+        description: extractErrorMessage(error, "Vui lòng kiểm tra lại thông tin."),
         variant: "destructive",
       });
     },
   });
 
-  const updateStatusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: string | number; status: PartnerStatus }) =>
-      updateAdminPartnerStatus(id, status),
+  const updateStatusMutation = useMutation<unknown, unknown, { id: string | number; status: PartnerStatus }>({
+    mutationFn: ({ id, status }) => updateAdminPartnerStatus(id, status),
     onSuccess: () => {
       toast({
         title: "Đã cập nhật đối tác",
@@ -178,11 +262,11 @@ export default function AdminPartners() {
       });
       queryClient.invalidateQueries({ queryKey: ["admin-partners"], exact: false });
     },
-    onError: (err: any) => {
-      console.error("Update partner failed:", err);
+    onError: (error: unknown) => {
+      console.error("Update partner failed:", error);
       toast({
         title: "Không thể cập nhật",
-        description: err?.response?.data?.message || "Vui lòng thử lại sau.",
+        description: extractErrorMessage(error, "Vui lòng thử lại sau."),
         variant: "destructive",
       });
     },
@@ -209,15 +293,152 @@ export default function AdminPartners() {
       queryClient.invalidateQueries({ queryKey: ["admin-partners"], exact: false });
       handleEditClose();
     },
-    onError: (err: any) => {
-      console.error("Update partner info failed:", err);
+    onError: (error: unknown) => {
+      console.error("Update partner info failed:", error);
       toast({
         title: "Không thể cập nhật",
-        description: err?.response?.data?.message || "Vui lòng kiểm tra lại dữ liệu.",
+        description: extractErrorMessage(error, "Vui lòng kiểm tra lại dữ liệu."),
         variant: "destructive",
       });
     },
   });
+
+  const partnerMetaNumbers = partnersMeta as {
+    current_page?: number | string;
+    per_page?: number | string;
+    last_page?: number | string;
+    total?: number | string;
+    from?: number | string;
+    to?: number | string;
+    approved_count?: number | string;
+    rejected_count?: number | string;
+  };
+
+  const currentPage = parseMetaNumber(partnerMetaNumbers.current_page) ?? page;
+  const serverPerPage = parseMetaNumber(partnerMetaNumbers.per_page) ?? perPage;
+  const totalPartners =
+    parseMetaNumber(partnerMetaNumbers.total) ?? (partners.length && !partnersQuery.isLoading ? partners.length : 0);
+  const lastPage =
+    parseMetaNumber(partnerMetaNumbers.last_page) ??
+    Math.max(1, serverPerPage > 0 ? Math.ceil(totalPartners / serverPerPage) : 1);
+  const rangeStart =
+    parseMetaNumber(partnerMetaNumbers.from) ?? (totalPartners > 0 ? (currentPage - 1) * serverPerPage + 1 : 0);
+  const rangeEnd =
+    parseMetaNumber(partnerMetaNumbers.to) ??
+    (totalPartners > 0 ? Math.min(totalPartners, currentPage * serverPerPage) : 0);
+  const displayStart = totalPartners === 0 ? 0 : Math.max(1, Math.min(rangeStart || 1, totalPartners));
+  const displayEnd = totalPartners === 0 ? 0 : Math.min(rangeEnd || displayStart, totalPartners);
+  const isFirstPage = currentPage <= 1;
+  const isLastPage = currentPage >= lastPage;
+
+  const approvedPartners =
+    parseMetaNumber(partnerMetaNumbers.approved_count) ??
+    partners.filter((partner) => partner.status === "approved").length;
+  const rejectedPartners =
+    parseMetaNumber(partnerMetaNumbers.rejected_count) ??
+    partners.filter((partner) => partner.status === "rejected").length;
+
+  const paginationRange = useMemo<(number | "ellipsis")[]>(() => {
+    const totalPages = Math.max(1, lastPage);
+    const current = Math.min(Math.max(1, currentPage), totalPages);
+
+    if (totalPages <= 5) {
+      return Array.from({ length: totalPages }, (_, index) => index + 1);
+    }
+
+    const range: (number | "ellipsis")[] = [1];
+    const siblings = 1;
+    const start = Math.max(2, current - siblings);
+    const end = Math.min(totalPages - 1, current + siblings);
+
+    if (start > 2) {
+      range.push("ellipsis");
+    }
+
+    for (let i = start; i <= end; i++) {
+      range.push(i);
+    }
+
+    if (end < totalPages - 1) {
+      range.push("ellipsis");
+    }
+
+    range.push(totalPages);
+    return range;
+  }, [currentPage, lastPage]);
+
+  const partnerDetailQuery = useQuery<AdminPartnerDetail, Error, PartnerDetailQueryData>({
+    queryKey: ["admin-partner", detailPartnerId],
+    queryFn: () => {
+      if (detailPartnerId === null) {
+        throw new Error("Thiếu mã đối tác để tra cứu hồ sơ.");
+      }
+      return fetchAdminPartner(detailPartnerId);
+    },
+    enabled: detailPartnerId !== null,
+    staleTime: 30_000,
+    select: (payload) => {
+      const normalized = normalizePartner(payload.partner);
+      const statsSource = payload.stats ?? payload.partner?.stats ?? {};
+      return {
+        normalized,
+        stats: {
+          toursCount: parseMetaNumber(statsSource.tours_count) ?? normalized.toursCount ?? 0,
+          bookingsCount: parseMetaNumber(statsSource.bookings_count) ?? normalized.bookingsCount ?? 0,
+        },
+        raw: payload,
+      };
+    },
+  });
+
+  useEffect(() => {
+    if (partnerDetailQuery.data?.normalized) {
+      setDetailPartner(partnerDetailQuery.data.normalized);
+    }
+  }, [partnerDetailQuery.data]);
+
+  const handleStatusFilterChange = (value: PartnerStatus | "all") => {
+    setStatusFilter(value);
+    setPage(1);
+  };
+
+  const handlePerPageChange = (value: string) => {
+    const parsed = Number(value);
+    setPerPage((prev) => {
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return parsed;
+      }
+      return prev;
+    });
+    setPage(1);
+  };
+
+  const handleSearchSubmit = () => {
+    setSearchTerm(searchInput.trim());
+    setPage(1);
+  };
+
+  const handlePageChange = (nextPage: number) => {
+    if (!Number.isFinite(nextPage)) return;
+    const clamped = Math.min(Math.max(1, Math.trunc(nextPage)), lastPage || 1);
+    if (clamped === page) return;
+    setPage(clamped);
+  };
+
+  const handleViewDetail = (partner: NormalizedPartner) => {
+    setDetailPartner(partner);
+    setDetailPartnerId(partner.id);
+    setIsDetailOpen(true);
+  };
+
+  const handleDetailClose = () => {
+    setIsDetailOpen(false);
+    setDetailPartnerId(null);
+    setDetailPartner(null);
+    if (partnerDetailQuery.remove) {
+      partnerDetailQuery.remove();
+    }
+  };
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -278,15 +499,18 @@ export default function AdminPartners() {
     updateInfoMutation.mutate();
   };
 
-  const totalPartnersValue =
-    typeof partnersMeta.total === "number"
-      ? partnersMeta.total
-      : Number.isFinite(Number(partnersMeta.total))
-        ? Number(partnersMeta.total)
-        : undefined;
-  const totalPartners = totalPartnersValue ?? partners.length;
-  const approvedPartners = partners.filter((partner) => partner.status === "approved").length;
-  const rejectedPartners = partners.filter((partner) => partner.status === "rejected").length;
+  const detailStats =
+    partnerDetailQuery.data?.stats ?? {
+      toursCount: detailPartner?.toursCount ?? 0,
+      bookingsCount: detailPartner?.bookingsCount ?? 0,
+    };
+  const detailStatusLabel =
+    detailPartner && detailPartner.status ? STATUS_LABEL_MAP[detailPartner.status] ?? detailPartner.status : "";
+  const detailAccountStatus = detailPartner?.userStatus ?? detailPartner?.raw?.user?.status ?? "";
+  const isDetailLoading = partnerDetailQuery.isFetching;
+  const detailErrorMessage = partnerDetailQuery.isError
+    ? extractErrorMessage(partnerDetailQuery.error, "Không thể tải hồ sơ đối tác.")
+    : "";
 
   return (
     <div className="space-y-6">
@@ -404,16 +628,68 @@ export default function AdminPartners() {
 
       <Card>
         <CardHeader>
-          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
             <div>
               <CardTitle>Danh sách đối tác</CardTitle>
               <CardDescription>Theo dõi trạng thái duyệt và thống kê cơ bản</CardDescription>
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline">Xuất dữ liệu</Button>
-              <Button variant="outline" disabled>
-                Bộ lọc
-              </Button>
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+              <div className="w-full sm:w-40">
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">Số dòng / trang</label>
+                <Select value={String(perPage)} onValueChange={handlePerPageChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Chọn số dòng" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PER_PAGE_OPTIONS.map((option) => (
+                      <SelectItem key={option} value={String(option)}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="w-full sm:w-48">
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">Trạng thái</label>
+                <Select value={statusFilter} onValueChange={(value) => handleStatusFilterChange(value as PartnerStatus | "all")}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Chọn trạng thái" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tất cả</SelectItem>
+                    {STATUS_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="w-full sm:w-64">
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">Từ khóa</label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Tìm theo tên, email hoặc công ty..."
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        handleSearchSubmit();
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleSearchSubmit}
+                    disabled={partnersQuery.isFetching && searchTerm === searchInput.trim()}
+                  >
+                    Tìm
+                  </Button>
+                </div>
+              </div>
+              
             </div>
           </div>
         </CardHeader>
@@ -433,59 +709,245 @@ export default function AdminPartners() {
                   Đang tải danh sách đối tác...
                 </div>
               ) : partners.length === 0 ? (
-                <div className="py-10 text-center text-sm text-muted-foreground">Chưa có đối tác nào trong hệ thống.</div>
+                <div className="py-10 text-center text-sm text-muted-foreground">
+                  {searchTerm || statusFilter !== "all"
+                    ? "Không tìm thấy đối tác phù hợp."
+                    : "Chưa có đối tác nào trong hệ thống."}
+                </div>
               ) : (
-                partners.map((partner) => (
-                  <div key={partner.id} className="grid gap-4 px-4 py-4 md:grid-cols-[2fr,1.5fr,2fr,1fr,1fr] md:items-center">
-                    <div className="space-y-1">
-                      <p className="font-semibold">{partner.companyName}</p>
-                      <p className="text-xs text-muted-foreground">
-                        MST: {partner.taxCode || "—"} • {partner.address || "Chưa cập nhật"}
+                partners.map((partner) => {
+                  const badgeLabel = STATUS_LABEL_MAP[partner.status] ?? partner.status;
+                  const badgeVariant = getPartnerStatusBadgeVariant(partner.status);
+                  const createdAtSource = partner.raw?.created_at;
+                  const createdAtLabel = createdAtSource ? new Date(createdAtSource).toLocaleDateString("vi-VN") : null;
+                  const isUpdatingThisPartner =
+                    updateStatusMutation.isPending && updateStatusMutation.variables?.id === partner.id;
+
+                  return (
+                    <div
+                      key={partner.id}
+                      className="grid gap-4 px-4 py-4 md:grid-cols-[2fr,1.5fr,2fr,1fr,1.35fr] md:items-center"
+                    >
+                      <div className="space-y-1">
+                        <p className="font-semibold">{partner.companyName}</p>
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          <Badge variant={badgeVariant}>{badgeLabel}</Badge>
+                          {createdAtLabel ? <span>Gia nhập: {createdAtLabel}</span> : null}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          MST: {partner.taxCode || "—"} • {partner.address || "Chưa cập nhật"}
+                        </p>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {partner.contactName || partner.phone
+                          ? `${partner.contactName}${partner.phone ? ` • ${partner.phone}` : ""}`
+                          : "—"}
                       </p>
+                      <p className="text-sm text-muted-foreground">{partner.email || "—"}</p>
+                      <div className="text-sm text-muted-foreground">
+                        {partner.toursCount} tour • {partner.bookingsCount} lượt đặt
+                      </div>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+                        <Button variant="outline" size="sm" onClick={() => handleViewDetail(partner)}>
+                          Xem hồ sơ
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEditOpen(partner)}
+                          disabled={updateInfoMutation.isPending && editingPartner?.id === partner.id}
+                        >
+                          Chỉnh sửa
+                        </Button>
+                        <Select
+                          value={partner.status}
+                          onValueChange={(status) =>
+                            updateStatusMutation.mutate({ id: partner.id, status: status as PartnerStatus })
+                          }
+                          disabled={isUpdatingThisPartner}
+                        >
+                          <SelectTrigger className="h-9 min-w-[170px] justify-between sm:w-auto">
+                            <SelectValue placeholder="Cập nhật trạng thái" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {STATUS_OPTIONS.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      {partner.contactName || partner.phone
-                        ? `${partner.contactName}${partner.phone ? ` • ${partner.phone}` : ""}`
-                        : "—"}
-                    </p>
-                    <p className="text-sm text-muted-foreground">{partner.email || "—"}</p>
-                    <div className="text-sm text-muted-foreground">
-                      {partner.toursCount} tour • {partner.bookingsCount} lượt đặt
-                    </div>
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEditOpen(partner)}
-                        disabled={updateInfoMutation.isPending && editingPartner?.id === partner.id}
-                      >
-                        Chỉnh sửa
-                      </Button>
-                      <Select
-                        defaultValue={partner.status}
-                        onValueChange={(status) => updateStatusMutation.mutate({ id: partner.id, status: status as PartnerStatus })}
-                        disabled={updateStatusMutation.isPending}
-                      >
-                        <SelectTrigger className="h-9 min-w-[160px] justify-between sm:w-auto">
-                          <SelectValue placeholder="Cập nhật trạng thái" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {STATUS_OPTIONS.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
+          {totalPartners > 0 ? (
+            <div className="flex flex-col gap-4 px-4 py-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+              <span>
+                Hiển thị {displayStart}-{displayEnd} trên tổng {totalPartners} đối tác
+              </span>
+              <Pagination className="w-auto gap-2 md:mx-0 md:justify-end">
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      href="#"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        if (isFirstPage) return;
+                        handlePageChange(currentPage - 1);
+                      }}
+                      className={isFirstPage ? "pointer-events-none opacity-50" : undefined}
+                      aria-disabled={isFirstPage}
+                      tabIndex={isFirstPage ? -1 : undefined}
+                    />
+                  </PaginationItem>
+                  {paginationRange.map((item, index) => (
+                    <PaginationItem key={`${item}-${index}`}>
+                      {item === "ellipsis" ? (
+                        <PaginationEllipsis />
+                      ) : (
+                        <PaginationLink
+                          href="#"
+                          isActive={item === currentPage}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            handlePageChange(item);
+                          }}
+                        >
+                          {item}
+                        </PaginationLink>
+                      )}
+                    </PaginationItem>
+                  ))}
+                  <PaginationItem>
+                    <PaginationNext
+                      href="#"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        if (isLastPage) return;
+                        handlePageChange(currentPage + 1);
+                      }}
+                      className={isLastPage ? "pointer-events-none opacity-50" : undefined}
+                      aria-disabled={isLastPage}
+                      tabIndex={isLastPage ? -1 : undefined}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
+      <Dialog
+        open={isDetailOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            handleDetailClose();
+          } else {
+            setIsDetailOpen(true);
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Hồ sơ đối tác</DialogTitle>
+            <DialogDescription>Thông tin tổng quan và thống kê hoạt động của đối tác.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {detailErrorMessage ? (
+              <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {detailErrorMessage}
+              </div>
+            ) : null}
+            {detailPartner ? (
+              <div className="space-y-6">
+                {isDetailLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Đang đồng bộ dữ liệu mới nhất...
+                  </div>
+                ) : null}
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <p className="text-lg font-semibold text-foreground">{detailPartner.companyName}</p>
+                    {detailPartner.status ? (
+                      <Badge variant={getPartnerStatusBadgeVariant(detailPartner.status)}>
+                        {detailStatusLabel || detailPartner.status}
+                      </Badge>
+                    ) : null}
+                    {detailAccountStatus ? (
+                      <Badge variant={detailAccountStatus === "active" ? "default" : "secondary"}>
+                        Tài khoản {detailAccountStatus === "active" ? "hoạt động" : "tạm dừng"}
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Thành lập:{" "}
+                    {detailPartner.raw?.created_at
+                      ? new Date(detailPartner.raw.created_at).toLocaleDateString("vi-VN")
+                      : "Chưa cập nhật"}
+                  </p>
+                  <p className="text-sm text-muted-foreground">Địa chỉ: {detailPartner.address || "Chưa cập nhật"}</p>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded-lg border p-4">
+                    <p className="text-sm font-medium text-muted-foreground">Số tour đã tạo</p>
+                    <p className="mt-1 text-2xl font-semibold text-foreground">{detailStats.toursCount}</p>
+                  </div>
+                  <div className="rounded-lg border p-4">
+                    <p className="text-sm font-medium text-muted-foreground">Tổng lượt đặt</p>
+                    <p className="mt-1 text-2xl font-semibold text-foreground">{detailStats.bookingsCount}</p>
+                  </div>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-1 text-sm">
+                    <p className="font-semibold text-foreground">Thông tin liên hệ</p>
+                    <p className="text-muted-foreground">Người liên hệ: {detailPartner.contactName || "—"}</p>
+                    <p className="text-muted-foreground">Email: {detailPartner.email || "—"}</p>
+                    <p className="text-muted-foreground">Số điện thoại: {detailPartner.phone || "—"}</p>
+                  </div>
+                  <div className="space-y-1 text-sm">
+                    <p className="font-semibold text-foreground">Thông tin doanh nghiệp</p>
+                    <p className="text-muted-foreground">Tên công ty: {detailPartner.companyName}</p>
+                    <p className="text-muted-foreground">Mã số thuế: {detailPartner.taxCode || "—"}</p>
+                    <p className="text-muted-foreground">Email đăng nhập: {detailPartner.raw?.user?.email || "—"}</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="py-8 text-center text-sm text-muted-foreground">
+                {isDetailLoading ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Đang tải hồ sơ đối tác...
+                  </div>
+                ) : (
+                  "Chọn một đối tác trong danh sách để xem chi tiết hồ sơ."
+                )}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={handleDetailClose}>
+              Đóng
+            </Button>
+            {detailPartner ? (
+              <Button
+                type="button"
+                onClick={() => {
+                  handleEditOpen(detailPartner);
+                  handleDetailClose();
+                }}
+              >
+                Chỉnh sửa thông tin
+              </Button>
+            ) : null}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={Boolean(editingPartner)}

@@ -151,20 +151,7 @@ const TravelHeader = () => {
 
             {/* Right side */}
             <div className="flex items-center space-x-2">
-              <Button variant="ghost" size="sm" className="hidden lg:flex text-gray-600 hover:text-gray-800 text-sm">
-                <img
-                  src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><path fill='%23da251d' d='M0 0h512v512H0z'/><path fill='%23ff0' d='m256 128 47 144h151l-122 88 47 144-123-89-122 89 47-144-123-88h151z'/></svg>"
-                  alt="VN flag"
-                  className="w-5 h-5 mr-1"
-                />
-                VN
-                <ChevronDown className="w-3 h-3 ml-1" />
-              </Button>
-
-              <Button variant="ghost" size="sm" className="hidden lg:flex text-gray-600 hover:text-gray-800 text-sm">
-                VND
-                <ChevronDown className="w-3 h-3 ml-1" />
-              </Button>
+             
 
               <Button variant="ghost" size="sm" className="hidden md:flex text-gray-600 hover:text-gray-800 text-sm">
                 Mở ứng dụng

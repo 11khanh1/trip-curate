@@ -126,6 +126,13 @@ export interface PartnerPayload {
   status: PartnerStatus;
 }
 
+export interface AdminPartnersParams {
+  status?: PartnerStatus | string;
+  search?: string;
+  page?: number;
+  per_page?: number;
+}
+
 export interface PartnerUpdatePayload {
   company_name?: string;
   tax_code?: string | null;
@@ -276,8 +283,21 @@ export async function patchAdminUserStatus(id: string | number, status: AdminUse
   return extractData(res);
 }
 
-export async function fetchAdminPartners(params?: { page?: number; per_page?: number; status?: string }): Promise<PaginatedResponse<AdminPartner>> {
-  const res = await apiClient.get("/api/admin/partners", { params });
+export async function fetchAdminPartners(params: AdminPartnersParams = {}): Promise<PaginatedResponse<AdminPartner>> {
+  const query: Record<string, unknown> = {};
+
+  if (params.page !== undefined) query.page = params.page;
+  if (params.per_page !== undefined) query.per_page = params.per_page;
+  if (params.status !== undefined && params.status !== "") query.status = params.status;
+
+  if (params.search !== undefined) {
+    const trimmed = params.search?.trim();
+    if (trimmed) {
+      query.search = trimmed;
+    }
+  }
+
+  const res = await apiClient.get("/api/admin/partners", { params: query });
   return extractPaginated<AdminPartner>(res);
 }
 
