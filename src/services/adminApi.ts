@@ -168,7 +168,7 @@ export interface AdminTour {
 }
 
 export interface AdminTourParams {
-  status?: string;
+  status?: AdminTourStatus | string;
   search?: string;
   partner_id?: string | number;
   page?: number;
@@ -379,9 +379,53 @@ export async function updateAdminPartnerStatus(id: string | number, status: Part
   return updateAdminPartner(id, { status });
 }
 
+export interface AdminTourSchedule {
+  id?: string | number;
+  title?: string;
+  start_date?: string;
+  end_date?: string;
+  capacity?: number;
+  slots_available?: number;
+  price?: number;
+  notes?: string | null;
+  [key: string]: unknown;
+}
+
+export interface AdminTourDetail extends AdminTour {
+  schedules?: AdminTourSchedule[];
+}
+
 export async function fetchAdminTours(params: AdminTourParams = {}): Promise<PaginatedResponse<AdminTour>> {
-  const res = await apiClient.get("/api/admin/tours", { params });
+  const query: Record<string, unknown> = {};
+
+  if (params.page !== undefined) query.page = params.page;
+  if (params.per_page !== undefined) query.per_page = params.per_page;
+
+  if (params.status !== undefined) {
+    const status = String(params.status).trim();
+    if (status.length > 0) {
+      query.status = status;
+    }
+  }
+
+  if (params.partner_id !== undefined && params.partner_id !== null && params.partner_id !== "") {
+    query.partner_id = params.partner_id;
+  }
+
+  if (params.search !== undefined) {
+    const trimmed = params.search?.toString().trim();
+    if (trimmed) {
+      query.search = trimmed;
+    }
+  }
+
+  const res = await apiClient.get("/api/admin/tours", { params: query });
   return extractPaginated<AdminTour>(res);
+}
+
+export async function fetchAdminTour(id: string | number): Promise<AdminTourDetail> {
+  const res = await apiClient.get(`/api/admin/tours/${id}`);
+  return extractData<AdminTourDetail>(res);
 }
 
 export async function updateAdminTourStatus(id: string, status: AdminTourStatus) {

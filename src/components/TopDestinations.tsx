@@ -1,18 +1,25 @@
-const TopDestinations = () => {
-  const destinations = [
-    { name: "Vịnh Hạ Long", rank: 1 },
-    { name: "Địa đạo Củ Chi", rank: 2 },
-    { name: "Sun World Bà Nà Hills", rank: 3 },
-    { name: "Di sản Tràng An - Ninh Bình", rank: 4 },
-    { name: "Phan Xi Păng", rank: 5 },
-    { name: "Sun World Fansipan Legend", rank: 6 },
-    { name: "Vịnh Lan Hạ", rank: 7 },
-    { name: "Cát Cát", rank: 8 },
-    { name: "Sông Sài Gòn", rank: 9 },
-    { name: "Đồng bằng sông Cửu Long", rank: 10 },
-    { name: "Cầu Rồng", rank: 11 },
-    { name: "Phố đường tàu Hà Nội", rank: 12 }
-  ];
+import { Skeleton } from "@/components/ui/skeleton";
+import type { HomeCategory } from "@/services/publicApi";
+
+interface TopDestinationsProps {
+  categories?: HomeCategory[];
+  isLoading?: boolean;
+}
+
+const fallbackDestinations = [
+  { id: "fallback-1", name: "Vịnh Hạ Long", tours_count: 128 },
+  { id: "fallback-2", name: "Địa đạo Củ Chi", tours_count: 96 },
+  { id: "fallback-3", name: "Bà Nà Hills", tours_count: 88 },
+  { id: "fallback-4", name: "Phố Cổ Hội An", tours_count: 75 },
+  { id: "fallback-5", name: "Tràng An - Ninh Bình", tours_count: 64 },
+  { id: "fallback-6", name: "Sa Pa", tours_count: 54 },
+  { id: "fallback-7", name: "Đà Lạt", tours_count: 49 },
+  { id: "fallback-8", name: "Phú Quốc", tours_count: 42 },
+];
+
+const TopDestinations = ({ categories, isLoading }: TopDestinationsProps) => {
+  const destinations =
+    categories && categories.length > 0 ? categories : fallbackDestinations;
 
   return (
     <section className="py-16 bg-muted/50">
@@ -23,24 +30,39 @@ const TopDestinations = () => {
         <h3 className="text-xl text-center mb-12 text-muted-foreground">
           Điểm tham quan hàng đầu Việt Nam
         </h3>
-        
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {destinations.map((destination) => (
-            <div 
-              key={destination.rank}
-              className="bg-card rounded-lg p-4 hover:shadow-lg transition-shadow cursor-pointer border"
-            >
-              <div className="flex items-center space-x-3">
-                <span className="flex-shrink-0 w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-semibold">
-                  {destination.rank}
-                </span>
-                <span className="text-foreground font-medium text-sm">
-                  {destination.name}
-                </span>
+
+        {isLoading ? (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {Array.from({ length: 8 }).map((_, index) => (
+              <Skeleton key={index} className="h-20 rounded-lg" />
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {destinations.map((destination, index) => (
+              <div
+                key={destination.id ?? index}
+                className="bg-card rounded-lg p-4 hover:shadow-lg transition-shadow cursor-pointer border"
+              >
+                <div className="flex items-center space-x-3">
+                  <span className="flex-shrink-0 w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-semibold">
+                    {index + 1}
+                  </span>
+                  <div>
+                    <span className="block text-foreground font-medium text-sm">
+                      {destination.name}
+                    </span>
+                    {destination.tours_count !== undefined ? (
+                      <span className="text-xs text-muted-foreground">
+                        {destination.tours_count.toLocaleString("vi-VN")} tour đã duyệt
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );

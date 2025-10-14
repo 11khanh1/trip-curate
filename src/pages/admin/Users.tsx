@@ -242,6 +242,21 @@ export default function AdminUsers() {
               <CardDescription>Xem thông tin cơ bản và trạng thái tài khoản</CardDescription>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+               <div className="w-full sm:w-40">
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">Số dòng / trang</label>
+                <Select value={String(perPage)} onValueChange={handlePerPageChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Chọn số dòng" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PER_PAGE_OPTIONS.map((option) => (
+                      <SelectItem key={option} value={String(option)}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="w-full sm:w-64">
                 <label className="mb-1 block text-xs font-medium text-muted-foreground">Bộ lọc trạng thái</label>
                 <Select value={statusFilter} onValueChange={(value) => handleStatusFilterChange(value as UserStatus | "all")}>
@@ -271,21 +286,7 @@ export default function AdminUsers() {
                   </Button>
                 </div>
               </div>
-              <div className="w-full sm:w-40">
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">Số dòng / trang</label>
-                <Select value={String(perPage)} onValueChange={handlePerPageChange}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Chọn số dòng" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PER_PAGE_OPTIONS.map((option) => (
-                      <SelectItem key={option} value={String(option)}>
-                        {option}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+             
             </div>
           </div>
         </CardHeader>

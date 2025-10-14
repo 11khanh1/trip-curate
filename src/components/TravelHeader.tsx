@@ -3,10 +3,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Link } from "react-router-dom";
 import AuthModal from "@/components/auth/AuthModal";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 // Giả định useUser trả về currentUser có thuộc tính role
 import { useUser } from "@/context/UserContext"; 
 import { useNavigate } from "react-router-dom"; 
+import { useQuery } from "@tanstack/react-query";
 import {
   NavigationMenu,
   NavigationMenuContent,
@@ -20,6 +21,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
+import { fetchSearchSuggestions, type SearchSuggestion } from "@/services/publicApi";
 
 // Định nghĩa Role cho currentUser (giả định)
 interface CurrentUser {
@@ -41,6 +43,48 @@ const TravelHeader = () => {
   // Sử dụng kiểu dữ liệu giả định để TypeScript hoạt động
   const { currentUser, setCurrentUser } = useUser() as UserContextType;
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [searchValue, setSearchValue] = useState("");
+  const [debouncedValue, setDebouncedValue] = useState("");
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const handler = window.setTimeout(() => {
+      setDebouncedValue(searchValue.trim());
+    }, 300);
+    return () => window.clearTimeout(handler);
+  }, [searchValue]);
+
+  const suggestionsQuery = useQuery({
+    queryKey: ["search-suggestions", debouncedValue],
+    queryFn: () => fetchSearchSuggestions(debouncedValue),
+    enabled: debouncedValue.length > 0,
+  });
+
+  const suggestions = suggestionsQuery.data?.suggestions ?? [];
+
+  const showSuggestionDropdown = useMemo(() => {
+    if (!isSearchFocused) return false;
+    if (searchValue.trim().length === 0) return false;
+    return suggestionsQuery.isFetching || suggestions.length > 0;
+  }, [isSearchFocused, searchValue, suggestionsQuery.isFetching, suggestions.length]);
+
+  const handleSearchSubmit = (keyword?: string) => {
+    const term = keyword ?? searchValue.trim();
+    if (!term) return;
+    setIsSearchFocused(false);
+    navigate(`/resultsearch?keyword=${encodeURIComponent(term)}`);
+  };
+
+  const handleSuggestionSelect = (suggestion: SearchSuggestion) => {
+    setSearchValue("");
+    setIsSearchFocused(false);
+    if (suggestion.id !== undefined && suggestion.id !== null) {
+      navigate(`/activity/${suggestion.id}`);
+    } else if (suggestion.title) {
+      handleSearchSubmit(suggestion.title);
+    }
+  };
 
   // Dữ liệu menu... (giữ nguyên)
 
@@ -145,7 +189,65 @@ const TravelHeader = () => {
                   type="text"
                   placeholder="Tìm theo điểm đến, hoạt động"
                   className="pl-10 pr-4 py-2 w-full border-gray-200 rounded-lg focus:border-primary focus:ring-1 focus:ring-primary"
+                  value={searchValue}
+                  onChange={(event) => setSearchValue(event.target.value)}
+                  onFocus={() => setIsSearchFocused(true)}
+                  onBlur={() => {
+                    window.setTimeout(() => setIsSearchFocused(false), 120);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      handleSearchSubmit();
+                    }
+                    if (event.key === "Escape") {
+                      setIsSearchFocused(false);
+                    }
+                  }}
                 />
+
+                {showSuggestionDropdown ? (
+                  <div className="absolute left-0 right-0 top-full mt-2 rounded-xl border border-gray-200 bg-white shadow-lg z-50">
+                    {suggestionsQuery.isFetching ? (
+                      <div className="px-4 py-3 text-sm text-muted-foreground">Đang tìm kiếm...</div>
+                    ) : suggestions.length === 0 ? (
+                      <div className="px-4 py-3 text-sm text-muted-foreground">
+                        Không tìm thấy kết quả phù hợp.
+                      </div>
+                    ) : (
+                      <ul className="max-h-72 overflow-y-auto py-2">
+                        {suggestions.map((suggestion) => (
+                          <li key={`${suggestion.id ?? suggestion.title}`} className="px-2">
+                            <button
+                              type="button"
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={() => handleSuggestionSelect(suggestion)}
+                              className="w-full text-left px-3 py-2 rounded-lg hover:bg-muted transition-colors"
+                            >
+                              <p className="text-sm font-medium text-foreground">
+                                {suggestion.title ?? "Tour chưa đặt tên"}
+                              </p>
+                              {suggestion.destination ? (
+                                <p className="text-xs text-muted-foreground">{suggestion.destination}</p>
+                              ) : null}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <div className="border-t px-4 py-2 text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-primary hover:text-primary/80"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => handleSearchSubmit()}
+                      >
+                        Xem tất cả kết quả
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
 

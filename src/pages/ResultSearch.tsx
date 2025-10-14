@@ -1,4 +1,6 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { SlidersHorizontal } from "lucide-react";
 
 import TravelHeader from "@/components/TravelHeader";
@@ -9,78 +11,160 @@ import { ActivityCardKlook } from "@/components/search/ActivityCard";
 import { ResultsHeader } from "@/components/search/ResultsHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import { Skeleton } from "@/components/ui/skeleton";
+import { fetchTours, type PublicTour, type TourSortOption } from "@/services/publicApi";
 
-const activities = [
-  {
-    image: "https://images.unsplash.com/photo-1589895292539-8e7fdf87e41f?w=800",
-    category: "Du thuyền ngắm cảnh",
-    location: "Hà Nội, Việt Nam",
-    title: "Du thuyền Cozy Bay: Vịnh Hạ Long, Sửng Sốt, Ti Top",
-    bookingType: "Đón tại khách sạn",
-    rating: 4.8,
-    reviews: 3406,
-    booked: "40K+ đã được đặt",
-    price: 1_219_927,
-    discount: 15,
-  },
-  {
-    image: "https://images.unsplash.com/photo-1583417319070-4a69db38a482?w=800",
-    category: "Du thuyền ngắm cảnh",
-    location: "Hà Nội, Việt Nam",
-    title: "Du thuyền Olympus Day Cruise: Vịnh Hạ Long, Sửng Sốt, Ti Top",
-    bookingType: "Đặt trước cho ngày mai",
-    rating: 4.9,
-    reviews: 756,
-    booked: "8K+ đã được đặt",
-    price: 1_087_324,
-    discount: 15,
-  },
-  {
-    image: "https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=800",
-    category: "Du thuyền ngắm cảnh",
-    location: "Hà Nội, Việt Nam",
-    title: "Du thuyền Serenity: Vịnh Hạ Long & Vịnh Lan Hạ",
-    bookingType: "Đón tại khách sạn",
-    rating: 4.9,
-    reviews: 2145,
-    booked: "18K+ đã được đặt",
-    price: 2_650_000,
-    discount: 15,
-  },
-];
+const PER_PAGE = 12;
 
 const sortOptions = [
   { value: "popular", label: "Phổ biến" },
   { value: "rating", label: "Đánh giá cao" },
   { value: "new", label: "Mới nhất" },
   { value: "price-asc", label: "Giá thấp đến cao" },
-  { value: "price-desc", label: "Giá cao đến thấp" },
+  { value: "price-desc", label: "Giá cao xuống thấp" },
 ];
 
+const sortMapping: Record<string, TourSortOption | undefined> = {
+  popular: "created_desc",
+  rating: "created_desc",
+  new: "created_desc",
+  "price-asc": "price_asc",
+  "price-desc": "price_desc",
+};
+
+const normalizePrice = (tour: PublicTour) => {
+  if (typeof tour.base_price === "number" && Number.isFinite(tour.base_price)) {
+    return Math.max(0, tour.base_price);
+  }
+  if (typeof tour.season_price === "number" && Number.isFinite(tour.season_price)) {
+    return Math.max(0, tour.season_price);
+  }
+  const schedulePrice = tour.schedules?.find(
+    (schedule) => typeof schedule.season_price === "number" && Number.isFinite(schedule.season_price),
+  )?.season_price;
+  if (typeof schedulePrice === "number") {
+    return Math.max(0, schedulePrice);
+  }
+  return 0;
+};
+
+const mapTourToActivityCard = (tour: PublicTour) => {
+  const title = tour.title ?? tour.name ?? "Tour du lịch";
+  const location = tour.destination ?? tour.partner?.company_name ?? "Việt Nam";
+  const image =
+    (tour.thumbnail_url && tour.thumbnail_url.length > 0 ? tour.thumbnail_url : undefined) ??
+    "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=800&h=600&fit=crop";
+  const price = normalizePrice(tour);
+  const category =
+    tour.categories && tour.categories.length > 0
+      ? tour.categories[0]?.name ?? "Tour"
+      : tour.partner?.company_name ?? "Tour";
+  const bookedCount =
+    tour.bookings_count && tour.bookings_count > 0
+      ? `${tour.bookings_count.toLocaleString("vi-VN")} lượt đặt`
+      : undefined;
+
+  return {
+    image,
+    category,
+    location,
+    title,
+    bookingType: tour.schedules?.[0]?.start_date
+      ? `Khởi hành ${new Date(tour.schedules[0].start_date!).toLocaleDateString("vi-VN")}`
+      : undefined,
+    rating: 4.8,
+    reviews: tour.bookings_count ?? 1200,
+    booked: bookedCount,
+    price,
+    discount: undefined,
+  };
+};
+
 const ResultSearch = () => {
+  const [searchParams] = useSearchParams();
+  const keyword = (searchParams.get("keyword") ?? "").trim();
+
   const [showFilters, setShowFilters] = useState(false);
   const [sortBy, setSortBy] = useState<string>("popular");
+  const [page, setPage] = useState(1);
+
+  const toursQuery = useQuery({
+    queryKey: ["public-tours-search", keyword, sortBy, page],
+    queryFn: () =>
+      fetchTours({
+        status: "approved",
+        search: keyword || undefined,
+        page,
+        per_page: PER_PAGE,
+        sort: sortMapping[sortBy],
+      }),
+    enabled: keyword.length > 0,
+    placeholderData: keepPreviousData,
+    staleTime: 60 * 1000,
+  });
+
+  const toursData = toursQuery.data?.data ?? [];
+  const toursMeta = toursQuery.data?.meta ?? {};
+
+  const currentPage = Number(toursMeta.current_page ?? page) || 1;
+  const totalResults = Number(toursMeta.total ?? toursData.length) || toursData.length;
+  const lastPage =
+    Number(toursMeta.last_page ?? (totalResults > 0 ? Math.ceil(totalResults / PER_PAGE) : 1)) || 1;
+  const rangeStart =
+    Number(toursMeta.from ?? (totalResults === 0 ? 0 : (currentPage - 1) * PER_PAGE + 1)) || 0;
+  const rangeEnd =
+    Number(toursMeta.to ?? (totalResults === 0 ? 0 : Math.min(totalResults, currentPage * PER_PAGE))) ||
+    0;
+  const isFirstPage = currentPage <= 1;
+  const isLastPage = currentPage >= lastPage;
+
+  const paginationRange = useMemo<(number | "ellipsis")[]>(() => {
+    const totalPages = Math.max(1, lastPage);
+    const current = Math.min(Math.max(1, currentPage), totalPages);
+    if (totalPages <= 5) {
+      return Array.from({ length: totalPages }, (_, index) => index + 1);
+    }
+
+    const range: (number | "ellipsis")[] = [1];
+    const siblings = 1;
+    const start = Math.max(2, current - siblings);
+    const end = Math.min(totalPages - 1, current + siblings);
+
+    if (start > 2) range.push("ellipsis");
+    for (let i = start; i <= end; i += 1) range.push(i);
+    if (end < totalPages - 1) range.push("ellipsis");
+    range.push(totalPages);
+    return range;
+  }, [currentPage, lastPage]);
+
+  const handleSortChange = (value: string) => {
+    setSortBy(value);
+    setPage(1);
+  };
+
+  const handlePageChange = (nextPage: number) => {
+    if (!Number.isFinite(nextPage)) return;
+    const clamped = Math.min(Math.max(1, Math.trunc(nextPage)), lastPage);
+    if (clamped === page) return;
+    setPage(clamped);
+  };
 
   const activeFilters = useMemo(
-    () => ["Ưu đãi độc quyền", "Xếp hạng 4.5+", "Có hoàn hủy linh hoạt"],
-    []
+    () => (keyword.length > 0 ? [`Từ khóa: "${keyword}"`] : []),
+    [keyword],
   );
 
-  const sortedActivities = useMemo(() => {
-    const list = [...activities];
-    switch (sortBy) {
-      case "price-asc":
-        return list.sort((a, b) => a.price - b.price);
-      case "price-desc":
-        return list.sort((a, b) => b.price - a.price);
-      case "rating":
-        return list.sort((a, b) => b.rating - a.rating);
-      case "new":
-        return list.slice().reverse();
-      default:
-        return list;
-    }
-  }, [sortBy]);
+  const mappedActivities =
+    toursData.length > 0 ? toursData.map(mapTourToActivityCard) : [];
 
   return (
     <div className="min-h-screen bg-muted/40 flex flex-col">
@@ -94,10 +178,12 @@ const ResultSearch = () => {
               Kết quả tìm kiếm cho
             </p>
             <h1 className="text-3xl font-bold text-foreground">
-              Tour & Hoạt động tại Hạ Long
+              {keyword.length > 0 ? keyword : "Tour & Hoạt động"}
             </h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Tìm thấy {sortedActivities.length} tour phù hợp với tiêu chí của bạn. Hãy dùng bộ lọc để tinh chỉnh kết quả nhanh hơn.
+              {toursQuery.isLoading
+                ? "Đang tải dữ liệu tour phù hợp..."
+                : `Tìm thấy ${totalResults} tour phù hợp với tiêu chí của bạn. Sử dụng bộ lọc để tinh chỉnh kết quả nhanh hơn.`}
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               {activeFilters.map((filter) => (
@@ -116,7 +202,7 @@ const ResultSearch = () => {
                   key={option.value}
                   size="sm"
                   variant={sortBy === option.value ? "default" : "outline"}
-                  onClick={() => setSortBy(option.value)}
+                  onClick={() => handleSortChange(option.value)}
                 >
                   {option.label}
                 </Button>
@@ -145,18 +231,83 @@ const ResultSearch = () => {
 
           <section className="flex-1 min-w-0 space-y-6">
             <ResultsHeader
-              totalResults={sortedActivities.length}
+              totalResults={totalResults}
               selectedFilters={activeFilters.length}
               sortValue={sortBy}
               sortOptions={sortOptions}
-              onSortChange={setSortBy}
+              onSortChange={handleSortChange}
             />
 
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-              {sortedActivities.map((activity, index) => (
-                <ActivityCardKlook key={index} {...activity} />
-              ))}
-            </div>
+            {toursQuery.isLoading ? (
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <Skeleton key={index} className="h-[360px] rounded-xl" />
+                ))}
+              </div>
+            ) : mappedActivities.length === 0 ? (
+              <div className="rounded-xl border px-6 py-12 text-center text-muted-foreground">
+                Không tìm thấy tour phù hợp với từ khóa "{keyword}". Vui lòng thử lại với từ khóa khác.
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+                  {mappedActivities.map((activity, index) => (
+                    <ActivityCardKlook key={`${activity.title}-${index}`} {...activity} />
+                  ))}
+                </div>
+
+                {lastPage > 1 ? (
+                  <Pagination className="w-full justify-center">
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious
+                          href="#"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            if (isFirstPage) return;
+                            handlePageChange(currentPage - 1);
+                          }}
+                          className={isFirstPage ? "pointer-events-none opacity-50" : undefined}
+                          aria-disabled={isFirstPage}
+                          tabIndex={isFirstPage ? -1 : undefined}
+                        />
+                      </PaginationItem>
+                      {paginationRange.map((item, index) => (
+                        <PaginationItem key={`${item}-${index}`}>
+                          {item === "ellipsis" ? (
+                            <PaginationEllipsis />
+                          ) : (
+                            <PaginationLink
+                              href="#"
+                              isActive={item === currentPage}
+                              onClick={(event) => {
+                                event.preventDefault();
+                                handlePageChange(item);
+                              }}
+                            >
+                              {item}
+                            </PaginationLink>
+                          )}
+                        </PaginationItem>
+                      ))}
+                      <PaginationItem>
+                        <PaginationNext
+                          href="#"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            if (isLastPage) return;
+                            handlePageChange(currentPage + 1);
+                          }}
+                          className={isLastPage ? "pointer-events-none opacity-50" : undefined}
+                          aria-disabled={isLastPage}
+                          tabIndex={isLastPage ? -1 : undefined}
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
+                ) : null}
+              </>
+            )}
           </section>
         </div>
       </main>
