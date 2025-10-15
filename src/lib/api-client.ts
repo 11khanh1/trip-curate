@@ -3,9 +3,14 @@ import axios from "axios";
 
 const isProd = import.meta.env.MODE === "production";
 
-const baseURL =
-  (isProd ? import.meta.env.VITE_API_BASE_URL_PROD : import.meta.env.VITE_API_BASE_URL) ||
-  "http://localhost:8080";
+const resolveBaseURL = () => {
+  const primary = isProd ? import.meta.env.VITE_API_BASE_URL_PROD : import.meta.env.VITE_API_BASE_URL;
+  const fallback = isProd ? import.meta.env.VITE_API_BASE_URL : import.meta.env.VITE_API_BASE_URL_PROD;
+  const candidate = primary ?? fallback ?? "http://localhost:8080/api";
+  return candidate.replace(/\/+$/, "");
+};
+
+const baseURL = resolveBaseURL();
 
 export const apiClient = axios.create({
   baseURL,
