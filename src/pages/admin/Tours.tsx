@@ -26,6 +26,7 @@ import {
 import { StatCard } from "@/components/admin/StatCard";
 import { Loader2, MapPin, CheckCircle2, Clock, XCircle, Search, DollarSign, CalendarDays, Phone, Mail, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   fetchAdminTours,
   fetchAdminTour,
@@ -630,12 +631,13 @@ export default function AdminTours() {
           }
         }}
       >
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-3xl max-h-[85vh] scrollbar-hide">
           <DialogHeader>
             <DialogTitle>Chi tiết tour</DialogTitle>
             <DialogDescription>Xem thông tin đầy đủ của tour và lịch khởi hành mới nhất.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-6">
+          <ScrollArea className="max-h-[60vh] pr-4 scrollbar-hide">
+            <div className="space-y-6 pr-2">
             {detailErrorMessage ? (
               <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                 {detailErrorMessage}
@@ -744,7 +746,8 @@ export default function AdminTours() {
                 )}
               </div>
             )}
-          </div>
+            </div>
+          </ScrollArea>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={handleDetailClose}>
               Đóng

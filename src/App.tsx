@@ -50,12 +50,14 @@ import PartnerAnalytics from "./pages/partner/Analytics";
 import PartnerSettings from "./pages/partner/Settings";
 import AuthCallback from "./pages/AuthCallback";
 import ResultSearch from "./pages/ResultSearch";
+import ScrollToTop from "@/components/ScrollToTop";
 
 const App = () => (
   <TooltipProvider>
     <Toaster />
     <Sonner />
     <BrowserRouter>
+      <ScrollToTop />
       <Routes>
         <Route path="/" element={<Index />} />
         <Route path="/activities" element={<AllActivities />} />
