@@ -34,7 +34,7 @@ const ForgotPasswordForm = ({ onBackToLogin }: ForgotPasswordFormProps) => {
     if (!isValidEmail(email)) return alert("Email không hợp lệ");
     setLoading(true);
     try {
-      const res = await fetch(`${BASE_URL}/api/auth/send-otp`, {
+      const res = await fetch(`${BASE_URL}/auth/send-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ channel: "email", value: email.trim() }),
@@ -58,7 +58,7 @@ const ForgotPasswordForm = ({ onBackToLogin }: ForgotPasswordFormProps) => {
     try {
       const payload: any = { channel: "email", value: email.trim(), otp };
       if (otpId) payload.otp_id = otpId;
-      const res = await fetch(`${BASE_URL}/api/auth/verify-otp`, {
+      const res = await fetch(`${BASE_URL}/auth/verify-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify(payload),

@@ -30,12 +30,12 @@ const LoginForm = ({ onSwitchToRegister, onForgotPassword, onSuccess }: LoginFor
 
   const openSocialPopup = async (provider: "google" | "facebook") => {
     try {
-      const res = await fetch(`${BASE_URL}/api/auth/social/${provider}/redirect`, {
+      const res = await fetch(`${BASE_URL}/auth/social/${provider}/redirect`, {
         method: "GET",
         headers: { Accept: "application/json" },
       });
       const data = await res.json().catch(() => ({}));
-      const url = data?.url || `${BASE_URL}/api/auth/social/${provider}/redirect`;
+      const url = data?.url || `${BASE_URL}/auth/social/${provider}/redirect`;
       const popup = window.open(url, `oauth-${provider}` , "width=520,height=600,menubar=no,location=no,status=no");
       if (!popup) {
         // Popup bị chặn → redirect toàn trang
@@ -49,7 +49,7 @@ const LoginForm = ({ onSwitchToRegister, onForgotPassword, onSuccess }: LoginFor
           const token = e.data.token as string;
           localStorage.setItem("token", token);
           // Cố gắng lấy user info (tùy backend)
-          const me = await fetch(`${BASE_URL}/api/user`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } }).catch(() => null);
+          const me = await fetch(`${BASE_URL}/user`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } }).catch(() => null);
           if (me && me.ok) {
             const user = await me.json().catch(() => null);
             if (user) {
@@ -80,7 +80,7 @@ const LoginForm = ({ onSwitchToRegister, onForgotPassword, onSuccess }: LoginFor
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${BASE_URL}/api/login`, {
+      const res = await fetch(`${BASE_URL}/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: formData.email.trim(), password: formData.password }),

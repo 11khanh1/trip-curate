@@ -1,13 +1,13 @@
 import { ArrowRight } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import TourCard from "./TourCard";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { PublicTour } from "@/services/publicApi";
+import { fetchTrendingTours, type PublicTour } from "@/services/publicApi";
 
 interface PopularActivitiesProps {
   tours?: PublicTour[];
-  isLoading?: boolean;
 }
 
 const FALLBACK_IMAGE =
@@ -133,9 +133,20 @@ const mapTourToCard = (tour: PublicTour) => {
   };
 };
 
-const PopularActivities = ({ tours, isLoading }: PopularActivitiesProps) => {
-  const activities =
-    tours && tours.length > 0 ? tours.map(mapTourToCard) : fallbackActivities;
+const POPULAR_LIMIT = 9;
+
+const PopularActivities = ({ tours }: PopularActivitiesProps) => {
+  const shouldFetch = !tours;
+  const trendingQuery = useQuery({
+    queryKey: ["public-tours-trending", { limit: POPULAR_LIMIT }],
+    queryFn: () => fetchTrendingTours({ limit: POPULAR_LIMIT, days: 60 }),
+    enabled: shouldFetch,
+    staleTime: 2 * 60 * 1000,
+  });
+
+  const data = tours ?? trendingQuery.data ?? [];
+  const isLoading = shouldFetch ? trendingQuery.isLoading : false;
+  const activities = data.length > 0 ? data.map(mapTourToCard) : fallbackActivities;
 
   return (
     <section className="py-12">

@@ -260,26 +260,26 @@ export interface StaffUpdatePayload {
 // --- API helpers ---
 
 export async function fetchAdminDashboard(): Promise<DashboardResponse> {
-  const res = await apiClient.get("/api/admin/dashboard");
+  const res = await apiClient.get("/admin/dashboard");
   const data = extractData<DashboardResponse>(res);
   data.raw = res.data;
   return data;
 }
 
 export async function fetchAdminUsers(params: AdminUsersParams = {}): Promise<PaginatedResponse<AdminUser>> {
-  const res = await apiClient.get("/api/admin/users", { params });
+  const res = await apiClient.get("/admin/users", { params });
   return extractPaginated<AdminUser>(res);
 }
 
 export async function fetchAdminUser(id: string | number): Promise<AdminUser> {
-  const res = await apiClient.get(`/api/admin/users/${id}`);
+  const res = await apiClient.get(`/admin/users/${id}`);
   return extractData<AdminUser>(res);
 }
 
 export type AdminUserStatus = "active" | "inactive";
 
 export async function patchAdminUserStatus(id: string | number, status: AdminUserStatus) {
-  const res = await apiClient.patch(`/api/admin/users/${id}/status`, { status });
+  const res = await apiClient.patch(`/admin/users/${id}/status`, { status });
   return extractData(res);
 }
 
@@ -297,7 +297,7 @@ export async function fetchAdminPartners(params: AdminPartnersParams = {}): Prom
     }
   }
 
-  const res = await apiClient.get("/api/admin/partners", { params: query });
+  const res = await apiClient.get("/admin/partners", { params: query });
   return extractPaginated<AdminPartner>(res);
 }
 
@@ -312,7 +312,7 @@ export interface AdminPartnerDetail {
 }
 
 export async function fetchAdminPartner(id: string | number): Promise<AdminPartnerDetail> {
-  const res = await apiClient.get(`/api/admin/partners/${id}`);
+  const res = await apiClient.get(`/admin/partners/${id}`);
   return extractData<AdminPartnerDetail>(res);
 }
 
@@ -341,7 +341,7 @@ export async function createAdminPartner(payload: PartnerPayload) {
   body.tax_code = sanitizeOptionalString(payload.tax_code) ?? null;
   body.address = sanitizeOptionalString(payload.address) ?? null;
 
-  const res = await apiClient.post("/api/admin/partners", body);
+  const res = await apiClient.post("/admin/partners", body);
   return extractData(res);
 }
 
@@ -371,7 +371,7 @@ export async function updateAdminPartner(id: string | number, payload: PartnerUp
     body.phone = sanitizeOptionalString(payload.phone);
   }
 
-  const res = await apiClient.patch(`/api/admin/partners/${id}`, body);
+  const res = await apiClient.patch(`/admin/partners/${id}`, body);
   return extractData(res);
 }
 
@@ -419,22 +419,22 @@ export async function fetchAdminTours(params: AdminTourParams = {}): Promise<Pag
     }
   }
 
-  const res = await apiClient.get("/api/admin/tours", { params: query });
+  const res = await apiClient.get("/admin/tours", { params: query });
   return extractPaginated<AdminTour>(res);
 }
 
 export async function fetchAdminTour(id: string | number): Promise<AdminTourDetail> {
-  const res = await apiClient.get(`/api/admin/tours/${id}`);
+  const res = await apiClient.get(`/admin/tours/${id}`);
   return extractData<AdminTourDetail>(res);
 }
 
 export async function updateAdminTourStatus(id: string, status: AdminTourStatus) {
-  const res = await apiClient.patch(`/api/admin/tours/${id}/status`, { status });
+  const res = await apiClient.patch(`/admin/tours/${id}/status`, { status });
   return extractData(res);
 }
 
 export async function fetchAdminCategories(params?: { page?: number; per_page?: number }): Promise<PaginatedResponse<AdminCategory>> {
-  const res = await apiClient.get("/api/admin/categories", { params });
+  const res = await apiClient.get("/admin/categories", { params });
   return extractPaginated<AdminCategory>(res);
 }
 
@@ -447,7 +447,7 @@ export async function createAdminCategory(payload: CategoryPayload) {
   if (slug) {
     body.slug = slug;
   }
-  const res = await apiClient.post("/api/admin/categories", body);
+  const res = await apiClient.post("/admin/categories", body);
   return extractData(res);
 }
 
@@ -459,12 +459,12 @@ export async function updateAdminCategory(id: string | number, payload: Category
     const slug = payload.slug?.trim();
     body.slug = slug && slug.length > 0 ? slug : null;
   }
-  const res = await apiClient.put(`/api/admin/categories/${id}`, body);
+  const res = await apiClient.put(`/admin/categories/${id}`, body);
   return extractData(res);
 }
 
 export async function deleteAdminCategory(id: string | number) {
-  const res = await apiClient.delete(`/api/admin/categories/${id}`);
+  const res = await apiClient.delete(`/admin/categories/${id}`);
   return extractData(res);
 }
 
@@ -486,27 +486,27 @@ function extractPaginated<T>(res: any): PaginatedResponse<T> {
 }
 
 export async function fetchAdminPromotions(params?: { page?: number; per_page?: number }): Promise<PaginatedResponse<AdminPromotion>> {
-  const res = await apiClient.get("/api/admin/promotions", { params });
+  const res = await apiClient.get("/admin/promotions", { params });
   return extractPaginated<AdminPromotion>(res);
 }
 
 export async function createAdminPromotion(payload: PromotionPayload) {
-  const res = await apiClient.post("/api/admin/promotions", payload);
+  const res = await apiClient.post("/admin/promotions", payload);
   return extractData(res);
 }
 
 export async function updateAdminPromotion(id: string | number, payload: PromotionUpdatePayload) {
-  const res = await apiClient.put(`/api/admin/promotions/${id}`, payload);
+  const res = await apiClient.put(`/admin/promotions/${id}`, payload);
   return extractData(res);
 }
 
 export async function deleteAdminPromotion(id: string | number) {
-  const res = await apiClient.delete(`/api/admin/promotions/${id}`);
+  const res = await apiClient.delete(`/admin/promotions/${id}`);
   return extractData(res);
 }
 
 export async function fetchAdminStaff(params?: { page?: number; per_page?: number; status?: string }): Promise<PaginatedResponse<AdminStaff>> {
-  const res = await apiClient.get("/api/admin/staff", { params });
+  const res = await apiClient.get("/admin/staff", { params });
   return extractPaginated<AdminStaff>(res);
 }
 
@@ -521,7 +521,7 @@ export async function createAdminStaff(payload: StaffPayload) {
   if (payload.status) {
     body.status = payload.status;
   }
-  const res = await apiClient.post("/api/admin/staff", body);
+  const res = await apiClient.post("/admin/staff", body);
   return extractData(res);
 }
 
@@ -535,11 +535,11 @@ export async function updateAdminStaff(id: string, payload: StaffUpdatePayload) 
     body.password_confirmation = payload.password_confirmation;
   }
   if (payload.status !== undefined) body.status = payload.status;
-  const res = await apiClient.put(`/api/admin/staff/${id}`, body);
+  const res = await apiClient.put(`/admin/staff/${id}`, body);
   return extractData(res);
 }
 
 export async function deleteAdminStaff(id: string) {
-  const res = await apiClient.delete(`/api/admin/staff/${id}`);
+  const res = await apiClient.delete(`/admin/staff/${id}`);
   return extractData(res);
 }

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { SlidersHorizontal } from "lucide-react";
+import { SlidersHorizontal, Sparkles, TrendingUp, Wallet, MapPin } from "lucide-react";
 
 import TravelHeader from "@/components/TravelHeader";
 import Footer from "@/components/Footer";
@@ -112,11 +112,13 @@ const ResultSearch = () => {
     staleTime: 60 * 1000,
   });
 
-  const toursData = toursQuery.data?.data ?? [];
+  const toursData = toursQuery.data?.data;
   const toursMeta = toursQuery.data?.meta ?? {};
 
+  const safeTours = toursData ?? [];
+
   const currentPage = Number(toursMeta.current_page ?? page) || 1;
-  const totalResults = Number(toursMeta.total ?? toursData.length) || toursData.length;
+  const totalResults = Number(toursMeta.total ?? safeTours.length) || safeTours.length;
   const lastPage =
     Number(toursMeta.last_page ?? (totalResults > 0 ? Math.ceil(totalResults / PER_PAGE) : 1)) || 1;
   const rangeStart =
@@ -163,50 +165,97 @@ const ResultSearch = () => {
     [keyword],
   );
 
-  const mappedActivities =
-    toursData.length > 0 ? toursData.map(mapTourToActivityCard) : [];
+  const mappedActivities = safeTours.length > 0 ? safeTours.map(mapTourToActivityCard) : [];
+
+  const priceStats = useMemo(() => {
+    const prices = (toursData ?? [])
+      .map((tour) => normalizePrice(tour))
+      .filter((value) => Number.isFinite(value) && value > 0);
+    if (!prices.length) return null;
+    prices.sort((a, b) => a - b);
+    const min = prices[0];
+    const max = prices[prices.length - 1];
+    const avg = Math.round(prices.reduce((acc, value) => acc + value, 0) / prices.length);
+    return { min, max, avg };
+  }, [toursData]);
 
   return (
     <div className="min-h-screen bg-muted/40 flex flex-col">
       <TravelHeader />
       <TabNavigation />
 
-      <header className="border-b bg-gradient-to-r from-orange-100 via-white to-white">
-        <div className="container mx-auto flex flex-col gap-4 px-4 py-6 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="text-sm uppercase tracking-wide text-muted-foreground">
-              Kết quả tìm kiếm cho
-            </p>
-            <h1 className="text-3xl font-bold text-foreground">
-              {keyword.length > 0 ? keyword : "Tour & Hoạt động"}
-            </h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {toursQuery.isLoading
-                ? "Đang tải dữ liệu tour phù hợp..."
-                : `Tìm thấy ${totalResults} tour phù hợp với tiêu chí của bạn. Sử dụng bộ lọc để tinh chỉnh kết quả nhanh hơn.`}
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {activeFilters.map((filter) => (
-                <Badge key={filter} variant="secondary" className="bg-white/70 border border-orange-200 text-orange-600">
-                  {filter}
-                </Badge>
-              ))}
-            </div>
-          </div>
+      <header className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-orange-200 via-white to-white" />
+        <div className="relative z-10">
+          <div className="container mx-auto px-4 py-8 lg:py-12">
+            <div className="grid gap-8 lg:grid-cols-[2fr,1fr] lg:items-center">
+              <div className="space-y-5">
+                <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-primary">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Khám phá trải nghiệm
+                </div>
+                <h1 className="text-3xl font-bold text-foreground sm:text-4xl lg:text-5xl">
+                  {keyword.length > 0 ? `Tour & hoạt động: ${keyword}` : "Tất cả tour và hoạt động nổi bật"}
+                </h1>
+                <p className="max-w-2xl text-base text-muted-foreground">
+                  {toursQuery.isLoading
+                    ? "Đang tải dữ liệu tour phù hợp..."
+                    : `Tìm thấy ${totalResults.toLocaleString("vi-VN")} lựa chọn được cập nhật liên tục từ đối tác VietTravel. Tinh chỉnh bộ lọc để khám phá đúng hành trình của bạn.`}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {activeFilters.map((filter) => (
+                    <Badge key={filter} variant="outline" className="border-primary/40 bg-white/70 text-primary">
+                      {filter}
+                    </Badge>
+                  ))}
+                </div>
+                <div className="flex flex-wrap items-center gap-3 pt-2">
+                  <Button
+                    variant="default"
+                    className="rounded-full bg-primary px-5"
+                    onClick={() => setShowFilters(true)}
+                  >
+                    <SlidersHorizontal className="mr-2 h-4 w-4" />
+                    Mở bộ lọc nâng cao
+                  </Button>
+                  <Button variant="ghost" className="rounded-full border border-transparent px-5">
+                    Lưu tìm kiếm
+                  </Button>
+                </div>
+              </div>
 
-          <div className="hidden items-center gap-2 lg:flex">
-            <span className="text-sm text-muted-foreground">Sắp xếp theo:</span>
-            <div className="flex items-center gap-2">
-              {sortOptions.map((option) => (
-                <Button
-                  key={option.value}
-                  size="sm"
-                  variant={sortBy === option.value ? "default" : "outline"}
-                  onClick={() => handleSortChange(option.value)}
-                >
-                  {option.label}
-                </Button>
-              ))}
+              <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+                <div className="rounded-2xl border border-primary/20 bg-white/80 p-4 shadow-sm backdrop-blur">
+                  <div className="flex items-center gap-3 text-primary">
+                    <MapPin className="h-5 w-5" />
+                    <span className="text-sm font-semibold uppercase tracking-wide">Kết quả</span>
+                  </div>
+                  <p className="mt-3 text-2xl font-bold text-foreground">
+                    {totalResults.toLocaleString("vi-VN")}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Trải nghiệm đang mở đặt chỗ</p>
+                </div>
+                <div className="rounded-2xl border border-primary/20 bg-white/80 p-4 shadow-sm backdrop-blur">
+                  <div className="flex items-center gap-3 text-primary">
+                    <Wallet className="h-5 w-5" />
+                    <span className="text-sm font-semibold uppercase tracking-wide">Giá từ</span>
+                  </div>
+                  <p className="mt-3 text-2xl font-bold text-foreground">
+                    {priceStats ? `₫ ${priceStats.min.toLocaleString("vi-VN")}` : "Đang cập nhật"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Mức giá thấp nhất hiện có</p>
+                </div>
+                <div className="rounded-2xl border border-primary/20 bg-white/80 p-4 shadow-sm backdrop-blur">
+                  <div className="flex items-center gap-3 text-primary">
+                    <TrendingUp className="h-5 w-5" />
+                    <span className="text-sm font-semibold uppercase tracking-wide">Trung bình</span>
+                  </div>
+                  <p className="mt-3 text-2xl font-bold text-foreground">
+                    {priceStats ? `₫ ${priceStats.avg.toLocaleString("vi-VN")}` : "Đang cập nhật"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Giá trung bình của các tour</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -235,6 +284,7 @@ const ResultSearch = () => {
               selectedFilters={activeFilters.length}
               sortValue={sortBy}
               sortOptions={sortOptions}
+              keyword={keyword.length > 0 ? keyword : undefined}
               onSortChange={handleSortChange}
             />
 

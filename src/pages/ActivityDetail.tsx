@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import TravelHeader from "@/components/TravelHeader";
 import Footer from "@/components/Footer";
-import { Star, MapPin, Heart, ChevronRight, Calendar, Users, Check, AlertCircle, Info, Globe } from "lucide-react";
+import { Star, MapPin, Heart, ChevronRight, Calendar, Users, Check, AlertCircle, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -17,6 +18,14 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
 import TourCard from "@/components/TourCard";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  fetchTourDetail,
+  fetchTrendingTours,
+  type PublicTour,
+  type PublicTourSchedule,
+} from "@/services/publicApi";
 
 const ActivityDetail = () => {
   const { id } = useParams();

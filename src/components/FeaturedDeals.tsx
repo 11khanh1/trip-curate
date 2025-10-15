@@ -1,11 +1,11 @@
 import { ArrowRight } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { HomePromotion } from "@/services/publicApi";
+import { fetchActivePromotions, type HomePromotion } from "@/services/publicApi";
 
 interface FeaturedDealsProps {
   promotions?: HomePromotion[];
-  isLoading?: boolean;
 }
 
 const GRADIENTS = [
@@ -80,11 +80,20 @@ const mapPromotionToDeal = (promotion: HomePromotion, index: number) => {
   };
 };
 
-const FeaturedDeals = ({ promotions, isLoading }: FeaturedDealsProps) => {
-  const deals =
-    promotions && promotions.length > 0
-      ? promotions.slice(0, 5).map(mapPromotionToDeal)
-      : fallbackDeals;
+const PROMOTION_LIMIT = 5;
+
+const FeaturedDeals = ({ promotions }: FeaturedDealsProps) => {
+  const shouldFetch = !promotions;
+  const promotionsQuery = useQuery({
+    queryKey: ["public-promotions-active", PROMOTION_LIMIT],
+    queryFn: () => fetchActivePromotions(PROMOTION_LIMIT),
+    enabled: shouldFetch,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const data = promotions ?? promotionsQuery.data ?? [];
+  const isLoading = shouldFetch ? promotionsQuery.isLoading : false;
+  const deals = data.length > 0 ? data.map(mapPromotionToDeal) : fallbackDeals;
 
   return (
     <section className="py-12 bg-background">

@@ -1,12 +1,12 @@
+import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { HomeCategory } from "@/services/publicApi";
+import { fetchHighlightCategories, type HomeCategory } from "@/services/publicApi";
 
 interface TopDestinationsProps {
   categories?: HomeCategory[];
-  isLoading?: boolean;
 }
 
-const fallbackDestinations = [
+const fallbackDestinations: HomeCategory[] = [
   { id: "fallback-1", name: "Vịnh Hạ Long", tours_count: 128 },
   { id: "fallback-2", name: "Địa đạo Củ Chi", tours_count: 96 },
   { id: "fallback-3", name: "Bà Nà Hills", tours_count: 88 },
@@ -17,9 +17,20 @@ const fallbackDestinations = [
   { id: "fallback-8", name: "Phú Quốc", tours_count: 42 },
 ];
 
-const TopDestinations = ({ categories, isLoading }: TopDestinationsProps) => {
-  const destinations =
-    categories && categories.length > 0 ? categories : fallbackDestinations;
+const HIGHLIGHT_LIMIT = 12;
+
+const TopDestinations = ({ categories }: TopDestinationsProps) => {
+  const shouldFetch = !categories;
+  const categoriesQuery = useQuery({
+    queryKey: ["public-highlight-categories", HIGHLIGHT_LIMIT],
+    queryFn: () => fetchHighlightCategories(HIGHLIGHT_LIMIT),
+    enabled: shouldFetch,
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const data = categories ?? categoriesQuery.data ?? [];
+  const isLoading = shouldFetch ? categoriesQuery.isLoading : false;
+  const destinations = data.length > 0 ? data : fallbackDestinations;
 
   return (
     <section className="py-16 bg-muted/50">
