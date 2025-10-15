@@ -13,6 +13,9 @@ import {
   Check,
   AlertCircle,
   Info,
+  Shield,
+  Phone,
+  Mail,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -103,6 +106,13 @@ interface ActivityDetailView {
     comment?: string;
   }>;
   itinerary?: string[];
+  policySummary: string[];
+  partner?: {
+    companyName?: string;
+    contactName?: string;
+    email?: string | null;
+    phone?: string | null;
+  };
 }
 
 const FALLBACK_IMAGE =
@@ -213,6 +223,21 @@ const normalizeTourDetail = (
         .map((line) => line.trim())
         .filter(Boolean)
     : [];
+  const policySummary = policyLines.slice(0, 5);
+
+  const partnerInfo = (() => {
+    if (!tour.partner) return undefined;
+    const candidate = {
+      companyName: tour.partner.company_name ?? undefined,
+      contactName: tour.partner.user?.name ?? undefined,
+      email: tour.partner.user?.email ?? null,
+      phone: tour.partner.user?.phone ?? null,
+    };
+    const hasInfo = Object.values(candidate).some(
+      (value) => typeof value === "string" && value.trim().length > 0,
+    );
+    return hasInfo ? candidate : undefined;
+  })();
 
   const termsAndConditions = tour.policy
     ? [
@@ -278,6 +303,8 @@ const normalizeTourDetail = (
     relatedActivities,
     reviews: [],
     itinerary: itineraryItems,
+    policySummary,
+    partner: partnerInfo,
   };
 };
 
@@ -415,6 +442,24 @@ const ActivityDetail = () => {
   const mainImage = activity.images[safeSelectedIndex] ?? activity.images[0];
   const breadcrumbLocation = activity.locationName ?? "Chi tiết tour";
   const itineraryItems = activity.itinerary ?? [];
+  const policySummary = activity.policySummary;
+  const hasPolicySummary = policySummary.length > 0;
+  const partner = activity.partner;
+  const quickInfoItems = [
+    activity.locationName
+      ? { icon: MapPin, label: "Điểm đến", value: activity.locationName }
+      : null,
+    durationLabel ? { icon: Calendar, label: "Thời lượng", value: durationLabel } : null,
+    ratingValue !== null
+      ? { icon: Star, label: "Đánh giá", value: `${ratingValue.toFixed(1)}/5` }
+      : null,
+    bookedCount !== null
+      ? { icon: Users, label: "Đã đặt", value: `${bookedCount.toLocaleString()}+ khách` }
+      : null,
+  ].filter(
+    (item): item is { icon: typeof MapPin; label: string; value: string } => Boolean(item),
+  );
+  const hasQuickInfo = quickInfoItems.length > 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -916,7 +961,7 @@ const ActivityDetail = () => {
           </div>
 
           <div className="lg:col-span-1 space-y-6 lg:self-start">
-            <div className="lg:sticky lg:top-24">
+            <div className="lg:sticky lg:top-24 space-y-6">
               <Card className="w-full shadow-xl">
                 <CardContent className="pt-6">
                   <div className="space-y-4">
@@ -936,6 +981,106 @@ const ActivityDetail = () => {
                       Chọn các gói dịch vụ
                     </Button>
                   </div>
+                </CardContent>
+              </Card>
+
+              {hasQuickInfo && (
+                <Card>
+                  <CardContent className="p-6 space-y-4">
+                    <h3 className="font-semibold text-lg text-foreground">Thông tin nhanh</h3>
+                    <div className="space-y-3">
+                      {quickInfoItems.map((item) => {
+                        const Icon = item.icon;
+                        return (
+                          <div key={item.label} className="flex items-start gap-3">
+                            <Icon className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                            <div>
+                              <p className="text-sm text-muted-foreground">{item.label}</p>
+                              <p className="font-medium text-foreground">{item.value}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {hasPolicySummary && (
+                <Card>
+                  <CardContent className="p-6 space-y-4">
+                    <h3 className="font-semibold text-lg text-foreground flex items-center gap-2">
+                      <Shield className="h-5 w-5 text-primary" />
+                      Chính sách nổi bật
+                    </h3>
+                    <ul className="space-y-2">
+                      {policySummary.map((item, index) => (
+                        <li
+                          key={`${item}-${index}`}
+                          className="flex items-start gap-2 text-sm text-muted-foreground"
+                        >
+                          <span className="mt-1 text-primary">•</span>
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              )}
+
+              {partner && (
+                <Card>
+                  <CardContent className="p-6 space-y-4">
+                    <div>
+                      <h3 className="font-semibold text-lg text-foreground">Nhà cung cấp</h3>
+                      {partner.companyName && (
+                        <p className="text-sm text-muted-foreground">{partner.companyName}</p>
+                      )}
+                    </div>
+                    <div className="space-y-2 text-sm text-muted-foreground">
+                      {partner.contactName && (
+                        <div className="flex items-center gap-2">
+                          <Users className="h-4 w-4 text-primary" />
+                          <span>{partner.contactName}</span>
+                        </div>
+                      )}
+                      {partner.phone && (
+                        <div className="flex items-center gap-2">
+                          <Phone className="h-4 w-4 text-primary" />
+                          <span>{partner.phone}</span>
+                        </div>
+                      )}
+                      {partner.email && (
+                        <div className="flex items-center gap-2">
+                          <Mail className="h-4 w-4 text-primary" />
+                          <span className="break-all">{partner.email}</span>
+                        </div>
+                      )}
+                    </div>
+                    <Button variant="outline" className="w-full">
+                      Liên hệ đối tác
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+
+              <Card className="border-primary/20 bg-primary/5">
+                <CardContent className="p-6 space-y-3">
+                  <h3 className="font-semibold text-lg text-foreground">Cần hỗ trợ thêm?</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Đội ngũ TripCurate luôn sẵn sàng giúp bạn lên kế hoạch và giải đáp mọi thắc mắc.
+                  </p>
+                  <div className="space-y-2 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4 text-primary" />
+                      <span>Hotline: 1900 636 789</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-4 w-4 text-primary" />
+                      <span className="break-all">support@tripcurate.vn</span>
+                    </div>
+                  </div>
+                  <Button className="w-full">Trò chuyện với chúng tôi</Button>
                 </CardContent>
               </Card>
             </div>

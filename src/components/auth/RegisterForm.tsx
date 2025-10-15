@@ -207,7 +207,7 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }: RegisterFormProps) => {
     if (formData.password !== formData.confirmPassword) return alert("Xác nhận mật khẩu không khớp");
     setLoading(true);
     try {
-      const res = await fetch(`${BASE_URL}/api/auth/set-password`, {
+      const res = await fetch(`${BASE_URL}/auth/set-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify(
@@ -246,7 +246,7 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }: RegisterFormProps) => {
     if (resendIn > 0 || resending) return;
     setResending(true);
     try {
-      const res = await fetch(`${BASE_URL}/api/auth/send-otp`, {
+      const res = await fetch(`${BASE_URL}/auth/send-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ channel: "email", value: formData.email }),

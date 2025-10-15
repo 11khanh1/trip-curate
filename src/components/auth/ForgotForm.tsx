@@ -105,7 +105,7 @@ const ForgotPasswordForm = ({ onBackToLogin }: ForgotPasswordFormProps) => {
 
       if (resetMode === "set") {
         if (!otpId) return alert("Thiếu OTP ID. Vui lòng xác minh OTP lại.");
-        res = await fetch(`${BASE_URL}/api/auth/set-password`, {
+        res = await fetch(`${BASE_URL}/auth/set-password`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json" },
           body: JSON.stringify({
@@ -120,7 +120,7 @@ const ForgotPasswordForm = ({ onBackToLogin }: ForgotPasswordFormProps) => {
         data = await res.json().catch(() => ({}));
       } else {
         // resetMode === "reset": dùng endpoint reset-password truyền thống
-        res = await fetch(`${BASE_URL}/api/reset-password`, {
+        res = await fetch(`${BASE_URL}/reset-password`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "application/json" },
           body: JSON.stringify({
