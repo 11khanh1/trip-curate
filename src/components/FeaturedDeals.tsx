@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchActivePromotions, type HomePromotion } from "@/services/publicApi";
+import { Link } from "react-router-dom";
 
 interface FeaturedDealsProps {
   promotions?: HomePromotion[];
@@ -98,7 +99,16 @@ const FeaturedDeals = ({ promotions }: FeaturedDealsProps) => {
   return (
     <section className="py-12 bg-background">
       <div className="container mx-auto px-4">
-        <h2 className="text-2xl font-bold text-foreground mb-8">Ưu đãi cho bạn</h2>
+        <div className="mb-8 flex items-center justify-between">
+          <h2 className="text-2xl font-bold text-foreground">Ưu đãi cho bạn</h2>
+          <Link
+            to="/deals"
+            className="text-sm font-semibold text-primary flex items-center gap-1 hover:underline"
+          >
+            Xem tất cả
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
 
         {isLoading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
