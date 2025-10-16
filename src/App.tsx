@@ -51,6 +51,11 @@ import PartnerSettings from "./pages/partner/Settings";
 import AuthCallback from "./pages/AuthCallback";
 import ResultSearch from "./pages/ResultSearch";
 import ScrollToTop from "@/components/ScrollToTop";
+import BookingsList from "./pages/bookings/BookingsList";
+import BookingDetail from "./pages/bookings/BookingDetail";
+import BookingCheckout from "./pages/bookings/BookingCheckout";
+import SepayReturn from "./pages/payments/SepayReturn";
+import CartPage from "./pages/Cart";
 
 const App = () => (
   <TooltipProvider>
@@ -76,6 +81,11 @@ const App = () => (
         <Route path="/regions/indonesia" element={<Indonesia />} />
         <Route path="/deals" element={<Deals />} />
         <Route path="/resultsearch" element={<ResultSearch />} />
+        <Route path="/bookings" element={<BookingsList />} />
+        <Route path="/bookings/new" element={<BookingCheckout />} />
+        <Route path="/bookings/:id" element={<BookingDetail />} />
+        <Route path="/payments/sepay/return" element={<SepayReturn />} />
+        <Route path="/cart" element={<CartPage />} />
         <Route path="/account-settings" element={<AccountSettings />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/about/our-story" element={<OurStory />} />

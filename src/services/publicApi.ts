@@ -53,6 +53,20 @@ export interface PublicTourCategory {
   [key: string]: unknown;
 }
 
+export interface PublicTourPackage {
+  id?: string | number;
+  name?: string;
+  description?: string | null;
+  adult_price?: number | null;
+  child_price?: number | null;
+  is_active?: boolean;
+  currency?: string | null;
+  min_adults?: number | null;
+  min_children?: number | null;
+  max_people?: number | null;
+  [key: string]: unknown;
+}
+
 export interface PublicTour {
   id?: string | number;
   uuid?: string;
@@ -75,6 +89,7 @@ export interface PublicTour {
   tags?: string[] | null;
   partner?: PublicTourPartner | null;
   categories?: PublicTourCategory[];
+  packages?: PublicTourPackage[];
   schedules?: PublicTourSchedule[];
   created_at?: string;
   updated_at?: string;

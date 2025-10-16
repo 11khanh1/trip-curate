@@ -81,62 +81,6 @@ const fallbackTours = [
 const DEFAULT_TOUR_IMAGE =
   "https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?w=800&h=600&fit=crop";
 
-const regions = [
-  { id: "1", name: "VIỆT NAM", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1583417319070-4a69db38a482?w=100&h=100&fit=crop", url: "/regions/vietnam" },
-  { id: "2", name: "NHẬT BẢN", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1480796927426-f609979314bd?w=100&h=100&fit=crop", url: "/regions/japan" },
-  { id: "3", name: "SINGAPORE", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1525625293386-3f8f99389edd?w=100&h=100&fit=crop", url: "/regions/singapore" },
-  { id: "4", name: "THÁI LAN", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1528181304800-259b08848526?w=100&h=100&fit=crop", url: "/regions/thailand" },
-];
-
-const destinations = [
-  { id: "1", name: "Sapa", subtitle: "Trải nghiệm mùa mây", image: "https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?w=100&h=100&fit=crop" },
-  { id: "2", name: "Thượng Hải", subtitle: "Thành phố không ngủ", image: "https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=100&h=100&fit=crop" },
-  { id: "3", name: "Tokyo", subtitle: "Văn hóa & công nghệ", image: "https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=100&h=100&fit=crop" },
-  { id: "4", name: "Hà Nội", subtitle: "Phố cổ nghìn năm", image: "https://images.unsplash.com/photo-1509023464722-18d996393ca8?w=100&h=100&fit=crop" },
-];
-
-const landmarks = [
-  { id: "1", name: "Cung điện Grand", location: "Thái Lan", image: "https://images.unsplash.com/photo-1528181304800-259b08848526?w=100&h=100&fit=crop" },
-  { id: "2", name: "Núi Phú Sĩ", location: "Nhật Bản", image: "https://images.unsplash.com/photo-1578469550956-0e16b69c6a3d?w=100&h=100&fit=crop" },
-  { id: "3", name: "Tokyo Disney Resort", location: "Nhật Bản", image: "https://images.unsplash.com/photo-1511739001486-6bfe10ce785f?w=100&h=100&fit=crop" },
-  { id: "4", name: "Bà Nà Hills", location: "Việt Nam", image: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=100&h=100&fit=crop" },
-];
-
-const exploreCategories = [
-  {
-    id: "1",
-    icon: "🎯",
-    title: "Các hoạt động nền trải nghiệm",
-    items: ["Tour & Trải nghiệm", "Tour trong ngày", "Massage & Spa", "Hoạt động ngoài trời", "Trải nghiệm văn hóa", "Thể thao dưới nước", "Du thuyền", "Vé tham quan"],
-  },
-  {
-    id: "2",
-    icon: "🏨",
-    title: "Chỗ ở",
-    items: ["Khách sạn", "Homestay", "Resort"],
-  },
-  {
-    id: "3",
-    icon: "🚌",
-    title: "Các lựa chọn di chuyển",
-    items: ["Xe sân bay", "Thuê xe tự lái", "Vé tàu cao tốc", "Xe buýt liên tỉnh"],
-  },
-  {
-    id: "4",
-    icon: "📱",
-    title: "Sản phẩm du lịch thiết yếu",
-    items: ["WiFi và SIM", "Bảo hiểm du lịch", "Thẻ thành viên"],
-  },
-];
-
-const mainTabs = [
-  { id: "activities", label: "Các hoạt động nổi bật" },
-  { id: "regions", label: "Khu vực phổ biến" },
-  { id: "destinations", label: "Điểm đến phổ biến" },
-  { id: "landmarks", label: "Địa danh phổ biến" },
-  { id: "explore", label: "Khám phá VietTravel" },
-];
-
 const normalizeDuration = (duration?: number | string | null) => {
   if (duration === null || duration === undefined) return "Linh hoạt";
   if (typeof duration === "number") {
@@ -235,7 +179,6 @@ const buildCategoryTabs = (categories: HomeCategory[] | undefined) => {
 };
 
 const AllActivities = () => {
-  const [activeMainTab, setActiveMainTab] = useState("activities");
   const [activeCategory, setActiveCategory] = useState("all");
   const [page, setPage] = useState(1);
 
@@ -367,189 +310,101 @@ const AllActivities = () => {
       <TravelHeader />
 
       <main className="container mx-auto px-4 py-8">
-        <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="mb-8">
-          <TabsList className="bg-background border-b w-full justify-start rounded-none h-auto p-0">
-            {mainTabs.map((tab) => (
-              <TabsTrigger
-                key={tab.id}
-                value={tab.id}
-                className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-6 py-3 data-[state=active]:bg-transparent"
-              >
-                {tab.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+        {/* === PHẦN TABS CHÍNH ĐÃ BỊ XÓA === */}
 
-        {activeMainTab === "activities" && (
-          <>
-            <h1 className="text-4xl font-bold text-foreground mb-8">Các hoạt động nổi bật</h1>
+        <>
+          <h1 className="text-4xl font-bold text-foreground mb-8">Các hoạt động nổi bật</h1>
 
-            <Tabs value={activeCategory} onValueChange={handleCategoryChange} className="mb-8">
-              <TabsList className="bg-background border-b w-full justify-start rounded-none h-auto p-0 overflow-x-auto">
-                {categoryTabs.map((category) => (
-                  <TabsTrigger
-                    key={category.id}
-                    value={category.id}
-                    className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-6 py-3 data-[state=active]:bg-transparent whitespace-nowrap"
-                  >
-                    {category.label}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
+          <Tabs value={activeCategory} onValueChange={handleCategoryChange} className="mb-8">
+            <TabsList className="bg-background border-b w-full justify-start rounded-none h-auto p-0 overflow-x-auto">
+              {categoryTabs.map((category) => (
+                <TabsTrigger
+                  key={category.id}
+                  value={category.id}
+                  className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-6 py-3 data-[state=active]:bg-transparent whitespace-nowrap"
+                >
+                  {category.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
 
-            {isLoading ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-                {Array.from({ length: 8 }).map((_, index) => (
-                  <Skeleton key={index} className="h-[420px] rounded-xl" />
+          {isLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+              {Array.from({ length: 8 }).map((_, index) => (
+                <Skeleton key={index} className="h-[420px] rounded-xl" />
+              ))}
+            </div>
+          ) : mappedTours.length === 0 ? (
+            <div className="mb-12 rounded-xl border px-6 py-12 text-center text-muted-foreground">
+              Không tìm thấy tour phù hợp theo bộ lọc hiện tại.
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                {mappedTours.map((activity) => (
+                  <TourCard key={activity.id} {...activity} />
                 ))}
               </div>
-            ) : mappedTours.length === 0 ? (
-              <div className="mb-12 rounded-xl border px-6 py-12 text-center text-muted-foreground">
-                Không tìm thấy tour phù hợp theo bộ lọc hiện tại.
-              </div>
-            ) : (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                  {mappedTours.map((activity) => (
-                    <TourCard key={activity.id} {...activity} />
-                  ))}
-                </div>
 
-                {shouldRenderPagination ? (
-                  <div className="flex flex-col gap-4 px-2 pb-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
-                    <span>
-                      Hiển thị {rangeStart}-{rangeEnd} trên tổng {totalResults} tour
-                    </span>
-                    <Pagination className="w-auto gap-2 md:mx-0 md:justify-end">
-                      <PaginationContent>
-                        <PaginationItem>
-                          <PaginationPrevious
-                            href="#"
-                            onClick={(event) => {
-                              event.preventDefault();
-                              if (isFirstPage) return;
-                              handlePageChange(currentPage - 1);
-                            }}
-                            className={isFirstPage ? "pointer-events-none opacity-50" : undefined}
-                            aria-disabled={isFirstPage}
-                            tabIndex={isFirstPage ? -1 : undefined}
-                          />
+              {shouldRenderPagination ? (
+                <div className="flex flex-col gap-4 px-2 pb-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+                  <span>
+                    Hiển thị {rangeStart}-{rangeEnd} trên tổng {totalResults} tour
+                  </span>
+                  <Pagination className="w-auto gap-2 md:mx-0 md:justify-end">
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious
+                          href="#"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            if (isFirstPage) return;
+                            handlePageChange(currentPage - 1);
+                          }}
+                          className={isFirstPage ? "pointer-events-none opacity-50" : undefined}
+                          aria-disabled={isFirstPage}
+                          tabIndex={isFirstPage ? -1 : undefined}
+                        />
+                      </PaginationItem>
+                      {paginationRange.map((item, index) => (
+                        <PaginationItem key={`${item}-${index}`}>
+                          {item === "ellipsis" ? (
+                            <PaginationEllipsis />
+                          ) : (
+                            <PaginationLink
+                              href="#"
+                              isActive={item === currentPage}
+                              onClick={(event) => {
+                                event.preventDefault();
+                                handlePageChange(item as number);
+                              }}
+                            >
+                              {item}
+                            </PaginationLink>
+                          )}
                         </PaginationItem>
-                        {paginationRange.map((item, index) => (
-                          <PaginationItem key={`${item}-${index}`}>
-                            {item === "ellipsis" ? (
-                              <PaginationEllipsis />
-                            ) : (
-                              <PaginationLink
-                                href="#"
-                                isActive={item === currentPage}
-                                onClick={(event) => {
-                                  event.preventDefault();
-                                  handlePageChange(item);
-                                }}
-                              >
-                                {item}
-                              </PaginationLink>
-                            )}
-                          </PaginationItem>
-                        ))}
-                        <PaginationItem>
-                          <PaginationNext
-                            href="#"
-                            onClick={(event) => {
-                              event.preventDefault();
-                              if (isLastPage) return;
-                              handlePageChange(currentPage + 1);
-                            }}
-                            className={isLastPage ? "pointer-events-none opacity-50" : undefined}
-                            aria-disabled={isLastPage}
-                            tabIndex={isLastPage ? -1 : undefined}
-                          />
-                        </PaginationItem>
-                      </PaginationContent>
-                    </Pagination>
-                  </div>
-                ) : null}
-              </>
-            )}
-          </>
-        )}
-
-        {activeMainTab === "regions" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-            {regions.map((region) => (
-              <div
-                key={region.id}
-                className="flex items-center gap-4 p-4 hover:bg-muted/50 rounded-lg transition-colors cursor-pointer"
-              >
-                <img src={region.image} alt={region.name} className="w-12 h-12 rounded-full object-cover" />
-                <div>
-                  <p className="text-xs text-muted-foreground">{region.subtitle}</p>
-                  <h3 className="font-semibold text-foreground">{region.name}</h3>
+                      ))}
+                      <PaginationItem>
+                        <PaginationNext
+                          href="#"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            if (isLastPage) return;
+                            handlePageChange(currentPage + 1);
+                          }}
+                          className={isLastPage ? "pointer-events-none opacity-50" : undefined}
+                          aria-disabled={isLastPage}
+                          tabIndex={isLastPage ? -1 : undefined}
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {activeMainTab === "destinations" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-            {destinations.map((destination) => (
-              <div
-                key={destination.id}
-                className="flex items-center gap-4 p-4 hover:bg-muted/50 rounded-lg transition-colors cursor-pointer"
-              >
-                <img src={destination.image} alt={destination.name} className="w-12 h-12 rounded-full object-cover" />
-                <div>
-                  <p className="text-xs text-muted-foreground">{destination.subtitle}</p>
-                  <h3 className="font-semibold text-foreground">{destination.name}</h3>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {activeMainTab === "landmarks" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-            {landmarks.map((landmark) => (
-              <div
-                key={landmark.id}
-                className="flex items-center gap-4 p-4 hover:bg-muted/50 rounded-lg transition-colors cursor-pointer"
-              >
-                <img src={landmark.image} alt={landmark.name} className="w-12 h-12 rounded-full object-cover" />
-                <div>
-                  <h3 className="font-semibold text-foreground">{landmark.name}</h3>
-                  <p className="text-xs text-muted-foreground">{landmark.location}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {activeMainTab === "explore" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-12">
-            {exploreCategories.map((category) => (
-              <div key={category.id} className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl">{category.icon}</span>
-                  <h3 className="font-semibold text-foreground">{category.title}</h3>
-                </div>
-                <ul className="space-y-2">
-                  {category.items.map((item, index) => (
-                    <li
-                      key={index}
-                      className="text-sm text-muted-foreground hover:text-primary cursor-pointer transition-colors"
-                    >
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        )}
+              ) : null}
+            </>
+          )}
+        </>
       </main>
 
       <Footer />

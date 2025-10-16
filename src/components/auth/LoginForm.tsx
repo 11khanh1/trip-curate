@@ -125,6 +125,13 @@ const LoginForm = ({ onSwitchToRegister, onForgotPassword, onSuccess }: LoginFor
                 />
                 Google
               </Button>
+              <Button
+                className="relative h-11 font-medium justify-center bg-[#1877F2] hover:bg-[#166FE5] text-white rounded-lg shadow"
+                onClick={() => openSocialPopup("facebook")}
+              >
+                <FacebookIcon className="absolute left-4 w-5 h-5 text-white" />
+                Facebook
+              </Button>
               
               <Button
                 variant="outline"
@@ -146,13 +153,7 @@ const LoginForm = ({ onSwitchToRegister, onForgotPassword, onSuccess }: LoginFor
               >
                 <Mail className="w-5 h-5 mr-2" /> Bằng tài khoản
               </Button>
-              <Button
-                className="relative h-11 font-medium justify-center bg-[#1877F2] hover:bg-[#166FE5] text-white rounded-lg shadow"
-                onClick={() => openSocialPopup("facebook")}
-              >
-                <FacebookIcon className="absolute left-4 w-5 h-5 text-white" />
-                Facebook
-              </Button>
+              
             </div>
           </motion.div>
         )}

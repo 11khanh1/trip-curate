@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useEffect, useMemo, useState, useRef } from "react";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import TravelHeader from "@/components/TravelHeader";
 import Footer from "@/components/Footer";
@@ -10,19 +10,20 @@ import {
   ChevronRight,
   Calendar,
   Users,
-  Check,
   AlertCircle,
   Info,
   Shield,
   Phone,
   Mail,
   ChevronLeft,
+  Clock,
+  ArrowUpRight,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -32,17 +33,35 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
+// Thêm import cho component Select
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import TourCard from "@/components/TourCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { fetchTourDetail, fetchTrendingTours, type PublicTour } from "@/services/publicApi";
+import { fetchTourDetail, fetchTrendingTours, type PublicTour, type PublicTourSchedule } from "@/services/publicApi";
+import { useToast } from "@/hooks/use-toast";
+import { useCart } from "@/context/CartContext";
 
+
+// ====================================================================================
+// CÁC TYPE VÀ HÀM HỖ TRỢ (GIỮ NGUYÊN)
+// ====================================================================================
 type ActivityPackage = {
   id: string;
   name?: string | null;
   price?: number | null;
   originalPrice?: number | null;
+  adultPrice?: number | null;
+  childPrice?: number | null;
+  packageId?: string | null;
+  isActive?: boolean;
   includes: string[];
   startDate?: string | null;
   endDate?: string | null;
@@ -108,7 +127,7 @@ interface ActivityDetailView {
     date?: string;
     comment?: string;
   }>;
-  itinerary?: string[];
+  itinerary?: Array<string | { title?: string; description?: string; time?: string }>;
   policySummary: string[];
   partner?: {
     companyName?: string;
@@ -118,14 +137,13 @@ interface ActivityDetailView {
   };
 }
 
-const FALLBACK_IMAGE =
-  "https://images.unsplash.com/photo-1529651737248-dad5eeb48697?auto=format&fit=crop&w=1600&q=80";
+const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1529651737248-dad5eeb48697?auto=format&fit=crop&w=1600&q=80";
 
 const formatDate = (value?: string | null) => {
   if (!value) return null;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString("vi-VN");
+  return date.toLocaleDateString("vi-VN", { day: '2-digit', month: '2-digit', year: 'numeric' });
 };
 
 const generateFallbackId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -169,7 +187,6 @@ const normalizeTourDetail = (
   relatedTours: PublicTour[] = [],
 ): ActivityDetailView | null => {
   if (!tour) return null;
-
   const id = String(tour.id ?? tour.uuid ?? "");
   const rawImages = [
     tour.thumbnail_url,
@@ -201,19 +218,36 @@ const normalizeTourDetail = (
         .filter((entry): entry is string => Boolean(entry && entry.trim()))
     : [];
 
-  const packages: ActivityPackage[] = Array.isArray(tour.schedules)
-    ? tour.schedules.map((schedule, index) => ({
-        id: String(schedule?.id ?? `${id}-schedule-${index}`),
-        name: schedule?.title ?? `Lịch trình ${index + 1}`,
-        price: schedule?.season_price ?? tour.base_price ?? null,
-        originalPrice: tour.season_price ?? null,
-        includes: [],
-        startDate: schedule?.start_date ?? null,
-        endDate: schedule?.end_date ?? null,
-        capacity: schedule?.capacity ?? null,
-        slotsAvailable: schedule?.slots_available ?? null,
-      }))
-    : [];
+  const packages: ActivityPackage[] =
+    Array.isArray(tour.packages) && tour.packages.length > 0
+      ? tour.packages.map((pkg, index) => ({
+          id: String(pkg?.id ?? `${id}-package-${index}`),
+          packageId: String(pkg?.id ?? `${id}-package-${index}`),
+          name: pkg?.name ?? `Gói dịch vụ ${index + 1}`,
+          price: pkg?.adult_price ?? pkg?.child_price ?? tour.base_price ?? null,
+          originalPrice: tour.season_price ?? null,
+          adultPrice: pkg?.adult_price ?? null,
+          childPrice: pkg?.child_price ?? null,
+          isActive: pkg?.is_active ?? true,
+          includes: [],
+          startDate: null,
+          endDate: null,
+          capacity: null,
+          slotsAvailable: null,
+        }))
+      : Array.isArray(tour.schedules)
+      ? tour.schedules.map((schedule, index) => ({
+          id: String(schedule?.id ?? `${id}-schedule-${index}`),
+          name: schedule?.title ?? `Lịch trình ${index + 1}`,
+          price: schedule?.season_price ?? tour.base_price ?? null,
+          originalPrice: tour.season_price ?? null,
+          includes: [],
+          startDate: schedule?.start_date ?? null,
+          endDate: schedule?.end_date ?? null,
+          capacity: schedule?.capacity ?? null,
+          slotsAvailable: schedule?.slots_available ?? null,
+        }))
+      : [];
 
   const highlights =
     Array.isArray(tour.tags) && tour.tags.length > 0
@@ -300,21 +334,21 @@ const normalizeTourDetail = (
       ? {
           name: tour.destination,
           address: tour.destination,
-          coordinates: null,
+          coordinates: null, 
         }
       : undefined,
     relatedActivities,
     reviews: [],
-    itinerary: itineraryItems,
+    itinerary: tour.itinerary,
     policySummary,
     partner: partnerInfo,
   };
 };
 
 const ActivityDetailSkeleton = () => (
-  <div className="min-h-screen bg-background">
+  <div className="flex min-h-screen flex-col bg-background">
     <TravelHeader />
-    <main className="container mx-auto px-4 py-6 space-y-6">
+    <main className="container mx-auto flex-grow px-4 py-6 space-y-6">
       <Skeleton className="h-6 w-40" />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
@@ -333,10 +367,21 @@ const ActivityDetailSkeleton = () => (
   </div>
 );
 
+const MAX_TRAVELLERS = 15;
+
 const ActivityDetail = () => {
   const { id } = useParams();
   const [selectedImage, setSelectedImage] = useState(0);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("overview");
+  const tabsRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+  const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
+  const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(null);
+  const [adultCount, setAdultCount] = useState(1);
+  const [childCount, setChildCount] = useState(0);
+  const { addItem } = useCart();
+  const { toast } = useToast();
 
   const {
     data: tourDetail,
@@ -358,12 +403,48 @@ const ActivityDetail = () => {
     () => normalizeTourDetail(tourDetail, trendingTours ?? []),
     [tourDetail, trendingTours],
   );
+  const schedules = tourDetail?.schedules ?? [];
+  
+  const selectedSchedule = useMemo(
+    () =>
+      schedules.find((schedule) => String(schedule?.id) === selectedScheduleId) ??
+      (schedules.length > 0 ? schedules[0] : null),
+    [schedules, selectedScheduleId],
+  );
 
   useEffect(() => {
     setSelectedImage(0);
   }, [activity?.id]);
 
+  useEffect(() => {
+    if (activity?.packages.length) {
+      const fallback = activity.packages[0]?.id ?? null;
+      const availableIds = new Set(activity.packages.map((pkg) => pkg.id));
+      setSelectedPackageId((prev) => (prev && availableIds.has(prev) ? prev : fallback));
+    } else {
+      setSelectedPackageId(null);
+    }
+  }, [activity?.packages]);
+
+  // Tự động chọn lịch trình đầu tiên khi có dữ liệu
+  useEffect(() => {
+    if (Array.isArray(tourDetail?.schedules) && tourDetail.schedules.length > 0) {
+      const firstAvailableScheduleId = String(tourDetail.schedules[0]?.id ?? "");
+      setSelectedScheduleId(firstAvailableScheduleId);
+    } else {
+      setSelectedScheduleId(null);
+    }
+  }, [tourDetail?.schedules]);
+
+  const selectedPackage = useMemo(
+    () => activity?.packages.find((pkg) => pkg.id === selectedPackageId) ?? activity?.packages[0],
+    [activity?.packages, selectedPackageId],
+  );
+
   const displayPrice = useMemo(() => {
+    if (selectedPackage) {
+      return selectedPackage.adultPrice ?? selectedPackage.price ?? null;
+    }
     if (!activity) return null;
     const prices = activity.packages
       .map((pkg) => (typeof pkg.price === "number" ? pkg.price : null))
@@ -372,7 +453,15 @@ const ActivityDetail = () => {
       return Math.min(...prices);
     }
     return typeof activity.price === "number" ? activity.price : null;
-  }, [activity]);
+  }, [activity, selectedPackage]);
+
+  const handleSelectPackageClick = () => {
+    setActiveTab("packages");
+    tabsRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  };
 
   const images = activity?.images ?? [];
   const totalImages = images.length;
@@ -399,11 +488,97 @@ const ActivityDetail = () => {
   }, [images, safeSelectedIndex]);
   const hasMoreImages = totalImages > previewLimit;
 
+  const safeAdultCount = useMemo(() => Math.max(1, Math.min(MAX_TRAVELLERS, adultCount)), [adultCount]);
+  const safeChildCount = useMemo(
+    () => Math.max(0, Math.min(MAX_TRAVELLERS - safeAdultCount, childCount)),
+    [childCount, safeAdultCount],
+  );
+  useEffect(() => {
+    if (safeAdultCount !== adultCount) setAdultCount(safeAdultCount);
+  }, [adultCount, safeAdultCount]);
+  useEffect(() => {
+    if (safeChildCount !== childCount) setChildCount(safeChildCount);
+  }, [childCount, safeChildCount]);
+
+  const totalPrice = useMemo(() => {
+    if (!selectedPackage) return null;
+    const adultPrice = selectedPackage.adultPrice ?? selectedPackage.price ?? 0;
+    const childPrice = selectedPackage.childPrice ?? selectedPackage.adultPrice ?? selectedPackage.price ?? 0;
+    return safeAdultCount * adultPrice + safeChildCount * childPrice;
+  }, [selectedPackage, safeAdultCount, safeChildCount]);
+
+
+  const incrementAdults = () => setAdultCount((prev) => Math.min(MAX_TRAVELLERS, prev + 1));
+  const decrementAdults = () => setAdultCount((prev) => Math.max(1, prev - 1));
+  const incrementChildren = () =>
+    setChildCount((prev) => Math.min(MAX_TRAVELLERS - safeAdultCount, prev + 1));
+  const decrementChildren = () => setChildCount((prev) => Math.max(0, prev - 1));
+
+  const handleAddToCart = () => {
+    if (!activity || !selectedPackage) {
+      toast({
+        title: "Chưa thể thêm vào giỏ",
+        description: "Vui lòng chọn gói dịch vụ phù hợp trước khi thêm vào giỏ hàng.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (schedules.length > 0 && !selectedScheduleId) {
+      toast({
+        title: "Chưa chọn lịch khởi hành",
+        description: "Bạn cần chọn lịch khởi hành cụ thể trước khi thêm vào giỏ hàng.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const adultPrice = selectedPackage.adultPrice ?? selectedPackage.price ?? 0;
+    const childPrice = selectedPackage.childPrice ?? selectedPackage.adultPrice ?? selectedPackage.price ?? 0;
+    const scheduleTitle =
+      selectedSchedule?.title ??
+      (selectedSchedule?.start_date
+        ? new Date(selectedSchedule.start_date).toLocaleDateString("vi-VN")
+        : undefined);
+
+    addItem({
+      tourId: activity.id,
+      tourTitle: activity.title,
+      packageId: selectedPackage.packageId ?? selectedPackage.id,
+      packageName: selectedPackage.name,
+      scheduleId: selectedScheduleId ?? undefined,
+      scheduleTitle,
+      thumbnail: activity.images[0] ?? null,
+      adultCount: safeAdultCount,
+      childCount: safeChildCount,
+      adultPrice,
+      childPrice,
+    });
+
+    toast({
+      title: "Đã thêm vào giỏ hàng",
+      description: "Bạn có thể xem lại các hoạt động trong giỏ hàng để đặt sau.",
+    });
+  };
+
+  const handleBookNow = () => {
+    if (!activity || !selectedPackage) return;
+    const params = new URLSearchParams({
+      tourId: activity.id,
+      packageId: selectedPackage.packageId ?? selectedPackage.id,
+      adults: String(safeAdultCount),
+      children: String(safeChildCount),
+    });
+    if (selectedScheduleId) {
+      params.set("scheduleId", selectedScheduleId);
+    }
+    navigate(`/bookings/new?${params.toString()}`);
+  };
+
   if (!id) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="flex min-h-screen flex-col bg-background">
         <TravelHeader />
-        <main className="container mx-auto px-4 py-6">
+        <main className="container mx-auto flex-grow px-4 py-6">
           <Alert variant="destructive">
             <AlertTitle>Không tìm thấy tour</AlertTitle>
             <AlertDescription>Thiếu mã tour hợp lệ trong đường dẫn.</AlertDescription>
@@ -424,9 +599,9 @@ const ActivityDetail = () => {
         ? tourError.message
         : "Đã xảy ra lỗi khi tải thông tin tour. Vui lòng thử lại sau.";
     return (
-      <div className="min-h-screen bg-background">
+      <div className="flex min-h-screen flex-col bg-background">
         <TravelHeader />
-        <main className="container mx-auto px-4 py-6">
+        <main className="container mx-auto flex-grow px-4 py-6">
           <Alert variant="destructive">
             <AlertTitle>Không thể tải tour</AlertTitle>
             <AlertDescription>{message}</AlertDescription>
@@ -439,9 +614,9 @@ const ActivityDetail = () => {
 
   if (!activity) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="flex min-h-screen flex-col bg-background">
         <TravelHeader />
-        <main className="container mx-auto px-4 py-6">
+        <main className="container mx-auto flex-grow px-4 py-6">
           <Alert>
             <AlertTitle>Tour đang được cập nhật</AlertTitle>
             <AlertDescription>
@@ -472,6 +647,59 @@ const ActivityDetail = () => {
   const policySummary = activity.policySummary;
   const hasPolicySummary = policySummary.length > 0;
   const partner = activity.partner;
+  const serviceHighlights = useMemo(() => {
+    if (policySummary.length > 0) {
+      return policySummary.slice(0, 3);
+    }
+    if (hasPackages) {
+      const includeHighlights = activity.packages
+        .flatMap((pkg) => pkg.includes)
+        .filter((item): item is string => Boolean(item?.trim()));
+      if (includeHighlights.length > 0) {
+        return includeHighlights.slice(0, 3);
+      }
+    }
+    return ["Hủy miễn phí 24 giờ", "Xác nhận trong 24 giờ", "Nhóm nhỏ linh hoạt"];
+  }, [policySummary, hasPackages, activity.packages]);
+    
+  const serviceTimeline = useMemo(() => {
+    if (!Array.isArray(itineraryItems) || itineraryItems.length === 0) {
+      return [];
+    }
+
+    return itineraryItems.map((entry, index) => {
+      if (typeof entry === "string") {
+        const text = entry.trim();
+        return {
+          time: null,
+          title: text.length > 0 ? text : `Hoạt động ${index + 1}`,
+          description: undefined,
+        };
+      }
+      if (entry && typeof entry === "object") {
+        const time =
+          typeof entry.time === "string" && entry.time.trim().length > 0
+            ? entry.time.trim()
+            : null;
+        const title =
+          typeof entry.title === "string" && entry.title.trim().length > 0
+            ? entry.title.trim()
+            : `Hoạt động ${index + 1}`;
+        const description =
+          typeof entry.description === "string" && entry.description.trim().length > 0
+            ? entry.description.trim()
+            : undefined;
+        return { time, title, description };
+      }
+      return {
+        time: null,
+        title: `Hoạt động ${index + 1}`,
+        description: undefined,
+      };
+    });
+    }, [itineraryItems]);
+
+  const hasServiceTimeline = serviceTimeline.length > 0;
   const quickInfoItems = [
     activity.locationName
       ? { icon: MapPin, label: "Điểm đến", value: activity.locationName }
@@ -502,10 +730,9 @@ const ActivityDetail = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex min-h-screen flex-col bg-background">
       <TravelHeader />
-
-      <main className="container mx-auto px-4 py-6">
+      <main className="container mx-auto flex-grow px-4 py-6">
         <Breadcrumb className="mb-4">
           <BreadcrumbList>
             <BreadcrumbItem>
@@ -527,6 +754,7 @@ const ActivityDetail = () => {
         </Breadcrumb>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* CỘT NỘI DUNG BÊN TRÁI */}
           <div className="lg:col-span-2 space-y-6">
             <div className="space-y-4">
               <div className="space-y-2">
@@ -620,11 +848,9 @@ const ActivityDetail = () => {
                   </div>
                 )}
               </div>
-
-              
             </div>
 
-            <Tabs defaultValue="overview" className="w-full">
+            <Tabs value={activeTab} onValueChange={setActiveTab} ref={tabsRef} className="w-full">
               <TabsList className="w-full justify-start border-b rounded-none h-auto p-0 bg-transparent">
                 <TabsTrigger
                   value="overview"
@@ -675,8 +901,8 @@ const ActivityDetail = () => {
                     <div className="mt-4 space-y-2">
                       <h4 className="text-lg font-semibold text-foreground">Lịch trình nổi bật</h4>
                       <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
-                        {itineraryItems.map((item, index) => (
-                          <li key={index}>{item}</li>
+                        {itineraryItems.slice(0, 5).map((item, index) => (
+                           <li key={index}>{typeof item === 'string' ? item : item.title}</li>
                         ))}
                       </ul>
                     </div>
@@ -689,130 +915,161 @@ const ActivityDetail = () => {
                   <CardContent className="pt-6">
                     {hasPackages ? (
                       <div className="space-y-6">
-                        <div>
-                          <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-semibold">Vui lòng chọn ngày & gói dịch vụ</h3>
-                            <Button variant="link" className="text-primary p-0">
-                              Xóa tất cả
-                            </Button>
-                          </div>
-                          <Button variant="outline" className="w-full mb-4 justify-start text-primary">
-                            <Calendar className="mr-2 h-4 w-4" />
-                            Xem trạng thái dịch vụ
-                          </Button>
+                        <div className="space-y-3">
+                           <h3 className="text-lg font-semibold text-foreground">Vui lòng chọn gói dịch vụ</h3>
+                           <div className="flex flex-wrap gap-2">
+                             {activity.packages.map((pkg) => {
+                               const discount =
+                                 pkg.originalPrice &&
+                                 pkg.price &&
+                                 pkg.originalPrice > pkg.price
+                                   ? Math.round(((pkg.originalPrice - pkg.price) / pkg.originalPrice) * 100)
+                                   : null;
+                               return (
+                                 <Button
+                                   key={pkg.id}
+                                   variant={selectedPackageId === pkg.id ? "default" : "outline"}
+                                   onClick={() => setSelectedPackageId(pkg.id)}
+                                   className="relative rounded-full border-2 hover:border-primary"
+                                 >
+                                   {discount !== null && (
+                                     <Badge
+                                       variant="destructive"
+                                       className="absolute -top-2 -right-2 rounded-full px-2 py-0.5 text-xs"
+                                     >
+                                       Giảm {discount}%
+                                     </Badge>
+                                   )}
+                                   {pkg.name}
+                                 </Button>
+                               );
+                             })}
+                           </div>
+                         </div>
 
-                          <div className="space-y-3">
-                            <p className="text-sm font-medium text-muted-foreground">Loại gói dịch vụ</p>
-                            <div className="flex flex-wrap gap-2">
-                              {activity.packages.map((pkg) => {
-                                const discount =
-                                  pkg.originalPrice &&
-                                  pkg.price &&
-                                  pkg.originalPrice > pkg.price
-                                    ? Math.round(((pkg.originalPrice - pkg.price) / pkg.originalPrice) * 100)
-                                    : null;
-                                return (
-                                  <Button
-                                    key={pkg.id}
-                                    variant="outline"
-                                    className="relative rounded-full border-2 hover:border-primary"
-                                  >
-                                    {discount !== null && (
-                                      <Badge
-                                        variant="destructive"
-                                        className="absolute -top-2 -right-2 rounded-full px-2 py-0.5 text-xs"
-                                      >
-                                        Giảm {discount}%
-                                      </Badge>
-                                    )}
-                                    {pkg.name}
+                        {/* ==================================================================================== */}
+                        {/* THAY THẾ LỊCH BẰNG DROPDOWN */}
+                        {/* ==================================================================================== */}
+                        {schedules.length > 0 && (
+                          <>
+                            <Separator />
+                            <div className="space-y-3">
+                              <p className="text-sm font-medium text-muted-foreground">Chọn ngày khởi hành</p>
+                              <Select
+                                value={selectedScheduleId ?? ""}
+                                onValueChange={setSelectedScheduleId}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Chọn một lịch trình có sẵn" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {schedules.map((schedule) => {
+                                    if (!schedule?.id) return null;
+                                    const price = schedule.season_price ?? tourDetail?.base_price;
+                                    const date = formatDate(schedule.start_date);
+                                    
+                                    const slots = schedule.slots_available;
+                                    const status = slots !== null && slots < 5 ? `(Chỉ còn ${slots} chỗ)` : '';
+
+                                    const label = [
+                                      schedule.title,
+                                      date ? `- ${date}` : null,
+                                      status,
+                                    ].filter(Boolean).join(" ");
+                                    
+                                    return (
+                                      <SelectItem key={schedule.id} value={String(schedule.id)}>
+                                        {label}
+                                      </SelectItem>
+                                    );
+                                  })}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </>
+                        )}
+                        {/* ==================================================================================== */}
+                        
+                        <Separator />
+
+                        <div className="space-y-3">
+                            <p className="text-sm font-medium text-muted-foreground">Số lượng hành khách</p>
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between rounded-lg border px-3 py-2">
+                                <div>
+                                  <p className="font-medium text-foreground">Người lớn</p>
+                                  <p className="text-xs text-muted-foreground">Từ 12 tuổi trở lên</p>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={decrementAdults}>
+                                    -
                                   </Button>
-                                );
-                              })}
-                            </div>
-                          </div>
-
-                          <div className="mt-4 space-y-4">
-                            {activity.packages.map((pkg) => (
-                              <div key={`${pkg.id}-details`} className="border rounded-lg p-4 space-y-2">
-                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                  <h4 className="font-semibold text-foreground">{pkg.name}</h4>
-                                  {typeof pkg.price === "number" && (
-                                    <span className="font-semibold text-primary">
-                                      ₫ {pkg.price.toLocaleString()}
-                                    </span>
-                                  )}
+                                  <span className="w-6 text-center text-base font-semibold text-foreground">
+                                    {safeAdultCount}
+                                  </span>
+                                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={incrementAdults}>
+                                    +
+                                  </Button>
                                 </div>
-                                {(pkg.startDate || pkg.endDate || pkg.capacity || pkg.slotsAvailable) && (
-                                  <div className="text-sm text-muted-foreground space-y-1">
-                                    {pkg.startDate && (
-                                      <p>Ngày bắt đầu: {formatDate(pkg.startDate) ?? pkg.startDate}</p>
-                                    )}
-                                    {pkg.endDate && (
-                                      <p>Ngày kết thúc: {formatDate(pkg.endDate) ?? pkg.endDate}</p>
-                                    )}
-                                    {pkg.capacity && <p>Sức chứa: {pkg.capacity} khách</p>}
-                                    {pkg.slotsAvailable && <p>Còn trống: {pkg.slotsAvailable}</p>}
-                                  </div>
-                                )}
-                                {pkg.includes.length > 0 && (
-                                  <ul className="list-disc pl-5 text-sm text-muted-foreground space-y-1">
-                                    {pkg.includes.map((item, index) => (
-                                      <li key={index}>{item}</li>
-                                    ))}
-                                  </ul>
-                                )}
                               </div>
-                            ))}
-                          </div>
-                        </div>
-
-                        <Separator />
-
-                        <div className="space-y-4">
-                          <div className="space-y-3">
-                            <p className="text-sm font-medium text-muted-foreground">Số lượng</p>
-                            <div className="flex flex-col gap-3">
-                              {["Người lớn", "Trẻ em (5-8)"].map((label) => (
-                                <div key={label} className="flex items-center justify-between p-4 rounded-lg border">
-                                  <span className="font-medium">{label}</span>
-                                  <div className="flex items-center gap-4">
-                                    <Button variant="outline" size="icon" className="h-8 w-8 rounded-full">
-                                      -
-                                    </Button>
-                                    <span className="w-8 text-center font-semibold">0</span>
-                                    <Button variant="outline" size="icon" className="h-8 w-8 rounded-full">
-                                      +
-                                    </Button>
-                                  </div>
+                              <div className="flex items-center justify-between rounded-lg border px-3 py-2">
+                                <div>
+                                  <p className="font-medium text-foreground">Trẻ em</p>
+                                  <p className="text-xs text-muted-foreground">Từ 2 đến 11 tuổi</p>
                                 </div>
-                              ))}
+                                <div className="flex items-center gap-3">
+                                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={decrementChildren}>
+                                    -
+                                  </Button>
+                                  <span className="w-6 text-center text-base font-semibold text-foreground">
+                                    {safeChildCount}
+                                  </span>
+                                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={incrementChildren}>
+                                    +
+                                  </Button>
+                                </div>
+                              </div>
                             </div>
                           </div>
-                        </div>
 
                         <Separator />
 
-                        <div className="space-y-4">
-                          <div className="flex items-baseline gap-2">
-                            {displayPrice !== null ? (
-                              <span className="text-3xl font-bold">₫ {displayPrice.toLocaleString()}</span>
-                            ) : (
-                              <span className="text-sm text-muted-foreground">
-                                Liên hệ để biết giá chi tiết.
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            Vui lòng hoàn tất các bước yêu cầu để chuyển đến bước tiếp theo.
-                          </p>
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-muted-foreground">Tạm tính</p>
+                          {totalPrice !== null ? (
+                            <p className="text-3xl font-bold text-foreground">
+                              ₫ {totalPrice.toLocaleString("vi-VN")}
+                            </p>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">
+                              Liên hệ để nhận báo giá chi tiết cho gói dịch vụ này.
+                            </p>
+                          )}
+                        </div>
 
-                          <div className="flex gap-3">
-                            <Button variant="outline" className="flex-1 border-orange-500 text-orange-500 hover:bg-orange-50">
+                        <div className="space-y-2">
+                          <div className="flex flex-col gap-2 sm:flex-row">
+                            <Button
+                              variant="outline"
+                              className="w-full border-orange-500 text-orange-500 hover:bg-orange-50"
+                              size="lg"
+                              onClick={handleAddToCart}
+                              disabled={!selectedPackage}
+                            >
                               Thêm vào giỏ hàng
                             </Button>
-                            <Button className="flex-1 bg-orange-500 hover:bg-orange-600">Đặt ngay</Button>
+                            <Button
+                              className="w-full bg-orange-500 hover:bg-orange-600"
+                              size="lg"
+                              onClick={handleBookNow}
+                              disabled={!selectedPackage}
+                            >
+                              Đặt ngay
+                            </Button>
                           </div>
+                          <p className="text-center text-xs text-muted-foreground">
+                            Bạn sẽ được chuyển tới trang điền thông tin hành khách và thanh toán.
+                          </p>
                         </div>
                       </div>
                     ) : (
@@ -971,7 +1228,7 @@ const ActivityDetail = () => {
                       {locationCoords ? (
                         <div className="w-full h-64 bg-muted rounded-lg overflow-hidden">
                           <iframe
-                            src={`https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3919.086097468119!2d${locationCoords.lng}!3d${locationCoords.lat}!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zM1BMIS4!5e0!3m2!1svi!2s!4v1234567890123!5m2!1svi!2s`}
+                            src={`https://www.google.com/maps/embed/v1/view?key=YOUR_API_KEY&center=${locationCoords.lat},${locationCoords.lng}&zoom=14`}
                             width="100%"
                             height="100%"
                             style={{ border: 0 }}
@@ -1024,10 +1281,87 @@ const ActivityDetail = () => {
                         </span>
                       )}
                     </div>
+                      <Button
+                        onClick={handleSelectPackageClick}
+                        className="w-full bg-orange-500 hover:bg-orange-600 text-white text-base py-6"
+                      >
+                        Chọn các gói dịch vụ
+                      </Button>
+                  </div>
+                </CardContent>
+              </Card>
 
-                    <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white text-base py-6">
-                      Chọn các gói dịch vụ
-                    </Button>
+              <Card className="shadow-lg">
+                <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-0">
+                  <div>
+                    <CardTitle className="text-lg font-semibold text-foreground">Chi tiết gói dịch vụ</CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      Cập nhật nhanh về những gì bạn sẽ trải nghiệm
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-muted-foreground hover:text-primary"
+                    onClick={handleSelectPackageClick}
+                    aria-label="Xem chi tiết gói dịch vụ"
+                  >
+                    <ArrowUpRight className="h-4 w-4" />
+                  </Button>
+                </CardHeader>
+                <CardContent className="pt-4 space-y-4">
+                  {serviceHighlights.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {serviceHighlights.map((feature, index) => (
+                        <Badge
+                          key={`${feature}-${index}`}
+                          variant="outline"
+                          className="rounded-full border-dashed px-3 py-1 text-xs font-medium text-muted-foreground"
+                        >
+                          {feature}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-semibold text-foreground">Lịch trình</h4>
+                      {hasServiceTimeline && (
+                        <span className="text-xs text-muted-foreground">
+                          {serviceTimeline.length} điểm dừng
+                        </span>
+                      )}
+                    </div>
+
+                    {hasServiceTimeline ? (
+                      <div className="relative pl-5">
+                        <div className="absolute left-[6px] top-2 bottom-4 w-0.5 bg-border" />
+                        {serviceTimeline.map((item, index) => (
+                          <div key={`${item.title}-${index}`} className="relative pb-6 last:pb-0">
+                            <span className="absolute left-[-7px] top-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full border-2 border-background bg-primary shadow-sm" />
+                            <div className="ml-4 space-y-2">
+                              <div className="flex flex-wrap items-center gap-2">
+                                {item.time && (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                                    <Clock className="h-3.5 w-3.5" />
+                                    {item.time}
+                                  </span>
+                                )}
+                                <span className="font-medium text-sm text-foreground">{item.title}</span>
+                              </div>
+                              {item.description && (
+                                <p className="text-sm text-muted-foreground leading-relaxed">{item.description}</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Lịch trình chi tiết sẽ được cập nhật sớm. Vui lòng xem thêm trong mục gói dịch vụ.
+                      </p>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -1116,7 +1450,7 @@ const ActivityDetail = () => {
                 <CardContent className="p-6 space-y-3">
                   <h3 className="font-semibold text-lg text-foreground">Cần hỗ trợ thêm?</h3>
                   <p className="text-sm text-muted-foreground">
-                    Đội ngũ TripCurate luôn sẵn sàng giúp bạn lên kế hoạch và giải đáp mọi thắc mắc.
+                    Đội ngũ của chúng tôi luôn sẵn sàng giúp bạn lên kế hoạch và giải đáp mọi thắc mắc.
                   </p>
                   <div className="space-y-2 text-sm text-muted-foreground">
                     <div className="flex items-center gap-2">
@@ -1125,7 +1459,7 @@ const ActivityDetail = () => {
                     </div>
                     <div className="flex items-center gap-2">
                       <Mail className="h-4 w-4 text-primary" />
-                      <span className="break-all">support@tripcurate.vn</span>
+                      <span className="break-all">support@example.com</span>
                     </div>
                   </div>
                   <Button className="w-full">Trò chuyện với chúng tôi</Button>
@@ -1192,86 +1526,84 @@ const ActivityDetail = () => {
       </main>
 
     <Dialog open={isGalleryOpen} onOpenChange={setIsGalleryOpen}>
-  <DialogContent className="max-w-7xl w-full p-0 border-none bg-transparent shadow-none">
-    {/* ADDED: Thêm lại background để giao diện đẹp hơn */}
-    <div className="flex h-[90vh] flex-col overflow-hidden rounded-lg  text-white ">
-      <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
-        <h3 className="font-semibold truncate pr-4">{activity.title}</h3>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="text-white hover:bg-white/10 flex-shrink-0"
-          onClick={closeGallery}
-        >
-          <X className="h-5 w-5" />
-        </Button>
-      </div>
-
-      {/* FIXED: Thêm class "min-h-0" vào đây để sửa lỗi co giãn */}
-      <div className="relative flex-1 px-16 py-4 min-h-0">
-        {totalImages > 1 && (
-          <button
-            type="button"
-            onClick={goPrevImage}
-            className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white transition hover:bg-black/60 z-10"
-            aria-label="Ảnh trước"
-          >
-            <ChevronLeft className="h-6 w-6" />
-          </button>
-        )}
-
-        <div className="relative flex h-full w-full items-center justify-center">
-          <img
-            src={activity.images[safeSelectedIndex] ?? mainImage}
-            alt={`${activity.title} ${safeSelectedIndex + 1}`}
-            className="max-h-full max-w-full rounded-lg object-contain"
-          />
-          <div className="absolute bottom-4 right-4 rounded-full bg-black/50 px-3 py-1 text-xs font-medium text-white/90">
-            {safeSelectedIndex + 1} / {totalImages}
+      <DialogContent className="max-w-7xl w-full p-0 border-none bg-transparent shadow-none">
+        <div className="flex h-[90vh] flex-col overflow-hidden rounded-lg bg-black/90 text-white">
+          <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
+            <h3 className="font-semibold truncate pr-4">{activity.title}</h3>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-white hover:bg-white/10 flex-shrink-0"
+              onClick={closeGallery}
+            >
+              <X className="h-5 w-5" />
+            </Button>
           </div>
-        </div>
 
-        {totalImages > 1 && (
-          <button
-            type="button"
-            onClick={goNextImage}
-            className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white transition hover:bg-black/60 z-10"
-            aria-label="Ảnh tiếp theo"
-          >
-            <ChevronRight className="h-6 w-6" />
-          </button>
-        )}
-      </div>
+          <div className="relative flex-1 px-16 py-4 min-h-0">
+            {totalImages > 1 && (
+              <button
+                type="button"
+                onClick={goPrevImage}
+                className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white transition hover:bg-black/60 z-10"
+                aria-label="Ảnh trước"
+              >
+                <ChevronLeft className="h-6 w-6" />
+              </button>
+            )}
 
-      {activity.images.length > 0 && (
-        <div className="border-t border-white/10 px-5 py-4">
-          <div className="flex justify-center">
-            <div className="flex gap-3 overflow-x-auto pb-1">
-              {activity.images.map((image, index) => (
-                <button
-                  key={`${index}-${image}`}
-                  type="button"
-                  onClick={() => setSelectedImage(index)}
-                  className={`relative h-16 w-24 flex-shrink-0 overflow-hidden rounded-md transition focus:outline-none ${
-                    safeSelectedIndex === index
-                      ? "ring-2 ring-white shadow-lg"
-                      : "opacity-60 hover:opacity-100"
-                  }`}
-                >
-                  <img
-                    src={image}
-                    alt={`${activity.title} ${index + 1}`}
-                    className="h-full w-full object-cover"
-                  />
-                </button>
-              ))}
+            <div className="relative flex h-full w-full items-center justify-center">
+              <img
+                src={activity.images[safeSelectedIndex] ?? mainImage}
+                alt={`${activity.title} ${safeSelectedIndex + 1}`}
+                className="max-h-full max-w-full rounded-lg object-contain"
+              />
+              <div className="absolute bottom-4 right-4 rounded-full bg-black/50 px-3 py-1 text-xs font-medium text-white/90">
+                {safeSelectedIndex + 1} / {totalImages}
+              </div>
             </div>
+
+            {totalImages > 1 && (
+              <button
+                type="button"
+                onClick={goNextImage}
+                className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white transition hover:bg-black/60 z-10"
+                aria-label="Ảnh tiếp theo"
+              >
+                <ChevronRight className="h-6 w-6" />
+              </button>
+            )}
           </div>
+
+          {activity.images.length > 0 && (
+            <div className="border-t border-white/10 px-5 py-4">
+              <div className="flex justify-center">
+                <div className="flex gap-3 overflow-x-auto pb-1">
+                  {activity.images.map((image, index) => (
+                    <button
+                      key={`${index}-${image}`}
+                      type="button"
+                      onClick={() => setSelectedImage(index)}
+                      className={`relative h-16 w-24 flex-shrink-0 overflow-hidden rounded-md transition focus:outline-none ${
+                        safeSelectedIndex === index
+                          ? "ring-2 ring-white shadow-lg"
+                          : "opacity-60 hover:opacity-100"
+                      }`}
+                    >
+                      <img
+                        src={image}
+                        alt={`${activity.title} ${index + 1}`}
+                        className="h-full w-full object-cover"
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
-      )}
-    </div>
-  </DialogContent>
-</Dialog>
+      </DialogContent>
+    </Dialog>
       <Footer />
     </div>
   );

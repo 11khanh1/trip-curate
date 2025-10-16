@@ -1,13 +1,12 @@
-import { Search, Menu, User, Globe, ShoppingBag, Gift, ChevronDown, HelpCircle, Clock, Settings, Shield, LogOut, Briefcase } from "lucide-react";
+import { Search, Menu, User, ShoppingBag, Gift, ChevronDown, HelpCircle, Clock, Settings, Shield, LogOut, Briefcase } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import AuthModal from "@/components/auth/AuthModal";
 import { useState, useEffect, useMemo } from "react";
-// Giả định useUser trả về currentUser có thuộc tính role
-import { useUser } from "@/context/UserContext"; 
-import { useNavigate } from "react-router-dom"; 
+import { useUser } from "@/context/UserContext";
 import { useQuery } from "@tanstack/react-query";
+import { useCart } from "@/context/CartContext";
 import {
   NavigationMenu,
   NavigationMenuContent,
@@ -21,32 +20,99 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { fetchSearchSuggestions, type SearchSuggestion } from "@/services/publicApi";
+import { Separator } from "./ui/separator";
 
-// Định nghĩa Role cho currentUser (giả định)
 interface CurrentUser {
     id: string;
     name: string;
     email: string;
-    role: 'customer' | 'partner' | 'admin'; 
+    role: 'customer' | 'partner' | 'admin';
 }
 
-// Giả định hook useUser trả về user có role
 interface UserContextType {
     currentUser: CurrentUser | null;
     setCurrentUser: (user: CurrentUser | null) => void;
 }
 
+// ====================================================================================
+// COMPONENT: CART POPOVER CONTENT
+// ====================================================================================
+const CartPopoverContent = () => {
+  const { items, totalAmount } = useCart();
+  const navigate = useNavigate();
 
+  const formatter = useMemo(
+    () => new Intl.NumberFormat("vi-VN", {
+        style: "currency",
+        currency: "VND",
+        minimumFractionDigits: 0,
+      }),
+    [],
+  );
+
+  return (
+    <div className="flex flex-col">
+      {items.length === 0 ? (
+        <div className="flex flex-col items-center justify-center p-8 text-center">
+          <ShoppingBag className="h-12 w-12 text-gray-300" />
+          <p className="mt-4 font-semibold text-foreground">Giỏ hàng của bạn đang trống</p>
+          <p className="text-sm text-muted-foreground">Hãy bắt đầu khám phá và thêm sản phẩm!</p>
+        </div>
+      ) : (
+        <>
+          <div className="max-h-[400px] overflow-y-auto p-4 space-y-4">
+            {items.map((item) => (
+              <Link to={`/activity/${item.tourId}`} key={item.id} className="flex items-start gap-4 group">
+                <img
+                  src={item.thumbnail ?? "https://via.placeholder.com/150"}
+                  alt={item.tourTitle}
+                  className="h-16 w-16 rounded-md object-cover flex-shrink-0"
+                />
+                <div className="flex-1 overflow-hidden">
+                  <p className="font-semibold text-sm truncate group-hover:text-primary transition-colors">{item.tourTitle}</p>
+                  <p className="text-xs text-muted-foreground">{item.packageName}</p>
+                  {item.scheduleTitle && <p className="text-xs text-muted-foreground">{item.scheduleTitle}</p>}
+                  <p className="text-xs text-muted-foreground">{item.adultCount} Người lớn {item.childCount > 0 && `, ${item.childCount} Trẻ em`}</p>
+                  <p className="text-sm font-medium text-primary mt-1">{formatter.format(item.totalPrice)}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+          <Separator />
+          <div className="p-4 space-y-4">
+            <div className="flex justify-between items-center font-semibold">
+              <span>Tổng tiền ({items.length} sản phẩm):</span>
+              <span>{formatter.format(totalAmount)}</span>
+            </div>
+            <Button onClick={() => navigate('/cart')} className="w-full bg-orange-500 hover:bg-orange-600">
+              Xem giỏ hàng
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+
+// ====================================================================================
+// COMPONENT CHÍNH: TRAVEL HEADER
+// ====================================================================================
 const TravelHeader = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
-  // Sử dụng kiểu dữ liệu giả định để TypeScript hoạt động
   const { currentUser, setCurrentUser } = useUser() as UserContextType;
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [searchValue, setSearchValue] = useState("");
   const [debouncedValue, setDebouncedValue] = useState("");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const navigate = useNavigate();
+  const { totalItems } = useCart();
 
   useEffect(() => {
     const handler = window.setTimeout(() => {
@@ -87,90 +153,22 @@ const TravelHeader = () => {
   };
 
   // Dữ liệu menu... (giữ nguyên)
-
-  const regions = [
-    { id: "1", name: "VIỆT NAM", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1583417319070-4a69db38a482?w=100&h=100&fit=crop", url: "/regions/vietnam" },
-    { id: "2", name: "NHẬT BẢN", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1480796927426-f609979314bd?w=100&h=100&fit=crop", url: "/regions/japan" },
-    { id: "3", name: "SINGAPORE", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1525625293386-3f8f99389edd?w=100&h=100&fit=crop", url: "/regions/singapore" },
-    { id: "4", name: "THÁI LAN", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1528181304800-259b08848526?w=100&h=100&fit=crop", url: "/regions/thailand" },
-    { id: "5", name: "TRUNG QUỐC", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1508804185872-d7badad00f7d?w=100&h=100&fit=crop", url: "/regions/china" },
-    { id: "6", name: "HÀN QUỐC", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1517154421773-0529f29ea451?w=100&h=100&fit=crop", url: "/regions/south-korea" },
-    { id: "7", name: "ÚC", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1523482580672-f109ba8cb9be?w=100&h=100&fit=crop", url: "/regions/australia" },
-    { id: "8", name: "ANH", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=100&h=100&fit=crop", url: "/regions/uk" },
-    { id: "9", name: "THỤY SĨ", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1530122037265-a5f1f91d3b99?w=100&h=100&fit=crop", url: "/regions/switzerland" },
-    { id: "10", name: "MỸ", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1485738422979-f5c462d49f74?w=100&h=100&fit=crop", url: "/regions/usa" },
-    { id: "11", name: "MALAYSIA", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1596422846543-75c6fc197f07?w=100&h=100&fit=crop", url: "/regions/malaysia" },
-    { id: "12", name: "INDONESIA", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1555400038-63f5ba517a47?w=100&h=100&fit=crop", url: "/regions/indonesia" }
-  ];
-
-  const destinations = [
-    { id: "1", name: "Sapa", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?w=100&h=100&fit=crop" },
-    { id: "2", name: "Thượng Hải", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=100&h=100&fit=crop" },
-    { id: "3", name: "Tokyo", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=100&h=100&fit=crop" },
-    { id: "4", name: "Hà Nội", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1509023464722-18d996393ca8?w=100&h=100&fit=crop" },
-    { id: "5", name: "TP Hồ Chí Minh", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1583417319070-4a69db38a482?w=100&h=100&fit=crop" },
-    { id: "6", name: "Bangkok", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1508009603885-50cf7c579365?w=100&h=100&fit=crop" },
-    { id: "7", name: "Osaka", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1590559899731-a382839e5549?w=100&h=100&fit=crop" },
-    { id: "8", name: "Hồng Kông", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1536599018102-9f803c140fc1?w=100&h=100&fit=crop" },
-    { id: "9", name: "Phú Quốc", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=100&h=100&fit=crop" },
-    { id: "10", name: "Nha Trang", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1501594907352-04cda38ebc29?w=100&h=100&fit=crop" },
-    { id: "11", name: "Đài Bắc", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1526481280693-3bfa7568e0f3?w=100&h=100&fit=crop" },
-    { id: "12", name: "Đà Nẵng", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=100&h=100&fit=crop" },
-    { id: "13", name: "Kyoto", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=100&h=100&fit=crop" },
-    { id: "14", name: "Seoul", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1517154421773-0529f29ea451?w=100&h=100&fit=crop" },
-    { id: "15", name: "Edinburgh", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1555881400-74d7acaacd8b?w=100&h=100&fit=crop" },
-    { id: "16", name: "Hội An", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?w=100&h=100&fit=crop" }
-  ];
-
-  const landmarks = [
-    { id: "1", name: "Cung điện Grand", location: "THÁI LAN", image: "https://images.unsplash.com/photo-1528181304800-259b08848526?w=100&h=100&fit=crop" },
-    { id: "2", name: "Núi Phú Sĩ", location: "NHẬT BẢN", image: "https://images.unsplash.com/photo-1578469550956-0e16b69c6a3d?w=100&h=100&fit=crop" },
-    { id: "3", name: "Legoland Discovery Center Tokyo", location: "NHẬT BẢN", image: "https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=100&h=100&fit=crop" },
-    { id: "4", name: "Sands SkyPark Observation Deck Singapore", location: "SINGAPORE", image: "https://images.unsplash.com/photo-1525625293386-3f8f99389edd?w=100&h=100&fit=crop" },
-    { id: "5", name: "sunway lagoon", location: "MALAYSIA", image: "https://images.unsplash.com/photo-1596422846543-75c6fc197f07?w=100&h=100&fit=crop" },
-    { id: "6", name: "Tokyo Disney Resort", location: "NHẬT BẢN", image: "https://images.unsplash.com/photo-1513407030348-c983a97b98d8?w=100&h=100&fit=crop" },
-    { id: "7", name: "Hong Kong Disneyland", location: "Hồng Kông", image: "https://images.unsplash.com/photo-1536599018102-9f803c140fc1?w=100&h=100&fit=crop" },
-    { id: "8", name: "Armani Hotel Dubai, Burj Khalifa", location: "CÁC TIỂU VƯƠNG QUỐC Ả RẬP THỐNG NHẤT", image: "https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=100&h=100&fit=crop" },
-    { id: "9", name: "Tokyo Skytree", location: "NHẬT BẢN", image: "https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=100&h=100&fit=crop" },
-    { id: "10", name: "Tháp Eiffel", location: "PHÁP", image: "https://images.unsplash.com/photo-1511739001486-6bfe10ce785f?w=100&h=100&fit=crop" },
-    { id: "11", name: "Ghibli Park", location: "NHẬT BẢN", image: "https://images.unsplash.com/photo-1524413840807-0c3cb6fa808d?w=100&h=100&fit=crop" },
-    { id: "12", name: "Nijo Castle", location: "NHẬT BẢN", image: "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=100&h=100&fit=crop" },
-    { id: "13", name: "Seoul Sky", location: "HÀN QUỐC", image: "https://images.unsplash.com/photo-1517154421773-0529f29ea451?w=100&h=100&fit=crop" },
-    { id: "14", name: "Dhow Cruise Dubai", location: "CÁC TIỂU VƯƠNG QUỐC Ả RẬP THỐNG NHẤT", image: "https://images.unsplash.com/photo-1512632578888-169bbbc64f33?w=100&h=100&fit=crop" },
-    { id: "15", name: "Bánh xe Ferris Miramar", location: "ĐÀI LOAN", image: "https://images.unsplash.com/photo-1526481280693-3bfa7568e0f3?w=100&h=100&fit=crop" },
-    { id: "16", name: "Yas Island", location: "CÁC TIỂU VƯƠNG QUỐC Ả RẬP THỐNG NHẤT", image: "https://images.unsplash.com/photo-1518684079-3c830dcef090?w=100&h=100&fit=crop" }
-  ];
-
-  const exploreCategories = [
-    {
-      id: "1",
-      icon: "🎯",
-      title: "Các hoạt động nền trải nghiệm",
-      items: ["Tour & Trải nghiệm", "Tour trong ngày", "Massage & Spa", "Hoạt động ngoài trời", "Trải nghiệm văn hóa", "Thể thao dưới nước", "Du thuyền", "Vé tham quan"]
-    },
-
-    {
-      id: "3",
-      icon: "🚌",
-      title: "Các lựa chọn di chuyển",
-      items: ["Xe sân bay", "Thuê xe tự lái", "Vé tàu châu Âu", "Vé tàu cao tốc Trung Quốc", "Vé tàu Nhật Bản", "Vé tàu Shinkansen", "Xe buýt Hàn Quốc"]
-    },
-  ];
+  const regions = [ { id: "1", name: "VIỆT NAM", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1583417319070-4a69db38a482?w=100&h=100&fit=crop", url: "/regions/vietnam" }, { id: "2", name: "NHẬT BẢN", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1480796927426-f609979314bd?w=100&h=100&fit=crop", url: "/regions/japan" }, { id: "3", name: "SINGAPORE", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1525625293386-3f8f99389edd?w=100&h=100&fit=crop", url: "/regions/singapore" }, { id: "4", name: "THÁI LAN", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1528181304800-259b08848526?w=100&h=100&fit=crop", url: "/regions/thailand" }, { id: "5", name: "TRUNG QUỐC", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1508804185872-d7badad00f7d?w=100&h=100&fit=crop", url: "/regions/china" }, { id: "6", name: "HÀN QUỐC", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1517154421773-0529f29ea451?w=100&h=100&fit=crop", url: "/regions/south-korea" }, { id: "7", name: "ÚC", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1523482580672-f109ba8cb9be?w=100&h=100&fit=crop", url: "/regions/australia" }, { id: "8", name: "ANH", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=100&h=100&fit=crop", url: "/regions/uk" }, { id: "9", name: "THỤY SĨ", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1530122037265-a5f1f91d3b99?w=100&h=100&fit=crop", url: "/regions/switzerland" }, { id: "10", name: "MỸ", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1485738422979-f5c462d49f74?w=100&h=100&fit=crop", url: "/regions/usa" }, { id: "11", name: "MALAYSIA", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1596422846543-75c6fc197f07?w=100&h=100&fit=crop", url: "/regions/malaysia" }, { id: "12", name: "INDONESIA", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1555400038-63f5ba517a47?w=100&h=100&fit=crop", url: "/regions/indonesia" } ];
+  const destinations = [ { id: "1", name: "Sapa", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?w=100&h=100&fit=crop" }, { id: "2", name: "Thượng Hải", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=100&h=100&fit=crop" }, { id: "3", name: "Tokyo", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=100&h=100&fit=crop" }, { id: "4", name: "Hà Nội", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1509023464722-18d996393ca8?w=100&h=100&fit=crop" }, { id: "5", name: "TP Hồ Chí Minh", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1583417319070-4a69db38a482?w=100&h=100&fit=crop" }, { id: "6", name: "Bangkok", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1508009603885-50cf7c579365?w=100&h=100&fit=crop" }, { id: "7", name: "Osaka", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1590559899731-a382839e5549?w=100&h=100&fit=crop" }, { id: "8", name: "Hồng Kông", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1536599018102-9f803c140fc1?w=100&h=100&fit=crop" }, { id: "9", name: "Phú Quốc", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=100&h=100&fit=crop" }, { id: "10", name: "Nha Trang", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1501594907352-04cda38ebc29?w=100&h=100&fit=crop" }, { id: "11", name: "Đài Bắc", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1526481280693-3bfa7568e0f3?w=100&h=100&fit=crop" }, { id: "12", name: "Đà Nẵng", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=100&h=100&fit=crop" }, { id: "13", name: "Kyoto", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=100&h=100&fit=crop" }, { id: "14", name: "Seoul", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1517154421773-0529f29ea451?w=100&h=100&fit=crop" }, { id: "15", name: "Edinburgh", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1555881400-74d7acaacd8b?w=100&h=100&fit=crop" }, { id: "16", name: "Hội An", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?w=100&h=100&fit=crop" } ];
+  const landmarks = [ { id: "1", name: "Cung điện Grand", location: "THÁI LAN", image: "https://images.unsplash.com/photo-1528181304800-259b08848526?w=100&h=100&fit=crop" }, { id: "2", name: "Núi Phú Sĩ", location: "NHẬT BẢN", image: "https://images.unsplash.com/photo-1578469550956-0e16b69c6a3d?w=100&h=100&fit=crop" }, { id: "3", name: "Legoland Discovery Center Tokyo", location: "NHẬT BẢN", image: "https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=100&h=100&fit=crop" }, { id: "4", name: "Sands SkyPark Observation Deck Singapore", location: "SINGAPORE", image: "https://images.unsplash.com/photo-1525625293386-3f8f99389edd?w=100&h=100&fit=crop" }, { id: "5", name: "sunway lagoon", location: "MALAYSIA", image: "https://images.unsplash.com/photo-1596422846543-75c6fc197f07?w=100&h=100&fit=crop" }, { id: "6", name: "Tokyo Disney Resort", location: "NHẬT BẢN", image: "https://images.unsplash.com/photo-1513407030348-c983a97b98d8?w=100&h=100&fit=crop" }, { id: "7", name: "Hong Kong Disneyland", location: "Hồng Kông", image: "https://images.unsplash.com/photo-1536599018102-9f803c140fc1?w=100&h=100&fit=crop" }, { id: "8", name: "Armani Hotel Dubai, Burj Khalifa", location: "CÁC TIỂU VƯƠNG QUỐC Ả RẬP THỐNG NHẤT", image: "https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=100&h=100&fit=crop" }, { id: "9", name: "Tokyo Skytree", location: "NHẬT BẢN", image: "https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=100&h=100&fit=crop" }, { id: "10", name: "Tháp Eiffel", location: "PHÁP", image: "https://images.unsplash.com/photo-1511739001486-6bfe10ce785f?w=100&h=100&fit=crop" }, { id: "11", name: "Ghibli Park", location: "NHẬT BẢN", image: "https://images.unsplash.com/photo-1524413840807-0c3cb6fa808d?w=100&h=100&fit=crop" }, { id: "12", name: "Nijo Castle", location: "NHẬT BẢN", image: "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=100&h=100&fit=crop" }, { id: "13", name: "Seoul Sky", location: "HÀN QUỐC", image: "https://images.unsplash.com/photo-1517154421773-0529f29ea451?w=100&h=100&fit=crop" }, { id: "14", name: "Dhow Cruise Dubai", location: "CÁC TIỂU VƯƠNG QUỐC Ả RẬP THỐNG NHẤT", image: "https://images.unsplash.com/photo-1512632578888-169bbbc64f33?w=100&h=100&fit=crop" }, { id: "15", name: "Bánh xe Ferris Miramar", location: "ĐÀI LOAN", image: "https://images.unsplash.com/photo-1526481280693-3bfa7568e0f3?w=100&h=100&fit=crop" }, { id: "16", name: "Yas Island", location: "CÁC TIỂU VƯƠNG QUỐC Ả RẬP THỐNG NHẤT", image: "https://images.unsplash.com/photo-1518684079-3c830dcef090?w=100&h=100&fit=crop" } ];
+  const exploreCategories = [ { id: "1", icon: "🎯", title: "Các hoạt động nền trải nghiệm", items: ["Tour & Trải nghiệm", "Tour trong ngày", "Massage & Spa", "Hoạt động ngoài trời", "Trải nghiệm văn hóa", "Thể thao dưới nước", "Du thuyền", "Vé tham quan"] }, { id: "3", icon: "🚌", title: "Các lựa chọn di chuyển", items: ["Xe sân bay", "Thuê xe tự lái", "Vé tàu châu Âu", "Vé tàu cao tốc Trung Quốc", "Vé tàu Nhật Bản", "Vé tàu Shinkansen", "Xe buýt Hàn Quốc"] }, ];
 
   return (
     <>
       <header className="bg-white border-b sticky top-0 z-40">
         <div className="container mx-auto px-4">
-          {/* Main header */}
           <div className="flex items-center justify-between h-16">
-            {/* Logo */}
             <div className="flex items-center">
-              <a href="/" className="text-2xl font-bold">
+              <Link to="/" className="text-2xl font-bold">
                 <span className="text-primary">VietTravel</span>
-              </a>
+              </Link>
             </div>
-            
-            {/* Search Bar */}
+
             <div className="flex-1 max-w-md mx-8">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -182,7 +180,7 @@ const TravelHeader = () => {
                   onChange={(event) => setSearchValue(event.target.value)}
                   onFocus={() => setIsSearchFocused(true)}
                   onBlur={() => {
-                    window.setTimeout(() => setIsSearchFocused(false), 120);
+                    window.setTimeout(() => setIsSearchFocused(false), 150);
                   }}
                   onKeyDown={(event) => {
                     if (event.key === "Enter") {
@@ -194,15 +192,13 @@ const TravelHeader = () => {
                     }
                   }}
                 />
-
-                {showSuggestionDropdown ? (
+                {/* PHẦN GỢI Ý TÌM KIẾM ĐÃ ĐƯỢC KHÔI PHỤC */}
+                {showSuggestionDropdown && (
                   <div className="absolute left-0 right-0 top-full mt-2 rounded-xl border border-gray-200 bg-white shadow-lg z-50">
                     {suggestionsQuery.isFetching ? (
                       <div className="px-4 py-3 text-sm text-muted-foreground">Đang tìm kiếm...</div>
                     ) : suggestions.length === 0 ? (
-                      <div className="px-4 py-3 text-sm text-muted-foreground">
-                        Không tìm thấy kết quả phù hợp.
-                      </div>
+                      <div className="px-4 py-3 text-sm text-muted-foreground">Không tìm thấy kết quả phù hợp.</div>
                     ) : (
                       <ul className="max-h-72 overflow-y-auto py-2">
                         {suggestions.map((suggestion) => (
@@ -213,9 +209,7 @@ const TravelHeader = () => {
                               onClick={() => handleSuggestionSelect(suggestion)}
                               className="w-full text-left px-3 py-2 rounded-lg hover:bg-muted transition-colors"
                             >
-                              <p className="text-sm font-medium text-foreground">
-                                {suggestion.title ?? "Tour chưa đặt tên"}
-                              </p>
+                              <p className="text-sm font-medium text-foreground">{suggestion.title ?? "Tour chưa đặt tên"}</p>
                               {suggestion.destination ? (
                                 <p className="text-xs text-muted-foreground">{suggestion.destination}</p>
                               ) : null}
@@ -236,34 +230,53 @@ const TravelHeader = () => {
                       </Button>
                     </div>
                   </div>
-                ) : null}
+                )}
               </div>
             </div>
 
-            {/* Right side */}
             <div className="flex items-center space-x-2">
-             
+              <Button variant="ghost" size="sm" className="hidden md:flex text-gray-600 hover:text-gray-800 text-sm">Mở ứng dụng</Button>
+              <Button variant="ghost" size="sm" className="hidden md:flex text-gray-600 hover:text-gray-800 text-sm"><HelpCircle className="w-4 h-4 mr-1" />Trợ giúp</Button>
+              <Button variant="ghost" size="sm" className="hidden md:flex text-gray-600 hover:text-gray-800 text-sm"><Clock className="w-4 h-4 mr-1" />Xem gần đây</Button>
 
-              <Button variant="ghost" size="sm" className="hidden md:flex text-gray-600 hover:text-gray-800 text-sm">
-                Mở ứng dụng
-              </Button>
+              {/* GIỎ HÀNG CHO DESKTOP */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" size="sm" className="hidden items-center gap-2 text-gray-600 hover:text-gray-800 md:flex relative">
+                    <ShoppingBag className="h-4 w-4" />
+                    <span className="text-sm">Giỏ hàng</span>
+                    {totalItems > 0 && (
+                      <span className="absolute -right-3 -top-2 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1 text-xs font-semibold text-white">
+                        {totalItems}
+                      </span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-96 p-0" align="center">
+                  <CartPopoverContent />
+                </PopoverContent>
+              </Popover>
 
-              <Button variant="ghost" size="sm" className="hidden md:flex text-gray-600 hover:text-gray-800 text-sm">
-                <HelpCircle className="w-4 h-4 mr-1" />
-                Trợ giúp
-              </Button>
-
-              <Button variant="ghost" size="sm" className="hidden md:flex text-gray-600 hover:text-gray-800 text-sm">
-                <Clock className="w-4 h-4 mr-1" />
-                Xem gần đây
-              </Button>
+              {/* GIỎ HÀNG CHO MOBILE */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" size="icon" className="md:hidden text-gray-600 hover:text-gray-800 relative">
+                    <ShoppingBag className="h-5 w-5" />
+                    {totalItems > 0 && (
+                      <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-white">
+                        {totalItems}
+                      </span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-96 p-0" align="center">
+                  <CartPopoverContent />
+                </PopoverContent>
+              </Popover>
 
               {currentUser ? (
-              // Nếu đã đăng nhập
                 <div className="flex items-center gap-2">
                   <User className="w-5 h-5 text-gray-600" />
-
-                  {/* Dropdown menu */}
                   <div className="relative">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -279,36 +292,28 @@ const TravelHeader = () => {
                             Cài đặt
                           </Link>
                         </DropdownMenuItem>
-
-                        {/* LOGIC PHÂN QUYỀN BẮT ĐẦU */}
-                        {/* 1. ADMIN - Thấy mục Quản lý */}
                         {currentUser.role === 'admin' && (
-                            <DropdownMenuItem asChild>
-                                <Link to="/admin" className="flex items-center gap-2 cursor-pointer">
-                                    <Shield className="w-4 h-4" />
-                                    Quản lý
-                                </Link>
-                            </DropdownMenuItem>
+                          <DropdownMenuItem asChild>
+                            <Link to="/admin" className="flex items-center gap-2 cursor-pointer">
+                              <Shield className="w-4 h-4" />
+                              Quản lý
+                            </Link>
+                          </DropdownMenuItem>
                         )}
-                        
-                        {/* 2. PARTNER - Thấy mục Đối tác */}
                         {currentUser.role === 'partner' && (
-                            <DropdownMenuItem asChild>
-                                <Link to="/partner" className="flex items-center gap-2 cursor-pointer">
-                                    <Briefcase className="w-4 h-4" />
-                                    Đối tác
-                                </Link>
-                            </DropdownMenuItem>
+                          <DropdownMenuItem asChild>
+                            <Link to="/partner" className="flex items-center gap-2 cursor-pointer">
+                              <Briefcase className="w-4 h-4" />
+                              Đối tác
+                            </Link>
+                          </DropdownMenuItem>
                         )}
-                        {/* LOGIC PHÂN QUYỀN KẾT THÚC */}
-                        
                         <DropdownMenuItem
                           onClick={() => {
                             localStorage.removeItem("token");
                             localStorage.removeItem("user");
-                            
                             setCurrentUser(null);
-                            setTimeout(() => {window.location.href = "/"}, 300);
+                            setTimeout(() => { window.location.href = "/" }, 300);
                           }}
                           className="cursor-pointer flex items-center gap-2 text-red-600"
                         >
@@ -320,7 +325,6 @@ const TravelHeader = () => {
                   </div>
                 </div>
               ) : (
-                // Nếu chưa đăng nhập
                 <>
                   <Button
                     variant="ghost"
@@ -333,7 +337,6 @@ const TravelHeader = () => {
                   >
                     Đăng ký
                   </Button>
-
                   <Button
                     onClick={() => {
                       setAuthMode("login");
@@ -345,17 +348,12 @@ const TravelHeader = () => {
                   </Button>
                 </>
               )}
-
-              <Button variant="ghost" size="sm" className="md:hidden">
-                <Menu className="w-4 h-4" />
-              </Button>
+              <Button variant="ghost" size="sm" className="md:hidden"><Menu className="w-4 h-4" /></Button>
             </div>
           </div>
 
-          
-          {/* Secondary navigation */}
           <div className="border-t py-3">
-            <NavigationMenu>
+             <NavigationMenu>
               <NavigationMenuList className="flex items-center space-x-8">
                 <NavigationMenuItem>
                   <NavigationMenuTrigger className="text-sm text-gray-700 hover:text-primary bg-transparent hover:bg-transparent data-[state=open]:bg-transparent">
@@ -377,7 +375,6 @@ const TravelHeader = () => {
                     </div>
                   </NavigationMenuContent>
                 </NavigationMenuItem>
-
                 <NavigationMenuItem>
                   <NavigationMenuTrigger className="text-sm text-gray-700 hover:text-primary bg-transparent hover:bg-transparent data-[state=open]:bg-transparent">
                     Điểm đến phổ biến
@@ -398,7 +395,6 @@ const TravelHeader = () => {
                     </div>
                   </NavigationMenuContent>
                 </NavigationMenuItem>
-
                 <NavigationMenuItem>
                   <NavigationMenuTrigger className="text-sm text-gray-700 hover:text-primary bg-transparent hover:bg-transparent data-[state=open]:bg-transparent">
                     Địa danh phổ biến
@@ -419,7 +415,6 @@ const TravelHeader = () => {
                     </div>
                   </NavigationMenuContent>
                 </NavigationMenuItem>
-
                 <NavigationMenuItem>
                   <NavigationMenuTrigger className="text-sm text-gray-700 hover:text-primary bg-transparent hover:bg-transparent data-[state=open]:bg-transparent">
                     Khám phá VietTravel
@@ -436,9 +431,7 @@ const TravelHeader = () => {
                             <ul className="space-y-2">
                               {category.items.map((item, index) => (
                                 <li key={index}>
-                                  <a href="#" className="text-sm text-gray-600 hover:text-primary transition-colors">
-                                    {item}
-                                  </a>
+                                  <a href="#" className="text-sm text-gray-600 hover:text-primary transition-colors">{item}</a>
                                 </li>
                               ))}
                             </ul>
@@ -448,7 +441,6 @@ const TravelHeader = () => {
                     </div>
                   </NavigationMenuContent>
                 </NavigationMenuItem>
-
                 <NavigationMenuItem>
                   <a href="#" className="flex items-center text-sm text-primary font-medium hover:text-primary/80 transition-colors">
                     <Gift className="w-4 h-4 mr-1" />
@@ -460,13 +452,11 @@ const TravelHeader = () => {
           </div>
         </div>
       </header>
-
-      <AuthModal 
-        isOpen={showAuthModal} 
-        onClose={() => setShowAuthModal(false)} 
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
         defaultMode={authMode}
       />
-
     </>
   );
 };

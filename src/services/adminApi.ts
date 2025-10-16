@@ -433,6 +433,8 @@ export async function updateAdminTourStatus(id: string, status: AdminTourStatus)
   return extractData(res);
 }
 
+
+
 export async function fetchAdminCategories(params?: { page?: number; per_page?: number }): Promise<PaginatedResponse<AdminCategory>> {
   const res = await apiClient.get("/admin/categories", { params });
   return extractPaginated<AdminCategory>(res);

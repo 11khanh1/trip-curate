@@ -18,11 +18,12 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Edit, Trash2, MapPin, List, Image, Calendar, Loader2, Eye, Send, ChevronLeft, ChevronRight } from "lucide-react";
 import axios from "axios";
+
+const PARTNER_TOUR_ENDPOINT = "/api/partner/tours";
 
 // ---------------------------- INTERFACES ----------------------------
 interface ItineraryItem {
@@ -74,7 +75,6 @@ type FormData = {
 export default function PartnerActivities() {
   const [tours, setTours] = useState<Tour[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [editingTour, setEditingTour] = useState<Tour | null>(null);
   const [selectedTour, setSelectedTour] = useState<Tour | null>(null);
@@ -211,14 +211,23 @@ export default function PartnerActivities() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
+const extractToursFromResponse = (payload: any): any[] => {
+  if (!payload) return [];
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload.data)) return payload.data;
+  if (Array.isArray(payload.tours)) return payload.tours;
+  if (Array.isArray(payload?.data?.data)) return payload.data.data;
+  if (Array.isArray(payload?.data?.tours)) return payload.data.tours;
+  return [];
+};
+
 const fetchTours = async () => {
   setIsLoading(true);
   try {
-    const res = await axios.get("/partner/tours", { headers: getTokenHeader() });
-    // Nếu backend trả về mảng thuần:
-    const raw = Array.isArray(res.data) ? res.data : (res.data.tours || []);
-    const data: Tour[] = raw.map(normalizeTourFromAPI);
-    setTours(data);
+    const res = await axios.get(PARTNER_TOUR_ENDPOINT, { headers: getTokenHeader() });
+    const raw = extractToursFromResponse(res.data);
+    const normalized: Tour[] = raw.map(normalizeTourFromAPI);
+    setTours(normalized);
   } catch (err: any) {
     console.error("Error fetching tours:", err);
     toast({
@@ -257,8 +266,8 @@ useEffect(() => { fetchTours(); }, []);
   const postTour = async (payload: any, isEdit = false, id?: string) => {
     setIsSubmitting(true);
     try {
-      const url = isEdit ? "/partner/tours/${id}" : "/partner/tours";
-      const method = isEdit ? 'put' : 'post';
+      const url = isEdit && id ? `${PARTNER_TOUR_ENDPOINT}/${id}` : PARTNER_TOUR_ENDPOINT;
+      const method = isEdit ? "put" : "post";
 
       const res = await axios({
         method: method,
@@ -275,8 +284,9 @@ useEffect(() => { fetchTours(); }, []);
         description: res.data.message || (isEdit ? "Tour đã được cập nhật." : "Tour đã được tạo."),
       });
 
-      await fetchTours(); 
-      setIsDialogOpen(false);
+      await fetchTours();
+      setEditingTour(null);
+      setFormData(initialFormData);
     } catch (err: any) {
       console.error(err);
       toast({
@@ -293,7 +303,7 @@ useEffect(() => { fetchTours(); }, []);
     if (!window.confirm("Bạn có chắc chắn muốn gửi yêu cầu duyệt tour này không?")) return;
     try {
       await axios.put(
-        "/partner/tours/${id}",
+        `${PARTNER_TOUR_ENDPOINT}/${id}`,
         { status: 'pending' },
         { headers: { 'Content-Type': 'application/json', ...getTokenHeader() } }
       );
@@ -318,7 +328,7 @@ useEffect(() => { fetchTours(); }, []);
   const handleDeleteTour = async (id: string) => {
     if (window.confirm("Bạn có chắc chắn muốn xóa tour này không?")) {
         try {
-            await axios.delete("/partner/tours/${id}", {
+            await axios.delete(`${PARTNER_TOUR_ENDPOINT}/${id}`, {
                 headers: getTokenHeader(),
             });
             toast({ title: "Xóa thành công", description: "Tour đã bị xóa." });
@@ -352,23 +362,17 @@ useEffect(() => { fetchTours(); }, []);
         tagsString: Array.isArray(editingTour.tags) ? editingTour.tags.join(", ") : "",
         imageUrlsString: Array.isArray(editingTour.media) ? editingTour.media.join("\n") : "",
         itineraryItems: parsedItinerary.length > 0 ? parsedItinerary : initialFormData.itineraryItems,
-        start_date: editingTour.schedule?.start_date?.split('T')[0] || initialFormData.start_date,
-        end_date: editingTour.schedule?.end_date?.split('T')[0] || initialFormData.end_date,
+        start_date: editingTour.schedule?.start_date?.split("T")[0] || initialFormData.start_date,
+        end_date: editingTour.schedule?.end_date?.split("T")[0] || initialFormData.end_date,
         seats_total: editingTour.schedule?.seats_total ?? initialFormData.seats_total,
         seats_available: editingTour.schedule?.seats_available ?? initialFormData.seats_available,
         season_price: editingTour.schedule?.season_price ?? initialFormData.season_price,
       });
-      setIsDialogOpen(true);
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } else {
-        setFormData(initialFormData);
+      setFormData(initialFormData);
     }
   }, [editingTour]);
-
-  useEffect(() => {
-    if (!isDialogOpen) {
-        setEditingTour(null);
-    }
-  }, [isDialogOpen])
 
   // ---------------------------- HANDLERS ----------------------------
 
@@ -377,7 +381,7 @@ useEffect(() => { fetchTours(); }, []);
       setIsDetailOpen(true);
       setIsDetailLoading(true);
       try {
-          const res = await axios.get("/partner/tours/${id}", {
+          const res = await axios.get(`${PARTNER_TOUR_ENDPOINT}/${id}`, {
               headers: getTokenHeader(),
           });
           
@@ -408,9 +412,9 @@ useEffect(() => { fetchTours(); }, []);
   };
 
   const handleAddTour = () => {
-    setEditingTour(null); 
-    setFormData(initialFormData); 
-    setIsDialogOpen(true);
+    setEditingTour(null);
+    setFormData(initialFormData);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleItineraryChange = (
@@ -423,15 +427,28 @@ useEffect(() => { fetchTours(); }, []);
     setFormData({ ...formData, itineraryItems: newItems });
   };
 
-  const addItineraryItem = () => {
-    setFormData({
-      ...formData,
-      itineraryItems: [
-        ...formData.itineraryItems,
-        { day: formData.itineraryItems.length + 1, title: "", detail: "" },
-      ],
-    });
-  };
+const addItineraryItem = () => {
+  setFormData({
+    ...formData,
+    itineraryItems: [
+      ...formData.itineraryItems,
+      { day: formData.itineraryItems.length + 1, title: "", detail: "" },
+    ],
+  });
+};
+
+const handleMoveItinerary = (index: number, delta: number) => {
+  setFormData((prev) => {
+    const items = [...prev.itineraryItems];
+    const targetIndex = index + delta;
+    if (targetIndex < 0 || targetIndex >= items.length) return prev;
+    [items[index], items[targetIndex]] = [items[targetIndex], items[index]];
+    return {
+      ...prev,
+      itineraryItems: items.map((item, idx) => ({ ...item, day: idx + 1 })),
+    };
+  });
+};
 
   const removeItineraryItem = (index: number) => {
     if (formData.itineraryItems.length > 1) {
@@ -519,134 +536,274 @@ useEffect(() => { fetchTours(); }, []);
   // ---------------------------- RENDER ----------------------------
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Quản lý Tour</h1>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button
-              onClick={handleAddTour}
-              className="bg-gradient-to-r from-orange-500 to-orange-400 hover:from-orange-600 hover:to-orange-500 text-white"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Thêm Tour mới
-            </Button>
-          </DialogTrigger>
+      <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between md:gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">Quản lý Tour</h1>
+          <p className="text-sm text-muted-foreground">
+            Tạo mới hoặc chỉnh sửa tour trước khi gửi duyệt.
+          </p>
+        </div>
+        <Button variant="outline" onClick={handleAddTour} className="w-full gap-2 md:w-auto">
+          <Plus className="h-4 w-4" />
+          Thêm tour mới
+        </Button>
+      </div>
 
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto scrollbar-hide">
-            <DialogHeader>
-              <DialogTitle>{editingTour ? "Chỉnh sửa Tour" : "Thêm Tour mới"}</DialogTitle>
-              <DialogDescription>
-                {editingTour
-                  ? "Cập nhật thông tin tour. Tour sẽ chuyển sang 'Chờ duyệt' sau khi cập nhật."
-                  : "Điền thông tin chi tiết tour."}
-              </DialogDescription>
-            </DialogHeader>
+      <Card>
+        <CardHeader className="space-y-1">
+          <CardTitle>{editingTour ? "Cập nhật tour" : "Thêm tour mới"}</CardTitle>
+          <CardDescription>
+            {editingTour
+              ? "Điều chỉnh thông tin tour. Sau khi lưu, tour sẽ quay về trạng thái chờ duyệt."
+              : "Nhập thông tin chi tiết để tạo tour mới trên hệ thống."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="title">Tên tour *</Label>
+                <Input
+                  id="title"
+                  value={formData.title}
+                  onChange={handleInputChange}
+                  placeholder="Ví dụ: Du thuyền Vịnh Hạ Long 3N2Đ"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="destination">Địa điểm *</Label>
+                <Input
+                  id="destination"
+                  value={formData.destination}
+                  onChange={handleInputChange}
+                  placeholder="Hạ Long, Quảng Ninh"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="tagsString">Thẻ nổi bật</Label>
+                <Input
+                  id="tagsString"
+                  value={formData.tagsString}
+                  onChange={handleInputChange}
+                  placeholder="biển, resort, 3n2d"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="base_price">Giá cơ bản</Label>
+                <Input
+                  id="base_price"
+                  type="number"
+                  min="0"
+                  value={formData.base_price}
+                  onChange={handleInputChange}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="season_price">Giá mùa cao điểm</Label>
+                <Input
+                  id="season_price"
+                  type="number"
+                  min="0"
+                  value={formData.season_price}
+                  onChange={handleInputChange}
+                  required
+                />
+              </div>
+              <div className="space-y-2 xl:col-span-3">
+                <Label htmlFor="imageUrlsString">Danh sách ảnh</Label>
+                <Textarea
+                  id="imageUrlsString"
+                  value={formData.imageUrlsString}
+                  onChange={handleInputChange}
+                  rows={editingTour ? 3 : 4}
+                  placeholder={"https://example.com/img1.jpg\nhttps://example.com/img2.jpg"}
+                />
+              </div>
+            </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="space-y-4 border p-4 rounded-lg">
-                    <Label htmlFor="title">Tên Tour *</Label>
-                    <Input id="title" value={formData.title} onChange={handleInputChange} required />
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="description">Mô tả tổng quan *</Label>
+                <Textarea
+                  id="description"
+                  value={formData.description}
+                  onChange={handleInputChange}
+                  rows={4}
+                  placeholder="Giới thiệu điểm đến, trải nghiệm chính, dịch vụ bao gồm..."
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="policy">Chính sách *</Label>
+                <Textarea
+                  id="policy"
+                  value={formData.policy}
+                  onChange={handleInputChange}
+                  rows={4}
+                  placeholder="Chính sách hoàn/huỷ, điều kiện đặt tour..."
+                  required
+                />
+              </div>
+            </div>
 
-                    <Label htmlFor="description">Mô tả *</Label>
-                    <Textarea id="description" value={formData.description} onChange={handleInputChange} required rows={3} />
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <div className="space-y-2">
+                <Label htmlFor="start_date">Ngày bắt đầu *</Label>
+                <Input
+                  id="start_date"
+                  type="date"
+                  value={formData.start_date}
+                  onChange={handleInputChange}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="end_date">Ngày kết thúc *</Label>
+                <Input
+                  id="end_date"
+                  type="date"
+                  value={formData.end_date}
+                  onChange={handleInputChange}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="seats_total">Tổng số chỗ *</Label>
+                <Input
+                  id="seats_total"
+                  type="number"
+                  min="1"
+                  value={formData.seats_total}
+                  onChange={handleInputChange}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="seats_available">Số chỗ còn trống *</Label>
+                <Input
+                  id="seats_available"
+                  type="number"
+                  min="0"
+                  max={formData.seats_total}
+                  value={formData.seats_available}
+                  onChange={handleInputChange}
+                  required
+                />
+              </div>
+            </div>
 
-                    <Label htmlFor="destination">Địa điểm *</Label>
-                    <Input id="destination" value={formData.destination} onChange={handleInputChange} required />
+            <div className="space-y-4 rounded-lg border p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h3 className="flex items-center gap-2 text-lg font-semibold text-primary">
+                  <MapPin className="h-5 w-5" /> Hành trình & gói dịch vụ
+                </h3>
+                <Button type="button" size="sm" onClick={addItineraryItem}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Thêm dòng lịch trình
+                </Button>
+              </div>
 
-                    <Label htmlFor="policy">Chính sách *</Label>
-                    <Textarea id="policy" value={formData.policy} onChange={handleInputChange} rows={3} required />
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                            <Label htmlFor="base_price">Giá cơ bản</Label>
-                            <Input id="base_price" type="number" value={formData.base_price} onChange={handleInputChange} required min="0" />
-                        </div>
-                        <div>
-                            <Label htmlFor="season_price">Giá mùa cao điểm</Label>
-                            <Input id="season_price" type="number" value={formData.season_price} onChange={handleInputChange} required min="0" />
-                        </div>
-                        <div>
-                            <Label htmlFor="tagsString">Tags (cách nhau dấu phẩy)</Label>
-                            <Input id="tagsString" value={formData.tagsString} onChange={handleInputChange} placeholder="biển, resort, 3n2d" />
-                        </div>
-                    </div>
-
-                    <Label htmlFor="imageUrlsString">Ảnh (mỗi dòng một URL)</Label>
-                    <Textarea
-                      id="imageUrlsString"
-                      value={formData.imageUrlsString}
-                      onChange={handleInputChange}
-                      rows={4}
-                      placeholder={"https://example.com/img1.jpg\nhttps://example.com/img2.jpg"}
-                    />
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <Label htmlFor="start_date">Ngày bắt đầu</Label>
-                            <Input id="start_date" type="date" value={formData.start_date} onChange={handleInputChange} required />
-                        </div>
-                        <div>
-                            <Label htmlFor="end_date">Ngày kết thúc</Label>
-                            <Input id="end_date" type="date" value={formData.end_date} onChange={handleInputChange} required />
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <Label htmlFor="seats_total">Tổng chỗ</Label>
-                            <Input id="seats_total" type="number" value={formData.seats_total} onChange={handleInputChange} required min="1" />
-                        </div>
-                        <div>
-                            <Label htmlFor="seats_available">Còn trống</Label>
-                            <Input id="seats_available" type="number" value={formData.seats_available} onChange={handleInputChange} required min="0" max={formData.seats_total} />
-                        </div>
-                    </div>
-                </div>
-
-              {/* Hành trình */}
-              <div className="space-y-4 border p-4 rounded-lg">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-semibold flex items-center gap-2 text-primary">
-                    <MapPin className="h-5 w-5" /> Hành trình
-                  </h3>
-                  <Button type="button" size="sm" onClick={addItineraryItem}>
-                    <Plus className="h-4 w-4 mr-2" /> Thêm Ngày
-                  </Button>
-                </div>
-
+              <div className="space-y-3">
                 {formData.itineraryItems.map((item, i) => (
-                  <Card key={i} className="p-3 border-l-4 border-primary/50">
-                    <CardHeader className="p-0 pb-2 flex-row justify-between items-center">
-                      <CardTitle className="text-base font-bold text-gray-800">Ngày {item.day}</CardTitle>
-                      {formData.itineraryItems.length > 1 && (
-                        <Button type="button" variant="destructive" size="icon" className="h-7 w-7" onClick={() => removeItineraryItem(i)}>
-                          <Trash2 className="h-3 w-3" />
+                  <Card key={i} className="border border-dashed border-primary/40">
+                    <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 p-4">
+                      <CardTitle className="text-base font-semibold">Ngày {item.day}</CardTitle>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => handleMoveItinerary(i, -1)}
+                          disabled={i === 0}
+                        >
+                          <ChevronLeft className="h-4 w-4" />
                         </Button>
-                      )}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => handleMoveItinerary(i, 1)}
+                          disabled={i === formData.itineraryItems.length - 1}
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </CardHeader>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <Input value={item.title} onChange={(e) => handleItineraryChange(i, "title", e.target.value)} placeholder="Tiêu đề ngày" required />
-                      <Input value={item.detail} onChange={(e) => handleItineraryChange(i, "detail", e.target.value)} placeholder="Chi tiết hoạt động" required />
-                    </div>
+                    <CardContent className="space-y-3 p-4 pt-0">
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label>Tiêu đề</Label>
+                          <Input
+                            value={item.title}
+                            onChange={(e) => handleItineraryChange(i, "title", e.target.value)}
+                            placeholder="Tham quan vịnh Hạ Long"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Chi tiết</Label>
+                          <Textarea
+                            value={item.detail}
+                            onChange={(e) => handleItineraryChange(i, "detail", e.target.value)}
+                            rows={3}
+                            placeholder="Hoạt động chính, dịch vụ đi kèm..."
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-end">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-red-600"
+                          onClick={() => removeItineraryItem(i)}
+                          disabled={formData.itineraryItems.length === 1}
+                        >
+                          <Trash2 className="mr-1 h-4 w-4" />
+                          Xóa dòng
+                        </Button>
+                      </div>
+                    </CardContent>
                   </Card>
                 ))}
               </div>
+            </div>
 
-              <div className="flex justify-end gap-2 pt-4">
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Hủy</Button>
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? (
-                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Đang lưu...</>
-                  ) : (
-                    editingTour ? "Cập nhật" : "Thêm Tour"
-                  )}
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              {editingTour ? (
+                <Button type="button" variant="outline" onClick={handleAddTour} disabled={isSubmitting}>
+                  Hủy chỉnh sửa
                 </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
-
-      </div>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setFormData(initialFormData)}
+                  disabled={isSubmitting}
+                >
+                  Làm mới
+                </Button>
+              )}
+              <Button
+                type="submit"
+                className="bg-gradient-to-r from-orange-500 to-orange-400 hover:from-orange-600 hover:to-orange-500 text-white"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Đang lưu...
+                  </>
+                ) : (
+                  editingTour ? "Cập nhật tour" : "Tạo tour"
+                )}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
 
         <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
             <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto scrollbar-hide">

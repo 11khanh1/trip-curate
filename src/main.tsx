@@ -5,6 +5,7 @@ import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persist
 import { UserProvider } from "./context/UserContext";
 import App from "./App.tsx";
 import "./index.css";
+import { CartProvider } from "./context/CartContext";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -47,13 +48,17 @@ const Root = persister ? (
     }}
   >
     <UserProvider>
-      <App />
+      <CartProvider>
+        <App />
+      </CartProvider>
     </UserProvider>
   </PersistQueryClientProvider>
 ) : (
   <QueryClientProvider client={queryClient}>
     <UserProvider>
-      <App />
+      <CartProvider>
+        <App />
+      </CartProvider>
     </UserProvider>
   </QueryClientProvider>
 );
