@@ -148,24 +148,13 @@ const TravelHeader = () => {
       title: "Các hoạt động nền trải nghiệm",
       items: ["Tour & Trải nghiệm", "Tour trong ngày", "Massage & Spa", "Hoạt động ngoài trời", "Trải nghiệm văn hóa", "Thể thao dưới nước", "Du thuyền", "Vé tham quan"]
     },
-    {
-      id: "2",
-      icon: "🏨",
-      title: "Chỗ ở",
-      items: ["Khách sạn"]
-    },
+
     {
       id: "3",
       icon: "🚌",
       title: "Các lựa chọn di chuyển",
       items: ["Xe sân bay", "Thuê xe tự lái", "Vé tàu châu Âu", "Vé tàu cao tốc Trung Quốc", "Vé tàu Nhật Bản", "Vé tàu Shinkansen", "Xe buýt Hàn Quốc"]
     },
-    {
-      id: "4",
-      icon: "📱",
-      title: "Sản phẩm du lịch thiết yếu",
-      items: ["WiFi và SIM"]
-    }
   ];
 
   return (
