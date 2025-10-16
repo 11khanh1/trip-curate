@@ -23,7 +23,7 @@ import {
 } from "@/services/publicApi";
 import { apiClient } from "@/lib/api-client";
 
-const PER_PAGE = 12;
+const PER_PAGE = 50;
 
 const fallbackTours = [
   {

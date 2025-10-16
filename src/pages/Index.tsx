@@ -11,7 +11,7 @@ import { fetchHome } from "@/services/publicApi";
 
 const Index = () => {
   const homeQuery = useQuery({
-    queryKey: ["public-home", { categories_limit: 6, promotions_limit: 3, trending_limit: 8 }],
+    queryKey: ["public-home", { categories_limit: 6, promotions_limit: 3, trending_limit: 12 }],
     queryFn: () =>
       fetchHome({
         categories_limit: 6,

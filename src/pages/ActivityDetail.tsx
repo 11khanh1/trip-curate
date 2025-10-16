@@ -16,6 +16,8 @@ import {
   Shield,
   Phone,
   Mail,
+  ChevronLeft,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -33,6 +35,7 @@ import { Separator } from "@/components/ui/separator";
 import TourCard from "@/components/TourCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { fetchTourDetail, fetchTrendingTours, type PublicTour } from "@/services/publicApi";
 
 type ActivityPackage = {
@@ -333,6 +336,7 @@ const ActivityDetailSkeleton = () => (
 const ActivityDetail = () => {
   const { id } = useParams();
   const [selectedImage, setSelectedImage] = useState(0);
+  const [isGalleryOpen, setIsGalleryOpen] = useState(false);
 
   const {
     data: tourDetail,
@@ -369,6 +373,31 @@ const ActivityDetail = () => {
     }
     return typeof activity.price === "number" ? activity.price : null;
   }, [activity]);
+
+  const images = activity?.images ?? [];
+  const totalImages = images.length;
+  const previewLimit = 5;
+  const safeSelectedIndex =
+    totalImages > 0 ? Math.min(selectedImage, Math.max(0, totalImages - 1)) : 0;
+  const mainImage = images[safeSelectedIndex] ?? images[0] ?? FALLBACK_IMAGE;
+  const previewItems = useMemo(() => {
+    if (images.length === 0) return [];
+    if (images.length <= previewLimit) {
+      return images.map((image, index) => ({ image, index }));
+    }
+    const mapped = images.map((image, index) => ({ image, index }));
+    const items = mapped.slice(0, previewLimit);
+    if (safeSelectedIndex >= previewLimit && mapped[safeSelectedIndex]) {
+      items[previewLimit - 1] = mapped[safeSelectedIndex];
+    }
+    const seen = new Set<number>();
+    return items.filter((item) => {
+      if (seen.has(item.index)) return false;
+      seen.add(item.index);
+      return true;
+    });
+  }, [images, safeSelectedIndex]);
+  const hasMoreImages = totalImages > previewLimit;
 
   if (!id) {
     return (
@@ -438,8 +467,6 @@ const ActivityDetail = () => {
   const reviewCount = typeof activity.reviewCount === "number" ? activity.reviewCount : null;
   const bookedCount = typeof activity.bookedCount === "number" ? activity.bookedCount : null;
   const durationLabel = activity.duration ? String(activity.duration) : null;
-  const safeSelectedIndex = Math.min(selectedImage, activity.images.length - 1);
-  const mainImage = activity.images[safeSelectedIndex] ?? activity.images[0];
   const breadcrumbLocation = activity.locationName ?? "Chi tiết tour";
   const itineraryItems = activity.itinerary ?? [];
   const policySummary = activity.policySummary;
@@ -460,6 +487,19 @@ const ActivityDetail = () => {
     (item): item is { icon: typeof MapPin; label: string; value: string } => Boolean(item),
   );
   const hasQuickInfo = quickInfoItems.length > 0;
+  const openGallery = (index: number) => {
+    setSelectedImage(index);
+    setIsGalleryOpen(true);
+  };
+  const closeGallery = () => setIsGalleryOpen(false);
+  const goPrevImage = () => {
+    if (totalImages <= 1) return;
+    setSelectedImage((prev) => (prev - 1 + totalImages) % totalImages);
+  };
+  const goNextImage = () => {
+    if (totalImages <= 1) return;
+    setSelectedImage((prev) => (prev + 1) % totalImages);
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -539,11 +579,12 @@ const ActivityDetail = () => {
               </div>
 
               <div className="space-y-4">
-                <div className="relative rounded-lg overflow-hidden">
+                <div className="relative rounded-lg overflow-hidden group">
                   <img
                     src={mainImage}
                     alt={activity.title}
-                    className="w-full h-[400px] object-cover"
+                    onClick={() => openGallery(safeSelectedIndex)}
+                    className="w-full h-[400px] object-cover cursor-zoom-in transition-transform group-hover:scale-[1.01]"
                   />
                   <Button
                     variant="ghost"
@@ -554,10 +595,10 @@ const ActivityDetail = () => {
                   </Button>
                 </div>
 
-                <div className="grid grid-cols-4 gap-2">
-                  {activity.images.map((image, index) => (
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
+                  {previewItems.map(({ image, index }) => (
                     <button
-                      key={image}
+                      key={`${index}-${image}`}
                       onClick={() => setSelectedImage(index)}
                       className={`rounded-lg overflow-hidden border-2 transition-colors ${
                         safeSelectedIndex === index ? "border-primary" : "border-transparent"
@@ -571,6 +612,13 @@ const ActivityDetail = () => {
                     </button>
                   ))}
                 </div>
+                {totalImages > 0 && (
+                  <div className="flex justify-end">
+                    <Button variant="outline" size="sm" onClick={() => openGallery(safeSelectedIndex)}>
+                      {hasMoreImages ? `Thư viện ảnh (${totalImages})` : "Thư viện ảnh"}
+                    </Button>
+                  </div>
+                )}
               </div>
 
               
@@ -1143,6 +1191,87 @@ const ActivityDetail = () => {
         )}
       </main>
 
+    <Dialog open={isGalleryOpen} onOpenChange={setIsGalleryOpen}>
+  <DialogContent className="max-w-7xl w-full p-0 border-none bg-transparent shadow-none">
+    {/* ADDED: Thêm lại background để giao diện đẹp hơn */}
+    <div className="flex h-[90vh] flex-col overflow-hidden rounded-lg  text-white ">
+      <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
+        <h3 className="font-semibold truncate pr-4">{activity.title}</h3>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="text-white hover:bg-white/10 flex-shrink-0"
+          onClick={closeGallery}
+        >
+          <X className="h-5 w-5" />
+        </Button>
+      </div>
+
+      {/* FIXED: Thêm class "min-h-0" vào đây để sửa lỗi co giãn */}
+      <div className="relative flex-1 px-16 py-4 min-h-0">
+        {totalImages > 1 && (
+          <button
+            type="button"
+            onClick={goPrevImage}
+            className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white transition hover:bg-black/60 z-10"
+            aria-label="Ảnh trước"
+          >
+            <ChevronLeft className="h-6 w-6" />
+          </button>
+        )}
+
+        <div className="relative flex h-full w-full items-center justify-center">
+          <img
+            src={activity.images[safeSelectedIndex] ?? mainImage}
+            alt={`${activity.title} ${safeSelectedIndex + 1}`}
+            className="max-h-full max-w-full rounded-lg object-contain"
+          />
+          <div className="absolute bottom-4 right-4 rounded-full bg-black/50 px-3 py-1 text-xs font-medium text-white/90">
+            {safeSelectedIndex + 1} / {totalImages}
+          </div>
+        </div>
+
+        {totalImages > 1 && (
+          <button
+            type="button"
+            onClick={goNextImage}
+            className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white transition hover:bg-black/60 z-10"
+            aria-label="Ảnh tiếp theo"
+          >
+            <ChevronRight className="h-6 w-6" />
+          </button>
+        )}
+      </div>
+
+      {activity.images.length > 0 && (
+        <div className="border-t border-white/10 px-5 py-4">
+          <div className="flex justify-center">
+            <div className="flex gap-3 overflow-x-auto pb-1">
+              {activity.images.map((image, index) => (
+                <button
+                  key={`${index}-${image}`}
+                  type="button"
+                  onClick={() => setSelectedImage(index)}
+                  className={`relative h-16 w-24 flex-shrink-0 overflow-hidden rounded-md transition focus:outline-none ${
+                    safeSelectedIndex === index
+                      ? "ring-2 ring-white shadow-lg"
+                      : "opacity-60 hover:opacity-100"
+                  }`}
+                >
+                  <img
+                    src={image}
+                    alt={`${activity.title} ${index + 1}`}
+                    className="h-full w-full object-cover"
+                  />
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  </DialogContent>
+</Dialog>
       <Footer />
     </div>
   );
