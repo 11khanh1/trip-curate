@@ -149,7 +149,7 @@ const Partner = () => {
   const postNewTour = async (tourData: TourAPI): Promise<Tour> => {
     setIsSubmitting(true);
     try {
-      const response = await axios.post("/api/partner/tours", tourData);
+      const response = await axios.post("/partner/tours", tourData);
       const newTourFromAPI: TourAPI & { id: string } = response.data;
 
       const newTourForState: Tour = {

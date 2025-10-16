@@ -215,7 +215,7 @@ export default function PartnerActivities() {
 const fetchTours = async () => {
   setIsLoading(true);
   try {
-    const res = await axios.get(`${API_BASE}/api/partner/tours`, { headers: getTokenHeader() });
+    const res = await axios.get(`${API_BASE}/partner/tours`, { headers: getTokenHeader() });
     // Nếu backend trả về mảng thuần:
     const raw = Array.isArray(res.data) ? res.data : (res.data.tours || []);
     const data: Tour[] = raw.map(normalizeTourFromAPI);
@@ -258,7 +258,7 @@ useEffect(() => { fetchTours(); }, []);
   const postTour = async (payload: any, isEdit = false, id?: string) => {
     setIsSubmitting(true);
     try {
-      const url = isEdit ? `${API_BASE}/api/partner/tours/${id}` : `${API_BASE}/api/partner/tours`;
+      const url = isEdit ? `${API_BASE}/partner/tours/${id}` : `${API_BASE}/partner/tours`;
       const method = isEdit ? 'put' : 'post';
 
       const res = await axios({
@@ -294,7 +294,7 @@ useEffect(() => { fetchTours(); }, []);
     if (!window.confirm("Bạn có chắc chắn muốn gửi yêu cầu duyệt tour này không?")) return;
     try {
       await axios.put(
-        `${API_BASE}/api/partner/tours/${id}`,
+        `${API_BASE}/partner/tours/${id}`,
         { status: 'pending' },
         { headers: { 'Content-Type': 'application/json', ...getTokenHeader() } }
       );
@@ -319,7 +319,7 @@ useEffect(() => { fetchTours(); }, []);
   const handleDeleteTour = async (id: string) => {
     if (window.confirm("Bạn có chắc chắn muốn xóa tour này không?")) {
         try {
-            await axios.delete(`${API_BASE}/api/partner/tours/${id}`, {
+            await axios.delete(`${API_BASE}/partner/tours/${id}`, {
                 headers: getTokenHeader(),
             });
             toast({ title: "Xóa thành công", description: "Tour đã bị xóa." });
@@ -378,7 +378,7 @@ useEffect(() => { fetchTours(); }, []);
       setIsDetailOpen(true);
       setIsDetailLoading(true);
       try {
-          const res = await axios.get(`${API_BASE}/api/partner/tours/${id}`, {
+          const res = await axios.get(`${API_BASE}/partner/tours/${id}`, {
               headers: getTokenHeader(),
           });
           
