@@ -5,12 +5,13 @@ import { Link } from "react-router-dom";
 import TourCard from "./TourCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchTrendingTours, type PublicTour } from "@/services/publicApi";
+import { apiClient } from "@/lib/api-client";
 
 interface PopularActivitiesProps {
   tours?: PublicTour[];
 }
 
-const FALLBACK_IMAGE =
+const DEFAULT_TOUR_IMAGE =
   "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&h=600&fit=crop";
 
 const fallbackActivities = [
@@ -18,7 +19,7 @@ const fallbackActivities = [
     id: "placeholder-1",
     title: "Khám phá Việt Nam",
     location: "Hà Nội",
-    image: FALLBACK_IMAGE,
+    image: DEFAULT_TOUR_IMAGE,
     rating: 4.8,
     reviewCount: 1240,
     price: 890000,
@@ -98,9 +99,23 @@ const featureFromSchedule = (tour: PublicTour) => {
 const mapTourToCard = (tour: PublicTour) => {
   const title = tour.title ?? tour.name ?? "Tour chưa đặt tên";
   const location = tour.destination ?? tour.partner?.company_name ?? "Việt Nam";
-  const image =
-    (tour.thumbnail_url && tour.thumbnail_url.length > 0 ? tour.thumbnail_url : undefined) ??
-    FALLBACK_IMAGE;
+  const resolveTourImage = () => {
+    const candidates: Array<string | null | undefined> = [
+      tour.thumbnail_url,
+      (tour as Record<string, unknown>)?.thumbnail as string | undefined,
+      Array.isArray(tour.media) ? tour.media[0] : undefined,
+      Array.isArray(tour.gallery) ? tour.gallery[0] : undefined,
+    ];
+    const raw = candidates.find((value) => typeof value === "string" && value.trim().length > 0);
+    if (!raw) return DEFAULT_TOUR_IMAGE;
+    const trimmed = raw.trim();
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+    const base = apiClient.defaults.baseURL ?? "";
+    if (!base) return trimmed;
+    const normalizedBase = base.replace(/\/api\/?$/, "/");
+    return `${normalizedBase}${trimmed.startsWith("/") ? trimmed.slice(1) : trimmed}`;
+  };
+  const image = resolveTourImage();
   const price = normalizePrice(tour);
   const category =
     tour.categories && tour.categories.length > 0

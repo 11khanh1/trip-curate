@@ -17,9 +17,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   fetchHighlightCategories,
   fetchTours,
+  fetchTrendingTours,
   type HomeCategory,
   type PublicTour,
 } from "@/services/publicApi";
+import { apiClient } from "@/lib/api-client";
 
 const PER_PAGE = 12;
 
@@ -75,6 +77,9 @@ const fallbackTours = [
     features: ["Cáp treo", "Show biểu diễn", "Ẩm thực"],
   },
 ];
+
+const DEFAULT_TOUR_IMAGE =
+  "https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?w=800&h=600&fit=crop";
 
 const regions = [
   { id: "1", name: "VIỆT NAM", subtitle: "Vui chơi & Trải nghiệm", image: "https://images.unsplash.com/photo-1583417319070-4a69db38a482?w=100&h=100&fit=crop", url: "/regions/vietnam" },
@@ -163,9 +168,23 @@ const normalizePrice = (tour: PublicTour) => {
 const mapTourToCard = (tour: PublicTour) => {
   const title = tour.title ?? tour.name ?? "Tour chưa đặt tên";
   const location = tour.destination ?? tour.partner?.company_name ?? "Việt Nam";
-  const image =
-    (tour.thumbnail_url && tour.thumbnail_url.length > 0 ? tour.thumbnail_url : undefined) ??
-    "https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?w=800&h=600&fit=crop";
+  const resolveTourImage = () => {
+    const candidates: Array<string | null | undefined> = [
+      tour.thumbnail_url,
+      (tour as Record<string, unknown>)?.thumbnail as string | undefined,
+      Array.isArray(tour.media) ? tour.media[0] : undefined,
+      Array.isArray(tour.gallery) ? tour.gallery[0] : undefined,
+    ];
+    const raw = candidates.find((value) => typeof value === "string" && value.trim().length > 0);
+    if (!raw) return DEFAULT_TOUR_IMAGE;
+    const trimmed = raw.trim();
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+    const base = apiClient.defaults.baseURL ?? "";
+    if (!base) return trimmed;
+    const normalizedBase = base.replace(/\/api\/?$/, "/");
+    return `${normalizedBase}${trimmed.startsWith("/") ? trimmed.slice(1) : trimmed}`;
+  };
+  const image = resolveTourImage();
   const price = normalizePrice(tour);
   const category =
     tour.categories && tour.categories.length > 0
@@ -235,6 +254,13 @@ const AllActivities = () => {
     setPage(1);
   }, [activeCategory]);
 
+  const trendingToursQuery = useQuery({
+    queryKey: ["public-tours-trending", { limit: PER_PAGE, days: 60 }],
+    queryFn: () => fetchTrendingTours({ limit: PER_PAGE, days: 60 }),
+    enabled: activeCategory === "all",
+    staleTime: 2 * 60 * 1000,
+  });
+
   const toursQuery = useQuery({
     queryKey: ["public-tours", activeCategory, page],
     queryFn: () =>
@@ -247,26 +273,55 @@ const AllActivities = () => {
       }),
     placeholderData: keepPreviousData,
     staleTime: 60 * 1000,
+    enabled: activeCategory !== "all",
   });
 
-  const toursData = toursQuery.data?.data ?? [];
-  const toursMeta = toursQuery.data?.meta ?? {};
+  const isLoading = activeCategory === "all" ? trendingToursQuery.isLoading : toursQuery.isLoading;
+  const toursData =
+    activeCategory === "all"
+      ? trendingToursQuery.data ?? []
+      : toursQuery.data?.data ?? [];
+  const toursMeta =
+    activeCategory === "all" ? undefined : toursQuery.data?.meta ?? {};
 
-  const mappedTours =
-    toursData.length > 0 ? toursData.map(mapTourToCard) : fallbackTours;
+  const mappedTours = toursData.length > 0 ? toursData.map(mapTourToCard) : fallbackTours;
 
-  const currentPage = Number(toursMeta.current_page ?? page) || 1;
+  const currentPage =
+    activeCategory === "all"
+      ? 1
+      : Number(((toursMeta?.current_page as number | undefined) ?? page)) || 1;
   const lastPage =
-    Number(toursMeta.last_page ?? (toursData.length === 0 ? 1 : Math.ceil((toursMeta.total as number | undefined ?? PER_PAGE) / PER_PAGE))) ||
-    1;
-  const totalResults = Number(toursMeta.total ?? toursData.length) || toursData.length;
+    activeCategory === "all"
+      ? 1
+      : Number(
+          (toursMeta?.last_page as number | undefined) ??
+            (toursData.length === 0
+              ? 1
+              : Math.ceil(
+                  ((toursMeta?.total as number | undefined) ?? PER_PAGE) / PER_PAGE,
+                )),
+        ) || 1;
+  const totalResults =
+    activeCategory === "all"
+      ? toursData.length
+      : Number((toursMeta?.total as number | undefined) ?? toursData.length) || toursData.length;
   const rangeStart =
-    Number(toursMeta.from ?? (totalResults === 0 ? 0 : (currentPage - 1) * PER_PAGE + 1)) || 0;
+    activeCategory === "all"
+      ? totalResults === 0 ? 0 : 1
+      : Number(
+          (toursMeta?.from as number | undefined) ??
+            (totalResults === 0 ? 0 : (currentPage - 1) * PER_PAGE + 1),
+        ) || 0;
   const rangeEnd =
-    Number(toursMeta.to ?? (totalResults === 0 ? 0 : Math.min(totalResults, currentPage * PER_PAGE))) ||
-    0;
+    activeCategory === "all"
+      ? totalResults
+      : Number(
+          (toursMeta?.to as number | undefined) ??
+            (totalResults === 0 ? 0 : Math.min(totalResults, currentPage * PER_PAGE)),
+        ) || 0;
   const isFirstPage = currentPage <= 1;
   const isLastPage = currentPage >= lastPage;
+  const shouldRenderPagination = activeCategory !== "all" && totalResults > 0;
 
   const paginationRange = useMemo<(number | "ellipsis")[]>(() => {
     const totalPages = Math.max(1, lastPage);
@@ -344,7 +399,7 @@ const AllActivities = () => {
               </TabsList>
             </Tabs>
 
-            {toursQuery.isLoading ? (
+            {isLoading ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
                 {Array.from({ length: 8 }).map((_, index) => (
                   <Skeleton key={index} className="h-[420px] rounded-xl" />
@@ -362,7 +417,7 @@ const AllActivities = () => {
                   ))}
                 </div>
 
-                {totalResults > 0 ? (
+                {shouldRenderPagination ? (
                   <div className="flex flex-col gap-4 px-2 pb-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
                     <span>
                       Hiển thị {rangeStart}-{rangeEnd} trên tổng {totalResults} tour

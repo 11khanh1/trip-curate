@@ -63,7 +63,7 @@ const STATUS_OPTIONS: { value: AdminTourStatus | "all"; label: string }[] = [
   { value: "rejected", label: STATUS_LABELS.rejected.label },
 ];
 
-const PER_PAGE_OPTIONS = [10, 20, 50] as const;
+const PER_PAGE_OPTIONS = [5, 10, 20] as const;
 
 const UPDATABLE_STATUSES: AdminTourStatus[] = ["pending", "approved", "rejected"];
 
