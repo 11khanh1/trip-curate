@@ -178,6 +178,7 @@ const LoginForm = ({ onSwitchToRegister, onForgotPassword, onSuccess }: LoginFor
                   onChange={(e) => handleChange("email", e.target.value)}
                   placeholder="email@example.com"
                   className="pl-10"
+                  autoComplete="email"
                   required
                 />
               </div>
@@ -193,6 +194,7 @@ const LoginForm = ({ onSwitchToRegister, onForgotPassword, onSuccess }: LoginFor
                   onChange={(e) => handleChange("password", e.target.value)}
                   placeholder="••••••••"
                   className="pl-10 pr-10"
+                  autoComplete="current-password"
                   required
                 />
                 <Button

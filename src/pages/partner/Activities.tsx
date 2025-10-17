@@ -497,6 +497,20 @@ const handleMoveItinerary = (index: number, delta: number) => {
       schedulePayload.id = editingTour.schedule.id;
     }
 
+    const baseAdultPrice = Number(formData.base_price) || 0;
+    const computedChildPrice =
+      baseAdultPrice > 0 ? Math.round(baseAdultPrice * 0.75) : 0;
+
+    const packagesPayload = [
+      {
+        name: formData.title || "Gói tiêu chuẩn",
+        description: formData.description || "",
+        adult_price: baseAdultPrice,
+        child_price: computedChildPrice,
+        is_active: true,
+      },
+    ];
+
     const payload = {
       title: formData.title,
       description: formData.description,
@@ -507,6 +521,7 @@ const handleMoveItinerary = (index: number, delta: number) => {
       media: mediaArray,
       itinerary: itineraryStrings,
       schedule: schedulePayload,
+      packages: packagesPayload,
     };
 
     await postTour(payload, !!editingTour, editingTour?.id);
