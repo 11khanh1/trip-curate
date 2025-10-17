@@ -368,6 +368,7 @@ const ActivityDetailSkeleton = () => (
 );
 
 const MAX_TRAVELLERS = 15;
+const CHILD_PRICE_RATIO = 0.75;
 const TAB_QUERY_KEY = "tab";
 const ACTIVITY_TAB_VALUES = ["overview", "packages", "details", "notes", "terms", "reviews"] as const;
 const VALID_TAB_SET = new Set<string>(ACTIVITY_TAB_VALUES);
@@ -458,9 +459,29 @@ const ActivityDetail = () => {
     [activity?.packages, selectedPackageId],
   );
 
+  const adultUnitPrice = useMemo(() => {
+    if (!selectedPackage) return 0;
+    const rawAdultPrice = selectedPackage.adultPrice ?? selectedPackage.price ?? null;
+    if (typeof rawAdultPrice === "number" && Number.isFinite(rawAdultPrice)) {
+      return Math.max(0, rawAdultPrice);
+    }
+    return 0;
+  }, [selectedPackage]);
+
+  const childUnitPrice = useMemo(() => {
+    if (adultUnitPrice <= 0) return 0;
+    const computed = Math.round(adultUnitPrice * CHILD_PRICE_RATIO);
+    return Math.max(0, computed);
+  }, [adultUnitPrice]);
+
+  const formatPriceLabel = (value: number) => {
+    if (value <= 0) return "Liên hệ";
+    return `₫ ${value.toLocaleString("vi-VN")}`;
+  };
+
   const displayPrice = useMemo(() => {
-    if (selectedPackage) {
-      return selectedPackage.adultPrice ?? selectedPackage.price ?? null;
+    if (adultUnitPrice > 0) {
+      return adultUnitPrice;
     }
     if (!activity) return null;
     const prices = activity.packages
@@ -470,7 +491,7 @@ const ActivityDetail = () => {
       return Math.min(...prices);
     }
     return typeof activity.price === "number" ? activity.price : null;
-  }, [activity, selectedPackage]);
+  }, [activity, adultUnitPrice]);
 
   const handleTabChange = (nextTab: string) => {
     setActiveTab(nextTab);
@@ -529,10 +550,8 @@ const ActivityDetail = () => {
 
   const totalPrice = useMemo(() => {
     if (!selectedPackage) return null;
-    const adultPrice = selectedPackage.adultPrice ?? selectedPackage.price ?? 0;
-    const childPrice = selectedPackage.childPrice ?? selectedPackage.adultPrice ?? selectedPackage.price ?? 0;
-    return safeAdultCount * adultPrice + safeChildCount * childPrice;
-  }, [selectedPackage, safeAdultCount, safeChildCount]);
+    return safeAdultCount * adultUnitPrice + safeChildCount * childUnitPrice;
+  }, [selectedPackage, safeAdultCount, safeChildCount, adultUnitPrice, childUnitPrice]);
 
 
   const incrementAdults = () => setAdultCount((prev) => Math.min(MAX_TRAVELLERS, prev + 1));
@@ -559,8 +578,6 @@ const ActivityDetail = () => {
       return;
     }
 
-    const adultPrice = selectedPackage.adultPrice ?? selectedPackage.price ?? 0;
-    const childPrice = selectedPackage.childPrice ?? selectedPackage.adultPrice ?? selectedPackage.price ?? 0;
     const scheduleTitle =
       selectedSchedule?.title ??
       (selectedSchedule?.start_date
@@ -577,8 +594,8 @@ const ActivityDetail = () => {
       thumbnail: activity.images[0] ?? null,
       adultCount: safeAdultCount,
       childCount: safeChildCount,
-      adultPrice,
-      childPrice,
+      adultPrice: adultUnitPrice,
+      childPrice: childUnitPrice,
     });
 
     toast({
@@ -1027,16 +1044,21 @@ const ActivityDetail = () => {
                                   <p className="font-medium text-foreground">Người lớn</p>
                                   <p className="text-xs text-muted-foreground">Từ 12 tuổi trở lên</p>
                                 </div>
-                                <div className="flex items-center gap-3">
-                                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={decrementAdults}>
-                                    -
-                                  </Button>
-                                  <span className="w-6 text-center text-base font-semibold text-foreground">
-                                    {safeAdultCount}
+                                <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center sm:gap-4">
+                                  <span className="min-w-[90px] text-right font-semibold text-foreground">
+                                    {formatPriceLabel(adultUnitPrice)}
                                   </span>
-                                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={incrementAdults}>
-                                    +
-                                  </Button>
+                                  <div className="flex items-center gap-3">
+                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={decrementAdults}>
+                                      -
+                                    </Button>
+                                    <span className="w-6 text-center text-base font-semibold text-foreground">
+                                      {safeAdultCount}
+                                    </span>
+                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={incrementAdults}>
+                                      +
+                                    </Button>
+                                  </div>
                                 </div>
                               </div>
                               <div className="flex items-center justify-between rounded-lg border px-3 py-2">
@@ -1044,16 +1066,21 @@ const ActivityDetail = () => {
                                   <p className="font-medium text-foreground">Trẻ em</p>
                                   <p className="text-xs text-muted-foreground">Từ 2 đến 11 tuổi</p>
                                 </div>
-                                <div className="flex items-center gap-3">
-                                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={decrementChildren}>
-                                    -
-                                  </Button>
-                                  <span className="w-6 text-center text-base font-semibold text-foreground">
-                                    {safeChildCount}
+                                <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center sm:gap-4">
+                                  <span className="min-w-[90px] text-right font-semibold text-foreground">
+                                    {formatPriceLabel(childUnitPrice)}
                                   </span>
-                                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={incrementChildren}>
-                                    +
-                                  </Button>
+                                  <div className="flex items-center gap-3">
+                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={decrementChildren}>
+                                      -
+                                    </Button>
+                                    <span className="w-6 text-center text-base font-semibold text-foreground">
+                                      {safeChildCount}
+                                    </span>
+                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={incrementChildren}>
+                                      +
+                                    </Button>
+                                  </div>
                                 </div>
                               </div>
                             </div>
