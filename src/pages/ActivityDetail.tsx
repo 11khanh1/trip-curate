@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import TravelHeader from "@/components/TravelHeader";
 import Footer from "@/components/Footer";
@@ -368,6 +368,9 @@ const ActivityDetailSkeleton = () => (
 );
 
 const MAX_TRAVELLERS = 15;
+const TAB_QUERY_KEY = "tab";
+const ACTIVITY_TAB_VALUES = ["overview", "packages", "details", "notes", "terms", "reviews"] as const;
+const VALID_TAB_SET = new Set<string>(ACTIVITY_TAB_VALUES);
 
 const ActivityDetail = () => {
   const { id } = useParams();
@@ -376,6 +379,8 @@ const ActivityDetail = () => {
   const [activeTab, setActiveTab] = useState("overview");
   const tabsRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabFromQuery = searchParams.get(TAB_QUERY_KEY);
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
   const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(null);
   const [adultCount, setAdultCount] = useState(1);
@@ -436,6 +441,18 @@ const ActivityDetail = () => {
     }
   }, [tourDetail?.schedules]);
 
+  useEffect(() => {
+    if (!tabFromQuery) return;
+    const normalizedTab = tabFromQuery.toLowerCase();
+    if (!VALID_TAB_SET.has(normalizedTab)) return;
+    if (normalizedTab !== activeTab) {
+      setActiveTab(normalizedTab);
+      if (normalizedTab === "packages") {
+        tabsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }
+  }, [tabFromQuery, activeTab]);
+
   const selectedPackage = useMemo(
     () => activity?.packages.find((pkg) => pkg.id === selectedPackageId) ?? activity?.packages[0],
     [activity?.packages, selectedPackageId],
@@ -455,8 +472,18 @@ const ActivityDetail = () => {
     return typeof activity.price === "number" ? activity.price : null;
   }, [activity, selectedPackage]);
 
+  const handleTabChange = (nextTab: string) => {
+    setActiveTab(nextTab);
+    if (searchParams.get(TAB_QUERY_KEY) === nextTab) {
+      return;
+    }
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set(TAB_QUERY_KEY, nextTab);
+    setSearchParams(nextParams, { replace: true });
+  };
+
   const handleSelectPackageClick = () => {
-    setActiveTab("packages");
+    handleTabChange("packages");
     tabsRef.current?.scrollIntoView({
       behavior: "smooth",
       block: "start",
@@ -850,7 +877,7 @@ const ActivityDetail = () => {
               </div>
             </div>
 
-            <Tabs value={activeTab} onValueChange={setActiveTab} ref={tabsRef} className="w-full">
+            <Tabs value={activeTab} onValueChange={handleTabChange} ref={tabsRef} className="w-full">
               <TabsList className="w-full justify-start border-b rounded-none h-auto p-0 bg-transparent">
                 <TabsTrigger
                   value="overview"
