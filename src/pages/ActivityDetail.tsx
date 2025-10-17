@@ -647,7 +647,7 @@ const ActivityDetail = () => {
   const policySummary = activity.policySummary;
   const hasPolicySummary = policySummary.length > 0;
   const partner = activity.partner;
-  const serviceHighlights = useMemo(() => {
+  const serviceHighlights = (() => {
     if (policySummary.length > 0) {
       return policySummary.slice(0, 3);
     }
@@ -660,9 +660,9 @@ const ActivityDetail = () => {
       }
     }
     return ["Hủy miễn phí 24 giờ", "Xác nhận trong 24 giờ", "Nhóm nhỏ linh hoạt"];
-  }, [policySummary, hasPackages, activity.packages]);
-    
-  const serviceTimeline = useMemo(() => {
+  })();
+
+  const serviceTimeline = (() => {
     if (!Array.isArray(itineraryItems) || itineraryItems.length === 0) {
       return [];
     }
@@ -697,7 +697,7 @@ const ActivityDetail = () => {
         description: undefined,
       };
     });
-    }, [itineraryItems]);
+  })();
 
   const hasServiceTimeline = serviceTimeline.length > 0;
   const quickInfoItems = [

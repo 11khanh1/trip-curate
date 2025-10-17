@@ -278,8 +278,14 @@ const CartPage = () => {
                       <div className="text-right">
                         <p className="font-semibold text-lg text-foreground">{formatter.format(item.totalPrice)}</p>
                         <div className="flex gap-2 mt-2">
-                            <Button variant="ghost" size="sm" onClick={() => navigate(`/activity/${item.tourId}`)}>Sửa</Button>
-                            <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700" onClick={() => removeItem(item.id)}>Xoá</Button>
+                          <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => navigate(`/activity/${item.tourId}?tab=packages`)}
+                          >
+                              Sửa
+                          </Button>                            
+                          <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700" onClick={() => removeItem(item.id)}>Xoá</Button>
                         </div>
                       </div>
                     </div>
@@ -299,9 +305,7 @@ const CartPage = () => {
                   <span>Tổng cộng ({selectedIds.size} dịch vụ)</span>
                   <span className="font-semibold text-foreground">{formatter.format(totalSelectedAmount)}</span>
                 </div>
-                 <p className="text-xs text-green-600 text-center bg-green-50 p-2 rounded-md">
-                    Nhận 3 xu cho đơn hàng này
-                </p>
+                 
               </CardContent>
               <CardFooter>
                  <Button
