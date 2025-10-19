@@ -86,6 +86,8 @@ export interface PublicTour {
   bookings_count?: number;
   reviews_count?: number | null;
   average_rating?: number | null;
+  rating_average?: number | null;
+  rating_count?: number | null;
   tags?: string[] | null;
   partner?: PublicTourPartner | null;
   categories?: PublicTourCategory[];

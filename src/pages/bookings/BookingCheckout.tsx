@@ -17,6 +17,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 
+import { isAxiosError } from "axios";
 import { useToast } from "@/hooks/use-toast";
 import { createBooking, type CreateBookingPayload } from "@/services/bookingApi";
 import { fetchTourDetail, type PublicTour, type PublicTourPackage, type PublicTourSchedule } from "@/services/publicApi";
@@ -125,10 +126,11 @@ const BookingCheckout = () => {
 
     if (current.length === desired) return; // Already in sync
 
-    const next = Array.from({ length: desired }, (_, index) => {
+    const next: BookingFormValues["passengers"] = Array.from({ length: desired }, (_, index) => {
       const existing = current[index];
+      const passengerType: "adult" | "child" = index < safeAdults ? "adult" : "child";
       return {
-        type: index < safeAdults ? "adult" : "child",
+        type: passengerType,
         full_name: existing?.full_name ?? "",
         date_of_birth: existing?.date_of_birth ?? "",
         document_number: existing?.document_number ?? "",
@@ -138,21 +140,26 @@ const BookingCheckout = () => {
     // **FIXED**: Removed unstable `form` object from dependency array to prevent infinite loops.
   }, [adults, children, setValue, getValues]);
 
-  const selectedPackage: PublicTourPackage | undefined = useMemo(
-    () => packages.find((pkg) => String(pkg.id) === packageId),
-    [packages, packageId],
-  );
+const selectedPackage: PublicTourPackage | undefined = useMemo(
+  () => packages.find((pkg) => String(pkg.id) === packageId),
+  [packages, packageId],
+);
 
-  const selectedSchedule: PublicTourSchedule | undefined = useMemo(
-    () => schedules.find((schedule) => String(schedule?.id) === scheduleId),
-    [schedules, scheduleId],
-  );
+const selectedSchedule: PublicTourSchedule | undefined = useMemo(
+  () => schedules.find((schedule) => String(schedule?.id) === scheduleId),
+  [schedules, scheduleId],
+);
 
-  const totalPrice = useMemo(() => {
-    if (!selectedPackage) return 0;
-    const adultPrice = selectedPackage.adult_price ?? tour?.base_price ?? 0;
-    const childPrice = selectedPackage.child_price ?? selectedPackage.adult_price ?? tour?.base_price ?? 0;
-    return adults * adultPrice + children * childPrice;
+const displayCurrency = useMemo(() => {
+  const raw = typeof tour?.currency === "string" ? tour.currency.trim() : "";
+  return raw.length > 0 ? raw : "VND";
+}, [tour?.currency]);
+
+const totalPrice = useMemo(() => {
+  if (!selectedPackage) return 0;
+  const adultPrice = selectedPackage.adult_price ?? tour?.base_price ?? 0;
+  const childPrice = selectedPackage.child_price ?? selectedPackage.adult_price ?? tour?.base_price ?? 0;
+  return adults * adultPrice + children * childPrice;
   }, [adults, children, selectedPackage, tour?.base_price]);
 
   const mutation = useMutation({
@@ -174,12 +181,18 @@ const BookingCheckout = () => {
       }
     },
     onError: (submitError: unknown) => {
+      const fallbackMessage = "Vui lòng kiểm tra lại thông tin và thử lại.";
+      const description = isAxiosError(submitError)
+        ? (submitError.response?.data as { message?: string })?.message ??
+          submitError.response?.statusText ??
+          fallbackMessage
+        : submitError instanceof Error
+        ? submitError.message
+        : fallbackMessage;
+
       toast({
         title: "Không thể tạo booking",
-        description:
-          submitError instanceof Error
-            ? submitError.message
-            : "Vui lòng kiểm tra lại thông tin và thử lại.",
+        description,
         variant: "destructive",
       });
     },
@@ -195,24 +208,38 @@ const BookingCheckout = () => {
       return;
     }
 
+    const payloadPassengers = values.passengers.map((passenger) => ({
+      type: passenger.type,
+      full_name: passenger.full_name.trim(),
+      date_of_birth: passenger.date_of_birth?.trim() || undefined,
+      document_number: passenger.document_number?.trim() || undefined,
+    }));
+
     const payload: CreateBookingPayload = {
-      tour_id: String(tour.id ?? tour.uuid),
-      package_id: values.package_id,
-      schedule_id: values.schedule_id,
+      tour_id: tourId || String(tour?.uuid ?? tour?.id ?? ""),
+      package_id: String(values.package_id).trim(),
+      schedule_id: String(values.schedule_id).trim(),
       adults: values.adults,
-      children: values.children,
-      contact_name: values.contact_name,
-      contact_email: values.contact_email,
-      contact_phone: values.contact_phone,
-      notes: values.notes ?? "",
+      contact_name: values.contact_name.trim(),
+      contact_email: values.contact_email.trim(),
+      contact_phone: values.contact_phone.trim(),
+      notes: values.notes?.trim() ? values.notes.trim() : undefined,
       payment_method: values.payment_method,
-      passengers: values.passengers.map((passenger) => ({
-        type: passenger.type,
-        full_name: passenger.full_name,
-        date_of_birth: passenger.date_of_birth || undefined,
-        document_number: passenger.document_number || undefined,
-      })),
+      passengers: payloadPassengers,
     };
+
+    if (values.children > 0) {
+      payload.children = values.children;
+    }
+
+    if (!payload.tour_id) {
+      toast({
+        title: "Thiếu thông tin tour",
+        description: "Không xác định được tour để tạo booking. Vui lòng thử lại từ trang chi tiết tour.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     mutation.mutate(payload);
   };
@@ -512,7 +539,7 @@ const BookingCheckout = () => {
                       <span>
                         {totalPrice.toLocaleString("vi-VN", {
                           style: "currency",
-                          currency: tour.currency ?? "VND",
+                          currency: displayCurrency,
                           minimumFractionDigits: 0,
                         })}
                       </span>
@@ -541,8 +568,13 @@ const BookingCheckout = () => {
                     />
                   </CardContent>
                   <CardFooter className="flex flex-col gap-3">
-                    <Button type="submit" size="lg" className="w-full" disabled={mutation.isLoading || packages.length === 0}>
-                      {mutation.isLoading ? "Đang xử lý..." : "Hoàn tất đặt chỗ"}
+                    <Button
+                      type="submit"
+                      size="lg"
+                      className="w-full"
+                      disabled={mutation.isPending || packages.length === 0}
+                    >
+                      {mutation.isPending ? "Đang xử lý..." : "Hoàn tất đặt chỗ"}
                     </Button>
                     <p className="text-center text-xs text-muted-foreground">
                        Khi tiếp tục, bạn đồng ý với điều khoản sử dụng và chính sách của chúng tôi.

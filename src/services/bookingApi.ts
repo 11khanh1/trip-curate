@@ -9,6 +9,24 @@ import type {
 export type BookingStatus = "pending" | "confirmed" | "cancelled" | "expired" | "completed" | string;
 export type BookingPaymentStatus = "unpaid" | "pending" | "paid" | "refunded" | "failed" | string;
 
+export interface BookingContact {
+  name?: string;
+  email?: string;
+  phone?: string;
+  company_name?: string | null;
+  notes?: string | null;
+  [key: string]: unknown;
+}
+
+export interface BookingReviewSummary {
+  id?: string | number;
+  rating?: number;
+  comment?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  [key: string]: unknown;
+}
+
 export interface BookingPassenger {
   id?: string | number;
   type?: "adult" | "child" | "infant" | string;
@@ -29,6 +47,8 @@ export interface BookingPayment {
   status?: "success" | "pending" | "failed" | string;
   order_code?: string | null;
   transaction_id?: string | null;
+  invoice_number?: string | null;
+  transaction_code?: string | null;
   paid_at?: string | null;
   refunded_at?: string | null;
   created_at?: string | null;
@@ -45,13 +65,13 @@ export interface Booking {
   payment_status?: BookingPaymentStatus;
   payment_method?: "offline" | "sepay" | string;
   total_amount?: number;
+  total_price?: number;
   currency?: string | null;
-  contact_name?: string;
-  contact_email?: string;
-  contact_phone?: string;
-  notes?: string | null;
+  total_adults?: number;
+  total_children?: number;
   adults?: number;
   children?: number;
+  booking_date?: string | null;
   booked_at?: string | null;
   cancelled_at?: string | null;
   created_at?: string;
@@ -59,11 +79,18 @@ export interface Booking {
   expires_at?: string | null;
   payment_url?: string | null;
   payment_id?: string | number | null;
+  can_cancel?: boolean;
+  contact?: BookingContact | null;
+  notes?: string | null;
+  contact_name?: string;
+  contact_email?: string;
+  contact_phone?: string;
   tour?: PublicTour | null;
   package?: PublicTourPackage | null;
   schedule?: PublicTourSchedule | null;
   passengers?: BookingPassenger[];
   payments?: BookingPayment[];
+  review?: BookingReviewSummary | null;
   [key: string]: unknown;
 }
 
@@ -89,7 +116,11 @@ const normalizePaginated = <T>(payload: any): Paginated<T> => {
 };
 
 export async function fetchBookings(params: BookingQueryParams = {}): Promise<BookingListResponse> {
-  const res = await apiClient.get("/bookings", { params });
+  const sanitizedParams = {
+    ...params,
+    status: params.status && params.status !== "all" ? params.status : undefined,
+  };
+  const res = await apiClient.get("/bookings", { params: sanitizedParams });
   return normalizePaginated<Booking>(res.data);
 }
 
@@ -142,9 +173,13 @@ export async function createBooking(payload: CreateBookingPayload): Promise<Crea
   return data as CreateBookingResponse;
 }
 
+export interface CancelBookingResponse {
+  message: string;
+}
+
 export async function cancelBooking(id: string | number) {
   const res = await apiClient.post(`/bookings/${id}/cancel`);
-  return res.data;
+  return res.data as CancelBookingResponse;
 }
 
 export interface SepayReturnQuery {

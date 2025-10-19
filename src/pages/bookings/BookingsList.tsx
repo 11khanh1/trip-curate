@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Calendar, ChevronRight, Clock, MapPin, Ticket } from "lucide-react";
+import { Calendar, ChevronRight, Clock, MapPin, Ticket, Users, Phone } from "lucide-react";
 
 import TravelHeader from "@/components/TravelHeader";
 import Footer from "@/components/Footer";
@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
-import { fetchBookings, type Booking, type BookingListResponse } from "@/services/bookingApi";
+import { fetchBookings, cancelBooking, type Booking, type BookingListResponse } from "@/services/bookingApi";
+import { useToast } from "@/hooks/use-toast";
 
 const STATUS_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "all", label: "Tất cả" },
@@ -54,6 +55,17 @@ const statusLabel = (status?: string) => {
       return "Đã hủy";
     default:
       return status ? status : "Đang cập nhật";
+  }
+};
+
+const paymentMethodLabel = (method?: string) => {
+  switch (method) {
+    case "sepay":
+      return "Thanh toán Sepay";
+    case "offline":
+      return "Thanh toán trực tiếp";
+    default:
+      return method ?? "Chưa cập nhật";
   }
 };
 
@@ -126,6 +138,34 @@ const EmptyState = () => (
 const BookingsList = () => {
   const [status, setStatus] = useState("all");
   const [page, setPage] = useState(1);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const cancelMutation = useMutation({
+    mutationFn: (bookingId: string) => cancelBooking(bookingId),
+    onSuccess: (response) => {
+      toast({
+        title: "Đã hủy booking",
+        description: response?.message ?? "Đơn của bạn đã được hủy thành công.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["bookings"] });
+    },
+    onError: (error: unknown) => {
+      toast({
+        title: "Không thể hủy booking",
+        description:
+          error instanceof Error ? error.message : "Vui lòng thử lại hoặc liên hệ bộ phận hỗ trợ.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const isCancellingBooking = (bookingId: string | number) => {
+    const pending = cancelMutation.isPending;
+    if (!pending) return false;
+    if (cancelMutation.variables === undefined) return false;
+    return String(cancelMutation.variables) === String(bookingId);
+  };
 
   const {
     data,
@@ -197,12 +237,33 @@ const BookingsList = () => {
                 booking.schedule?.title ??
                 (booking.schedule?.start_date ? `Lịch ${formatDate(booking.schedule.start_date)}` : undefined);
               const packageName = booking.package?.name ?? "Gói tiêu chuẩn";
+              const bookingTotal = booking.total_amount ?? booking.total_price ?? null;
+              const bookingDate = booking.booking_date ?? booking.booked_at ?? booking.created_at ?? null;
+              const totalAdults = booking.total_adults ?? booking.adults ?? 0;
+              const totalChildren = booking.total_children ?? booking.children ?? 0;
+              const guestSummary =
+                totalAdults + totalChildren > 0
+                  ? totalChildren > 0
+                    ? `${totalAdults} người lớn, ${totalChildren} trẻ em`
+                    : `${totalAdults} người lớn`
+                  : null;
+              const contactPhone = booking.contact?.phone ?? booking.contact_phone ?? null;
+              const canCancel =
+                booking.can_cancel ??
+                (booking.status === "pending" || booking.status === "confirmed");
 
               return (
                 <Card key={booking.id}>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-base font-semibold">{tourName}</CardTitle>
-                    <Badge variant={statusVariant(booking.status)}>{statusLabel(booking.status)}</Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={statusVariant(booking.status)}>{statusLabel(booking.status)}</Badge>
+                      {canCancel && (
+                        <Badge variant="outline" className="border-emerald-200 text-emerald-600">
+                          Có thể hủy
+                        </Badge>
+                      )}
+                    </div>
                   </CardHeader>
                   <CardContent className="space-y-3 text-sm text-muted-foreground">
                     <div className="flex flex-wrap items-center gap-4">
@@ -216,10 +277,10 @@ const BookingsList = () => {
                           {scheduleTitle}
                         </span>
                       )}
-                      {booking.booked_at && (
+                      {bookingDate && (
                         <span className="inline-flex items-center gap-2">
                           <Clock className="h-4 w-4 text-primary" />
-                          Đặt lúc {formatDate(booking.booked_at)}
+                          Đặt ngày {formatDate(bookingDate)}
                         </span>
                       )}
                     </div>
@@ -229,25 +290,71 @@ const BookingsList = () => {
                         <span>{booking.tour.destination}</span>
                       </div>
                     )}
+                    <div className="flex flex-wrap items-center gap-4">
+                      {guestSummary && (
+                        <span className="inline-flex items-center gap-2">
+                          <Users className="h-4 w-4 text-primary" />
+                          {guestSummary}
+                        </span>
+                      )}
+                      {contactPhone && (
+                        <span className="inline-flex items-center gap-2">
+                          <Phone className="h-4 w-4 text-primary" />
+                          {contactPhone}
+                        </span>
+                      )}
+                    </div>
                   </CardContent>
                   <CardFooter className="flex flex-col gap-3 border-t pt-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
                     <div className="space-y-1">
                       <p className="font-medium text-foreground">
-                        {formatCurrency(booking.total_amount, booking.currency ?? "VND")}
+                        {bookingTotal !== null
+                          ? formatCurrency(bookingTotal, booking.currency ?? "VND")
+                          : "Đang cập nhật"}
                       </p>
+                      {guestSummary && (
+                        <p>
+                          Số khách: <span className="font-medium text-foreground">{guestSummary}</span>
+                        </p>
+                      )}
                       {booking.payment_status && (
                         <p>
                           Trạng thái thanh toán:{" "}
                           <span className="font-medium text-foreground">{statusLabel(booking.payment_status)}</span>
                         </p>
                       )}
+                      {booking.payment_method && (
+                        <p>
+                          Phương thức:{" "}
+                          <span className="font-medium text-foreground">
+                            {paymentMethodLabel(booking.payment_method)}
+                          </span>
+                        </p>
+                      )}
                     </div>
-                    <Button asChild>
-                      <Link to={`/bookings/${booking.id}`} className="inline-flex items-center gap-2">
-                        Xem chi tiết
-                        <ChevronRight className="h-4 w-4" />
-                      </Link>
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {canCancel && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="border-red-200 text-red-500 hover:bg-red-50"
+                          onClick={() => {
+                            if (!window.confirm("Bạn có chắc chắn muốn hủy booking này?")) return;
+                            cancelMutation.mutate(String(booking.id));
+                          }}
+                          disabled={isCancellingBooking(booking.id)}
+                        >
+                          {isCancellingBooking(booking.id) ? "Đang hủy..." : "Hủy booking"}
+                        </Button>
+                      )}
+                      <Button asChild size="sm">
+                        <Link to={`/bookings/${booking.id}`} className="inline-flex items-center gap-2">
+                          Xem chi tiết
+                          <ChevronRight className="h-4 w-4" />
+                        </Link>
+                      </Button>
+                    </div>
                   </CardFooter>
                 </Card>
               );

@@ -112,7 +112,7 @@ const TravelHeader = () => {
   const [debouncedValue, setDebouncedValue] = useState("");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const navigate = useNavigate();
-  const { totalItems } = useCart();
+  const { totalItems, clearCart } = useCart();
 
   useEffect(() => {
     const handler = window.setTimeout(() => {
@@ -310,6 +310,7 @@ const TravelHeader = () => {
                         )}
                         <DropdownMenuItem
                           onClick={() => {
+                            clearCart({ persist: false });
                             localStorage.removeItem("token");
                             localStorage.removeItem("user");
                             setCurrentUser(null);

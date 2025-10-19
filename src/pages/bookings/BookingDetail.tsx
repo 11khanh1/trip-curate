@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -173,10 +172,9 @@ const BookingDetailPage = () => {
     },
   });
 
-  const canCancel = useMemo(() => {
-    if (!booking?.status) return false;
-    return booking.status === "pending" || booking.status === "confirmed";
-  }, [booking?.status]);
+  const canCancel = Boolean(
+    booking?.can_cancel ?? (booking?.status === "pending" || booking?.status === "confirmed"),
+  );
 
   const paymentUrl = booking?.payment_url;
   const paymentPending =

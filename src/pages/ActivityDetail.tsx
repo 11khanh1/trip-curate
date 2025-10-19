@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback, FormEvent } from "react";
 import { useParams, Link, useNavigate, useSearchParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import TravelHeader from "@/components/TravelHeader";
 import Footer from "@/components/Footer";
 import {
@@ -44,10 +44,34 @@ import {
 import TourCard from "@/components/TourCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { fetchTourDetail, fetchTrendingTours, type PublicTour, type PublicTourSchedule } from "@/services/publicApi";
 import { useToast } from "@/hooks/use-toast";
 import { useCart } from "@/context/CartContext";
+import { useUser } from "@/context/UserContext";
+import {
+  createReview,
+  deleteReview,
+  fetchTourReviews,
+  type TourReview,
+  type TourReviewListResponse,
+  updateReview,
+} from "@/services/reviewApi";
+import {
+  fetchBookings,
+  type Booking,
+  type BookingListResponse,
+  type BookingReviewSummary,
+} from "@/services/bookingApi";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 
 
 // ====================================================================================
@@ -137,6 +161,8 @@ interface ActivityDetailView {
   };
 }
 
+type EditableReview = Pick<TourReview, "id" | "rating" | "comment">;
+
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1529651737248-dad5eeb48697?auto=format&fit=crop&w=1600&q=80";
 
 const formatDate = (value?: string | null) => {
@@ -147,6 +173,53 @@ const formatDate = (value?: string | null) => {
 };
 
 const generateFallbackId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+const parseFloatOrNull = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  return null;
+};
+
+const parseIntOrNull = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) return Math.trunc(value);
+  if (typeof value === "string") {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  return null;
+};
+
+const extractPagination = (meta?: Record<string, unknown>) => {
+  if (!meta) {
+    return { current: undefined as number | undefined, last: undefined as number | undefined };
+  }
+  const rawCurrent = (meta as Record<string, unknown>).current_page ?? (meta as Record<string, unknown>).currentPage;
+  const rawLast = (meta as Record<string, unknown>).last_page ?? (meta as Record<string, unknown>).lastPage;
+  return {
+    current: parseIntOrNull(rawCurrent ?? undefined) ?? undefined,
+    last: parseIntOrNull(rawLast ?? undefined) ?? undefined,
+  };
+};
+
+const resolveErrorMessage = (error: unknown) => {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object") {
+    const maybeResponse = (error as Record<string, unknown>).response;
+    if (maybeResponse && typeof maybeResponse === "object") {
+      const message = (maybeResponse as Record<string, unknown>).data;
+      if (message && typeof message === "object" && typeof (message as Record<string, unknown>).message === "string") {
+        return String((message as Record<string, unknown>).message);
+      }
+    }
+    if ("message" in error && typeof (error as { message?: unknown }).message === "string") {
+      return String((error as { message?: unknown }).message);
+    }
+  }
+  return "Đã có lỗi xảy ra, vui lòng thử lại.";
+};
 
 const toRelatedActivity = (tour: PublicTour): RelatedActivity => {
   const images = [
@@ -167,8 +240,8 @@ const toRelatedActivity = (tour: PublicTour): RelatedActivity => {
     title: tour.title ?? tour.name ?? "Tour nổi bật",
     location: tour.destination ?? "Đang cập nhật",
     image: images[0] ?? FALLBACK_IMAGE,
-    rating: tour.average_rating ?? 4.5,
-    reviewCount: tour.reviews_count ?? 0,
+    rating: tour.rating_average ?? tour.average_rating ?? 4.5,
+    reviewCount: tour.rating_count ?? tour.reviews_count ?? 0,
     price: price ?? 0,
     originalPrice: originalPrice ?? undefined,
     discount,
@@ -315,8 +388,8 @@ const normalizeTourDetail = (
     category: tour.categories?.[0]?.name,
     tourType: tour.categories?.[0]?.name,
     pickupType: undefined,
-    rating: tour.average_rating ?? null,
-    reviewCount: tour.reviews_count ?? null,
+    rating: tour.rating_average ?? tour.average_rating ?? null,
+    reviewCount: tour.rating_count ?? tour.reviews_count ?? null,
     bookedCount: tour.bookings_count ?? null,
     price: tour.base_price ?? tour.season_price ?? null,
     originalPrice: tour.season_price ?? null,
@@ -388,6 +461,88 @@ const ActivityDetail = () => {
   const [childCount, setChildCount] = useState(0);
   const { addItem } = useCart();
   const { toast } = useToast();
+  const { currentUser } = useUser();
+  const queryClient = useQueryClient();
+  const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
+  const [selectedBookingId, setSelectedBookingId] = useState("");
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
+
+  const [editingReview, setEditingReview] = useState<EditableReview | null>(null);
+
+  const resetReviewForm = useCallback(() => {
+    setSelectedBookingId("");
+    setReviewRating(5);
+    setReviewComment("");
+    setEditingReview(null);
+  }, []);
+
+  const closeReviewDialog = useCallback(() => {
+    setIsReviewDialogOpen(false);
+    resetReviewForm();
+  }, [resetReviewForm]);
+
+  const invalidateReviewData = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["tour-reviews", id] });
+    queryClient.invalidateQueries({ queryKey: ["user-bookings", "completed", currentUser?.id] });
+  }, [queryClient, id, currentUser?.id]);
+
+  const createReviewMutation = useMutation({
+    mutationFn: createReview,
+    onSuccess: (response) => {
+      toast({
+        title: "Đánh giá đã được ghi nhận",
+        description: response?.message ?? "Cảm ơn bạn đã chia sẻ trải nghiệm.",
+      });
+      invalidateReviewData();
+      closeReviewDialog();
+    },
+    onError: (error: unknown) => {
+      toast({
+        title: "Không thể gửi đánh giá",
+        description: resolveErrorMessage(error),
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateReviewMutation = useMutation({
+    mutationFn: (input: { reviewId: string | number; payload: { rating?: number; comment?: string } }) =>
+      updateReview(input.reviewId, input.payload),
+    onSuccess: (response) => {
+      toast({
+        title: "Đánh giá đã được cập nhật",
+        description: response?.message ?? "Chúng tôi đã ghi nhận thay đổi của bạn.",
+      });
+      invalidateReviewData();
+      closeReviewDialog();
+    },
+    onError: (error: unknown) => {
+      toast({
+        title: "Không thể cập nhật đánh giá",
+        description: resolveErrorMessage(error),
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteReviewMutation = useMutation({
+    mutationFn: (reviewId: string | number) => deleteReview(reviewId),
+    onSuccess: (response) => {
+      toast({
+        title: "Đã xóa đánh giá",
+        description: response?.message ?? "Đánh giá của bạn đã được gỡ bỏ.",
+      });
+      invalidateReviewData();
+    },
+    onError: (error: unknown) => {
+      toast({
+        title: "Không thể xóa đánh giá",
+        description: resolveErrorMessage(error),
+        variant: "destructive",
+      });
+    },
+  });
 
   const {
     data: tourDetail,
@@ -405,11 +560,187 @@ const ActivityDetail = () => {
     queryFn: () => fetchTrendingTours({ limit: 6 }),
   });
 
+  const acceptableTourIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (id) ids.add(String(id));
+    if (tourDetail?.id !== undefined && tourDetail?.id !== null) ids.add(String(tourDetail.id));
+    if (tourDetail?.uuid) ids.add(String(tourDetail.uuid));
+    return Array.from(ids);
+  }, [id, tourDetail?.id, tourDetail?.uuid]);
+
+  const { data: completedBookingsData } = useQuery<BookingListResponse>({
+    queryKey: ["user-bookings", "completed", currentUser?.id],
+    queryFn: () => fetchBookings({ status: "completed", per_page: 50 }),
+    enabled: Boolean(currentUser),
+    staleTime: 60 * 1000,
+  });
+
   const activity = useMemo(
     () => normalizeTourDetail(tourDetail, trendingTours ?? []),
     [tourDetail, trendingTours],
   );
   const schedules = tourDetail?.schedules ?? [];
+
+  const bookingsForTour = useMemo(() => {
+    if (!completedBookingsData?.data || acceptableTourIds.length === 0) return [];
+    return completedBookingsData.data.filter((booking) => {
+      const identifiers: Array<string | number | null | undefined> = [
+        booking.tour?.id,
+        booking.tour?.uuid,
+        (booking as Record<string, unknown>)?.tour_id as string | number | undefined,
+      ];
+      return identifiers.some(
+        (value) => value !== undefined && value !== null && acceptableTourIds.includes(String(value)),
+      );
+    });
+  }, [completedBookingsData?.data, acceptableTourIds]);
+
+  const reviewableBookings = useMemo(
+    () => bookingsForTour.filter((booking) => !booking.review),
+    [bookingsForTour],
+  );
+
+  const existingReviewEntry = useMemo(
+    () => bookingsForTour.find((booking) => Boolean(booking.review)),
+    [bookingsForTour],
+  );
+
+  const existingReview: BookingReviewSummary | null = existingReviewEntry?.review ?? null;
+  const existingReviewBookingId = existingReviewEntry ? String(existingReviewEntry.id) : null;
+
+  const {
+    data: reviewsData,
+    isLoading: isReviewsLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery<TourReviewListResponse, Error>({
+    queryKey: ["tour-reviews", id ? String(id) : ""],
+    queryFn: ({ pageParam = 1 }) =>
+      fetchTourReviews(String(id), {
+        page: typeof pageParam === "number" ? pageParam : 1,
+        per_page: 5,
+      }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => {
+      const pagination = extractPagination(
+        (lastPage?.reviews?.meta as Record<string, unknown> | undefined) ?? undefined,
+      );
+      if (!pagination.current || !pagination.last) return undefined;
+      if (pagination.current >= pagination.last) return undefined;
+      return pagination.current + 1;
+    },
+    enabled: Boolean(id),
+    staleTime: 30 * 1000,
+  });
+
+  const allReviews = useMemo(
+    () => reviewsData?.pages?.flatMap((page) => page.reviews?.data ?? []) ?? [],
+    [reviewsData?.pages],
+  );
+
+  const ratingSummary = useMemo(() => {
+    if (!reviewsData?.pages || reviewsData.pages.length === 0) return null;
+    const pageWithRating = reviewsData.pages.find((page) => page?.rating);
+    return pageWithRating?.rating ?? reviewsData.pages[0]?.rating ?? null;
+  }, [reviewsData?.pages]);
+
+  const ratingAverage =
+    parseFloatOrNull(ratingSummary?.average ?? undefined) ??
+    (typeof activity?.rating === "number" ? activity.rating : null);
+
+  const ratingCount =
+    parseIntOrNull(ratingSummary?.count ?? undefined) ??
+    (typeof activity?.reviewCount === "number" ? activity.reviewCount : null);
+
+  const isMutationPending = (mutation: { isPending?: boolean; isLoading?: boolean }) =>
+    Boolean(mutation.isPending ?? mutation.isLoading ?? false);
+
+  const isSubmittingReview = isMutationPending(createReviewMutation) || isMutationPending(updateReviewMutation);
+  const isDeletingReview = isMutationPending(deleteReviewMutation);
+
+  const openCreateReview = useCallback(() => {
+    if (!currentUser) {
+      toast({
+        title: "Đăng nhập để đánh giá",
+        description: "Vui lòng đăng nhập để chia sẻ trải nghiệm của bạn.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (reviewableBookings.length === 0) {
+      toast({
+        title: "Chưa có booking phù hợp",
+        description: "Bạn chỉ có thể đánh giá sau khi hoàn thành tour và chưa gửi đánh giá trước đó.",
+      });
+      return;
+    }
+    const defaultBookingId = String(reviewableBookings[0]?.id ?? "");
+    setSelectedBookingId(defaultBookingId);
+    setReviewRating(5);
+    setReviewComment("");
+    setEditingReview(null);
+    setIsReviewDialogOpen(true);
+  }, [currentUser, reviewableBookings, toast]);
+
+  const openEditReview = useCallback(() => {
+    if (!existingReview?.id) {
+      toast({
+        title: "Không tìm thấy đánh giá",
+        description: "Không thể chỉnh sửa vì thiếu mã đánh giá hợp lệ.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const parsedRating = parseFloatOrNull(existingReview.rating ?? undefined) ?? 5;
+    const normalizedRating = Math.min(5, Math.max(1, parsedRating));
+    setReviewRating(normalizedRating);
+    setReviewComment(existingReview.comment ?? "");
+    setEditingReview({
+      id: existingReview.id,
+      rating: existingReview.rating,
+      comment: existingReview.comment ?? "",
+    });
+    setSelectedBookingId(existingReviewBookingId ?? "");
+    setIsReviewDialogOpen(true);
+  }, [existingReview, existingReviewBookingId, toast]);
+
+  const handleDeleteReview = useCallback(() => {
+    if (!existingReview) return;
+    if (isDeletingReview) return;
+    const confirmed = window.confirm("Bạn có chắc chắn muốn xóa đánh giá này?");
+    if (!confirmed) return;
+    deleteReviewMutation.mutate(existingReview.id);
+  }, [deleteReviewMutation, existingReview, isDeletingReview]);
+
+  const handleReviewSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const normalizedRating = Math.min(5, Math.max(1, reviewRating));
+    const sanitizedComment = reviewComment.trim();
+    if (editingReview) {
+      updateReviewMutation.mutate({
+        reviewId: editingReview.id,
+        payload: {
+          rating: normalizedRating,
+          comment: sanitizedComment.length > 0 ? sanitizedComment : undefined,
+        },
+      });
+      return;
+    }
+    if (!selectedBookingId) {
+      toast({
+        title: "Chọn booking để đánh giá",
+        description: "Vui lòng chọn booking đã hoàn thành để gửi đánh giá.",
+        variant: "destructive",
+      });
+      return;
+    }
+    createReviewMutation.mutate({
+      booking_id: selectedBookingId,
+      rating: normalizedRating,
+      comment: sanitizedComment.length > 0 ? sanitizedComment : undefined,
+    });
+  };
   
   const selectedSchedule = useMemo(
     () =>
@@ -548,6 +879,13 @@ const ActivityDetail = () => {
     if (safeChildCount !== childCount) setChildCount(safeChildCount);
   }, [childCount, safeChildCount]);
 
+  useEffect(() => {
+    if (!isReviewDialogOpen || editingReview) return;
+    if (!selectedBookingId && reviewableBookings.length > 0) {
+      setSelectedBookingId(String(reviewableBookings[0].id));
+    }
+  }, [isReviewDialogOpen, editingReview, reviewableBookings, selectedBookingId]);
+
   const totalPrice = useMemo(() => {
     if (!selectedPackage) return null;
     return safeAdultCount * adultUnitPrice + safeChildCount * childUnitPrice;
@@ -678,12 +1016,12 @@ const ActivityDetail = () => {
   const hasImportantNotes = activity.importantNotes.length > 0;
   const hasTerms = activity.termsAndConditions.length > 0;
   const hasFaqs = activity.faqs.length > 0;
-  const hasReviews = activity.reviews.length > 0;
+  const hasReviews = allReviews.length > 0;
   const hasLocation = Boolean(activity.location?.name || activity.location?.address);
   const locationCoords = activity.location?.coordinates;
   const hasRelated = activity.relatedActivities.length > 0;
-  const ratingValue = typeof activity.rating === "number" ? activity.rating : null;
-  const reviewCount = typeof activity.reviewCount === "number" ? activity.reviewCount : null;
+  const ratingValue = ratingAverage ?? null;
+  const reviewCount = ratingCount ?? null;
   const bookedCount = typeof activity.bookedCount === "number" ? activity.bookedCount : null;
   const durationLabel = activity.duration ? String(activity.duration) : null;
   const breadcrumbLocation = activity.locationName ?? "Chi tiết tour";
@@ -1193,72 +1531,146 @@ const ActivityDetail = () => {
               </TabsContent>
 
               <TabsContent value="reviews" className="mt-6">
-                {hasReviews ? (
-                  <div className="space-y-6">
-                    <div className="flex items-center gap-4 mb-6">
-                      <div className="text-center">
-                        <div className="text-5xl font-bold text-foreground">
-                          {ratingValue !== null ? ratingValue.toFixed(1) : "5.0"}
+                <div className="space-y-6">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="text-5xl font-bold text-foreground">
+                        {ratingValue !== null ? ratingValue.toFixed(1) : "—"}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: 5 }).map((_, index) => {
+                            const isFilled = ratingValue !== null && index < Math.round(ratingValue);
+                            return (
+                              <Star
+                                key={index}
+                                className={`h-4 w-4 ${isFilled ? "fill-yellow-400 text-yellow-400" : "text-gray-300"}`}
+                              />
+                            );
+                          })}
                         </div>
-                        <div className="flex items-center gap-1 mt-2">
-                          {[...Array(5)].map((_, i) => (
-                            <Star
-                              key={i}
-                              className={`h-4 w-4 ${
-                                ratingValue !== null && i < Math.round(ratingValue)
-                                  ? "fill-yellow-400 text-yellow-400"
-                                  : "text-gray-300"
-                              }`}
-                            />
-                          ))}
-                        </div>
-                        {reviewCount !== null && (
-                          <p className="text-sm text-muted-foreground mt-1">
-                            {reviewCount.toLocaleString()} đánh giá
-                          </p>
-                        )}
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {reviewCount !== null
+                            ? `${reviewCount.toLocaleString()} đánh giá`
+                            : "Chưa có đánh giá"}
+                        </p>
                       </div>
                     </div>
-
-                    <Separator />
-
-                    <div className="space-y-4">
-                      {activity.reviews.map((review) => (
-                        <Card key={review.id}>
-                          <CardContent className="p-6">
-                            <div className="flex items-start gap-4">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <span className="font-semibold">{review.author}</span>
-                                  {review.date && (
-                                    <span className="text-sm text-muted-foreground">{review.date}</span>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-1 mb-2">
-                                  {[...Array(5)].map((_, i) => (
-                                    <Star
-                                      key={i}
-                                      className={`h-4 w-4 ${
-                                        review.rating && i < review.rating
-                                          ? "fill-yellow-400 text-yellow-400"
-                                          : "text-gray-300"
-                                      }`}
-                                    />
-                                  ))}
-                                </div>
-                                <p className="text-muted-foreground">{review.comment}</p>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {existingReview ? (
+                        <>
+                          <Button variant="outline" size="sm" onClick={openEditReview} disabled={isSubmittingReview}>
+                            Chỉnh sửa đánh giá
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-500 hover:text-red-600"
+                            onClick={handleDeleteReview}
+                            disabled={isDeletingReview}
+                          >
+                            {isDeletingReview ? "Đang xoá..." : "Xoá đánh giá"}
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          size="sm"
+                          onClick={openCreateReview}
+                          disabled={!currentUser || reviewableBookings.length === 0 || isSubmittingReview}
+                        >
+                          Viết đánh giá
+                        </Button>
+                      )}
                     </div>
                   </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Chưa có đánh giá cho tour này. Hãy là người đầu tiên chia sẻ trải nghiệm của bạn!
-                  </p>
-                )}
+
+                  {currentUser && reviewableBookings.length === 0 && !existingReview && (
+                    <Alert>
+                      <AlertTitle>Bạn chưa có booking đủ điều kiện</AlertTitle>
+                      <AlertDescription>
+                        Chỉ những booking đã hoàn thành và chưa từng được đánh giá mới có thể gửi đánh giá cho tour.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {isReviewsLoading ? (
+                    <div className="space-y-3">
+                      {Array.from({ length: 3 }).map((_, index) => (
+                        <Skeleton key={index} className="h-24 rounded-lg" />
+                      ))}
+                    </div>
+                  ) : hasReviews ? (
+                    <div className="space-y-4">
+                      {allReviews.map((review) => {
+                        const value = parseFloatOrNull(review.rating ?? undefined) ?? 0;
+                        const displayDate = formatDate(review.created_at ?? review.updated_at ?? null);
+                        const isOwner =
+                          Boolean(currentUser) &&
+                          review.user?.id !== undefined &&
+                          String(review.user.id) === String(currentUser?.id);
+                        return (
+                          <Card key={review.id}>
+                            <CardContent className="p-6 space-y-3">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="font-semibold text-foreground">
+                                    {review.user?.name ?? "Ẩn danh"}
+                                  </p>
+                                  {displayDate && (
+                                    <p className="text-xs text-muted-foreground">{displayDate}</p>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  {Array.from({ length: 5 }).map((_, starIndex) => {
+                                    const filled = starIndex < Math.round(value);
+                                    return (
+                                      <Star
+                                        key={starIndex}
+                                        className={`h-4 w-4 ${
+                                          filled ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
+                                        }`}
+                                      />
+                                    );
+                                  })}
+                                  <span className="ml-2 text-sm font-medium text-foreground">
+                                    {value.toFixed(1)}
+                                  </span>
+                                </div>
+                              </div>
+                              <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line">
+                                {review.comment && review.comment.trim().length > 0
+                                  ? review.comment
+                                  : "Người dùng không để lại nội dung."}
+                              </p>
+                              {(review.booking?.code || review.tour_schedule?.start_date) && (
+                                <div className="text-xs text-muted-foreground">
+                                  {review.booking?.code && <span>Mã booking: {review.booking.code}</span>}
+                                  {review.tour_schedule?.start_date && (
+                                    <span className="ml-2">
+                                      Khởi hành {formatDate(review.tour_schedule.start_date)}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                              {isOwner && <Badge variant="secondary">Đánh giá của bạn</Badge>}
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                      {hasNextPage && (
+                        <div className="flex justify-center pt-2">
+                          <Button variant="outline" onClick={() => fetchNextPage()} disabled={isFetchingNextPage}>
+                            {isFetchingNextPage ? "Đang tải..." : "Xem thêm đánh giá"}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      Chưa có đánh giá cho tour này. Hãy là người đầu tiên chia sẻ trải nghiệm của bạn!
+                    </p>
+                  )}
+                </div>
               </TabsContent>
             </Tabs>
 
@@ -1578,6 +1990,102 @@ const ActivityDetail = () => {
           </div>
         )}
       </main>
+
+    <Dialog
+      open={isReviewDialogOpen}
+      onOpenChange={(open) => {
+        if (open) {
+          setIsReviewDialogOpen(true);
+        } else {
+          closeReviewDialog();
+        }
+      }}
+    >
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{editingReview ? "Cập nhật đánh giá" : "Viết đánh giá"}</DialogTitle>
+          <DialogDescription>
+            {editingReview
+              ? "Điều chỉnh đánh giá đã gửi để phản ánh đúng trải nghiệm của bạn."
+              : "Chia sẻ trải nghiệm thực tế của bạn để giúp những du khách khác lựa chọn tốt hơn."}
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleReviewSubmit} className="space-y-4">
+          {!editingReview && (
+            <div className="space-y-2">
+              <Label htmlFor="review-booking">Chọn booking</Label>
+              <Select value={selectedBookingId} onValueChange={(value) => setSelectedBookingId(value)}>
+                <SelectTrigger id="review-booking">
+                  <SelectValue placeholder="Chọn booking đã hoàn thành" />
+                </SelectTrigger>
+                <SelectContent>
+                  {reviewableBookings.map((booking) => {
+                    const scheduleLabel = formatDate(
+                      booking.schedule?.start_date ?? booking.booking_date ?? booking.created_at ?? null,
+                    );
+                    const packageName = booking.package?.name ?? "Gói tiêu chuẩn";
+                    return (
+                      <SelectItem key={booking.id} value={String(booking.id)}>
+                        {packageName}
+                        {scheduleLabel ? ` • ${scheduleLabel}` : ""}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label>Điểm đánh giá</Label>
+            <div className="flex items-center gap-2">
+              {Array.from({ length: 5 }).map((_, index) => {
+                const value = index + 1;
+                const active = value <= reviewRating;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    className={`transition-colors focus:outline-none ${
+                      active ? "text-yellow-400" : "text-gray-300 hover:text-yellow-400"
+                    }`}
+                    onClick={() => setReviewRating(value)}
+                    aria-label={`Chọn ${value} sao`}
+                  >
+                    <Star className={`h-6 w-6 ${active ? "fill-yellow-400" : ""}`} />
+                  </button>
+                );
+              })}
+              <span className="text-sm text-muted-foreground">{reviewRating}/5</span>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="review-comment">Nội dung đánh giá</Label>
+            <Textarea
+              id="review-comment"
+              value={reviewComment}
+              onChange={(event) => setReviewComment(event.target.value)}
+              placeholder="Chia sẻ những điều bạn ấn tượng hoặc cần cải thiện để giúp cộng đồng du lịch tốt hơn."
+              rows={5}
+            />
+          </div>
+
+          <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="outline" onClick={closeReviewDialog} disabled={isSubmittingReview}>
+              Huỷ
+            </Button>
+            <Button type="submit" disabled={isSubmittingReview || (!editingReview && reviewableBookings.length === 0)}>
+              {isSubmittingReview
+                ? "Đang gửi..."
+                : editingReview
+                ? "Cập nhật đánh giá"
+                : "Gửi đánh giá"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
 
     <Dialog open={isGalleryOpen} onOpenChange={setIsGalleryOpen}>
       <DialogContent className="max-w-7xl w-full p-0 border-none bg-transparent shadow-none">
