@@ -459,7 +459,7 @@ const ActivityDetail = () => {
   const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(null);
   const [adultCount, setAdultCount] = useState(1);
   const [childCount, setChildCount] = useState(0);
-  const { addItem } = useCart();
+  const { addItem, removeItem } = useCart();
   const { toast } = useToast();
   const { currentUser } = useUser();
   const queryClient = useQueryClient();
@@ -467,6 +467,49 @@ const ActivityDetail = () => {
   const [selectedBookingId, setSelectedBookingId] = useState("");
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState("");
+
+  const [editingCartItemId, setEditingCartItemId] = useState<string | null>(null);
+
+  const cartItemIdParam = searchParams.get("cartItemId");
+  const packageIdParam = searchParams.get("packageId");
+  const scheduleIdParam = searchParams.get("scheduleId");
+  const adultsParam = searchParams.get("adults");
+  const childrenParam = searchParams.get("children");
+
+  useEffect(() => {
+    setEditingCartItemId(cartItemIdParam ?? null);
+  }, [cartItemIdParam]);
+
+  useEffect(() => {
+    if (packageIdParam) {
+      setSelectedPackageId(packageIdParam);
+    }
+  }, [packageIdParam]);
+
+  useEffect(() => {
+    if (scheduleIdParam !== null) {
+      const trimmed = scheduleIdParam.trim();
+      setSelectedScheduleId(trimmed.length ? trimmed : null);
+    }
+  }, [scheduleIdParam]);
+
+  useEffect(() => {
+    if (adultsParam) {
+      const parsed = Number.parseInt(adultsParam, 10);
+      if (Number.isFinite(parsed) && parsed >= 1) {
+        setAdultCount(parsed);
+      }
+    }
+  }, [adultsParam]);
+
+  useEffect(() => {
+    if (childrenParam) {
+      const parsed = Number.parseInt(childrenParam, 10);
+      if (Number.isFinite(parsed) && parsed >= 0) {
+        setChildCount(parsed);
+      }
+    }
+  }, [childrenParam]);
 
   const [editingReview, setEditingReview] = useState<EditableReview | null>(null);
 
@@ -749,6 +792,8 @@ const ActivityDetail = () => {
     [schedules, selectedScheduleId],
   );
 
+  const isEditingCartItem = Boolean(editingCartItemId);
+
   useEffect(() => {
     setSelectedImage(0);
   }, [activity?.id]);
@@ -765,13 +810,14 @@ const ActivityDetail = () => {
 
   // Tự động chọn lịch trình đầu tiên khi có dữ liệu
   useEffect(() => {
+    if (scheduleIdParam) return;
     if (Array.isArray(tourDetail?.schedules) && tourDetail.schedules.length > 0) {
       const firstAvailableScheduleId = String(tourDetail.schedules[0]?.id ?? "");
       setSelectedScheduleId(firstAvailableScheduleId);
     } else {
       setSelectedScheduleId(null);
     }
-  }, [tourDetail?.schedules]);
+  }, [scheduleIdParam, tourDetail?.schedules]);
 
   useEffect(() => {
     if (!tabFromQuery) return;
@@ -922,6 +968,10 @@ const ActivityDetail = () => {
         ? new Date(selectedSchedule.start_date).toLocaleDateString("vi-VN")
         : undefined);
 
+    if (isEditingCartItem && editingCartItemId) {
+      removeItem(editingCartItemId);
+    }
+
     addItem({
       tourId: activity.id,
       tourTitle: activity.title,
@@ -937,9 +987,15 @@ const ActivityDetail = () => {
     });
 
     toast({
-      title: "Đã thêm vào giỏ hàng",
-      description: "Bạn có thể xem lại các hoạt động trong giỏ hàng để đặt sau.",
+      title: isEditingCartItem ? "Giỏ hàng đã được cập nhật" : "Đã thêm vào giỏ hàng",
+      description: isEditingCartItem
+        ? "Chúng tôi đã cập nhật gói dịch vụ trong giỏ hàng của bạn."
+        : "Bạn có thể xem lại các hoạt động trong giỏ hàng để đặt sau.",
     });
+
+    if (isEditingCartItem) {
+      navigate("/cart");
+    }
   };
 
   const handleBookNow = () => {
@@ -1448,7 +1504,7 @@ const ActivityDetail = () => {
                               onClick={handleAddToCart}
                               disabled={!selectedPackage}
                             >
-                              Thêm vào giỏ hàng
+                              {isEditingCartItem ? "Xác nhận" : "Thêm vào giỏ hàng"}
                             </Button>
                             <Button
                               className="w-full bg-orange-500 hover:bg-orange-600"

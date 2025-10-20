@@ -268,7 +268,7 @@ const CartPage = () => {
                                 <span className="w-5 text-center font-medium">{item.adultCount}</span>
                                 <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateItemQuantity(item.id, { adults: item.adultCount + 1, children: item.childCount })}><Plus className="h-3 w-3" /></Button>
                            </div>
-                           <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2">
                                 <span className="text-sm text-muted-foreground">Trẻ em:</span>
                                 <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateItemQuantity(item.id, { adults: item.adultCount, children: Math.max(0, item.childCount - 1) })}><Minus className="h-3 w-3" /></Button>
                                 <span className="w-5 text-center font-medium">{item.childCount}</span>
@@ -282,7 +282,19 @@ const CartPage = () => {
                           <Button 
                               variant="ghost" 
                               size="sm" 
-                              onClick={() => navigate(`/activity/${item.tourId}?tab=packages`)}
+                              onClick={() => {
+                                const params = new URLSearchParams({
+                                  tab: "packages",
+                                  cartItemId: item.id,
+                                  packageId: item.packageId,
+                                  adults: String(item.adultCount),
+                                  children: String(item.childCount),
+                                });
+                                if (item.scheduleId) {
+                                  params.set("scheduleId", item.scheduleId);
+                                }
+                                navigate(`/activity/${item.tourId}?${params.toString()}`);
+                              }}
                           >
                               Sửa
                           </Button>                            

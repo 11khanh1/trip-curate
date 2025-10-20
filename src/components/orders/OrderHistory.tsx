@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Calendar, Clock, ExternalLink, MapPin, RefreshCw } from "lucide-react";
+import { Calendar, Clock, CreditCard, ExternalLink, MapPin, RefreshCw, Wallet } from "lucide-react";
 
 import { useOrderHistory } from "@/hooks/useOrderHistory";
 import { useUser } from "@/context/UserContext";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 import type { Booking } from "@/services/bookingApi";
 
@@ -43,6 +44,20 @@ const statusLabel = (status?: string) => {
       return "Chưa thanh toán";
     case "refunded":
       return "Đã hoàn tiền";
+    default:
+      return status ?? "Đang cập nhật";
+  }
+};
+
+const paymentStatusLabel = (status?: string) => {
+  switch (status) {
+    case "success":
+    case "paid":
+      return "Đã thanh toán";
+    case "pending":
+      return "Đang chờ";
+    case "failed":
+      return "Thất bại";
     default:
       return status ?? "Đang cập nhật";
   }
@@ -170,6 +185,17 @@ const OrderHistory = ({ title = "Đơn hàng gần đây", limit = 5, emptyMessa
         <div className="space-y-4">
           {bookings.map((booking: Booking) => {
             const currency = booking.currency ?? "VND";
+            const hasPayments = Array.isArray(booking.payments) && booking.payments.length > 0;
+            const sepayPending =
+              booking.payment_method === "sepay" &&
+              booking.payment_status !== "paid" &&
+              typeof booking.payment_url === "string" &&
+              booking.payment_url.length > 0;
+            const offlinePending =
+              booking.payment_method === "offline" &&
+              booking.status !== "completed" &&
+              booking.status !== "cancelled";
+            const showPaymentHistory = hasPayments || sepayPending || offlinePending;
             return (
               <Card key={booking.id}>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -203,6 +229,87 @@ const OrderHistory = ({ title = "Đơn hàng gần đây", limit = 5, emptyMessa
                       <span className="font-medium">{formatCurrency(booking.total_amount ?? booking.total_price, currency)}</span>
                     </p>
                   )}
+                  {booking.payment_method && (
+                    <p className="flex items-center gap-2">
+                      <Wallet className="h-4 w-4 text-primary" />
+                      Phương thức:{" "}
+                      <span className="font-medium text-foreground">
+                        {booking.payment_method === "sepay" ? "Thanh toán Sepay" : "Thanh toán trực tiếp"}
+                      </span>
+                    </p>
+                  )}
+                  {booking.payment_status && (
+                    <p className="flex items-center gap-2">
+                      <CreditCard className="h-4 w-4 text-primary" />
+                      Trạng thái thanh toán:{" "}
+                      <span className="font-medium text-foreground">{paymentStatusLabel(booking.payment_status)}</span>
+                    </p>
+                  )}
+                  {showPaymentHistory && (
+                    <div className="rounded-lg border border-muted p-3 space-y-3">
+                      <p className="text-sm font-semibold text-foreground flex items-center gap-2">
+                        <CreditCard className="h-4 w-4 text-primary" />
+                        Lịch sử thanh toán
+                      </p>
+                      {hasPayments ? (
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Mã giao dịch</TableHead>
+                              <TableHead>Số tiền</TableHead>
+                              <TableHead>Trạng thái</TableHead>
+                              <TableHead>Thời gian</TableHead>
+                              <TableHead className="text-right">Thanh toán</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {booking.payments?.map((payment, index) => (
+                              <TableRow key={payment.id ?? index}>
+                                <TableCell className="font-medium text-foreground">
+                                  {payment.order_code ?? payment.transaction_id ?? "—"}
+                                </TableCell>
+                                <TableCell>{formatCurrency(payment.amount, payment.currency ?? currency)}</TableCell>
+                                <TableCell>
+                                  <Badge variant={statusVariant(payment.status)}>{paymentStatusLabel(payment.status)}</Badge>
+                                </TableCell>
+                                <TableCell>{formatDate(payment.paid_at ?? payment.updated_at ?? "")}</TableCell>
+                                <TableCell className="text-right">
+                                  {payment.status !== "paid" && sepayPending ? (
+                                    <Button asChild size="sm">
+                                      <a href={booking.payment_url ?? "#"} target="_blank" rel="noopener noreferrer">
+                                        Thanh toán ngay
+                                      </a>
+                                    </Button>
+                                  ) : payment.status !== "paid" && offlinePending ? (
+                                    <Button asChild size="sm" variant="outline">
+                                      <Link to={`/bookings/${booking.id}`}>Cập nhật</Link>
+                                    </Button>
+                                  ) : (
+                                    "—"
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      ) : (
+                        <div className="flex items-center justify-between rounded-md bg-muted/50 p-3 text-xs text-muted-foreground">
+                          <p>Chưa có giao dịch thanh toán được ghi nhận.</p>
+                          {sepayPending ? (
+                            <Button asChild size="sm">
+                              <a href={booking.payment_url ?? "#"} target="_blank" rel="noopener noreferrer">
+                                Thanh toán ngay
+                              </a>
+                            </Button>
+                          ) : offlinePending ? (
+                            <Button asChild size="sm" variant="outline">
+                              <Link to={`/bookings/${booking.id}`}>Cập nhật thanh toán</Link>
+                            </Button>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             );
@@ -214,4 +321,3 @@ const OrderHistory = ({ title = "Đơn hàng gần đây", limit = 5, emptyMessa
 };
 
 export default OrderHistory;
-
