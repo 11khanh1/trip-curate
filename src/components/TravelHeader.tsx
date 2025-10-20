@@ -1,4 +1,4 @@
-import { Search, Menu, User, ShoppingBag, Gift, ChevronDown, HelpCircle, Clock, Settings, Shield, LogOut, Briefcase } from "lucide-react";
+import { Search, Menu, User, ShoppingBag, Gift, ChevronDown, HelpCircle, Clock, Settings, Shield, LogOut, Briefcase, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Link, useNavigate } from "react-router-dom";
@@ -308,6 +308,12 @@ const TravelHeader = () => {
                             </Link>
                           </DropdownMenuItem>
                         )}
+                        <DropdownMenuItem asChild>
+                          <Link to="/bookings" className="flex items-center gap-2 cursor-pointer">
+                            <Receipt className="w-4 h-4" />
+                            Lịch sử đơn hàng
+                          </Link>
+                        </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => {
                             clearCart({ persist: false });

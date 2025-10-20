@@ -197,6 +197,7 @@ const CartPage = () => {
       packageId: item.packageId,
       adults: String(item.adultCount),
       children: String(item.childCount),
+      cartItemId: item.id,
     });
     if (item.scheduleId) {
       params.set("scheduleId", item.scheduleId);

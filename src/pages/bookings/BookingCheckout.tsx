@@ -16,9 +16,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import OrderHistory from "@/components/orders/OrderHistory";
 
 import { isAxiosError } from "axios";
 import { useToast } from "@/hooks/use-toast";
+import { useCart } from "@/context/CartContext";
 import { createBooking, type CreateBookingPayload } from "@/services/bookingApi";
 import { fetchTourDetail, type PublicTour, type PublicTourPackage, type PublicTourSchedule } from "@/services/publicApi";
 
@@ -49,9 +51,11 @@ const ensurePositive = (value: number, fallback: number) => (Number.isFinite(val
 const BookingCheckout = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { removeItem } = useCart();
   const [searchParams] = useSearchParams();
 
   const tourId = searchParams.get("tourId") ?? "";
+  const cartItemId = searchParams.get("cartItemId") ?? "";
   const defaultPackageId = searchParams.get("packageId") ?? "";
   const defaultScheduleId = searchParams.get("scheduleId") ?? "";
   const initialAdults = ensurePositive(Number.parseInt(searchParams.get("adults") ?? "1", 10), 1) || 1;
@@ -140,26 +144,26 @@ const BookingCheckout = () => {
     // **FIXED**: Removed unstable `form` object from dependency array to prevent infinite loops.
   }, [adults, children, setValue, getValues]);
 
-const selectedPackage: PublicTourPackage | undefined = useMemo(
-  () => packages.find((pkg) => String(pkg.id) === packageId),
-  [packages, packageId],
-);
+  const selectedPackage: PublicTourPackage | undefined = useMemo(
+    () => packages.find((pkg) => String(pkg.id) === packageId),
+    [packages, packageId],
+  );
 
-const selectedSchedule: PublicTourSchedule | undefined = useMemo(
-  () => schedules.find((schedule) => String(schedule?.id) === scheduleId),
-  [schedules, scheduleId],
-);
+  const selectedSchedule: PublicTourSchedule | undefined = useMemo(
+    () => schedules.find((schedule) => String(schedule?.id) === scheduleId),
+    [schedules, scheduleId],
+  );
 
-const displayCurrency = useMemo(() => {
-  const raw = typeof tour?.currency === "string" ? tour.currency.trim() : "";
-  return raw.length > 0 ? raw : "VND";
-}, [tour?.currency]);
+  const displayCurrency = useMemo(() => {
+    const raw = typeof tour?.currency === "string" ? tour.currency.trim() : "";
+    return raw.length > 0 ? raw : "VND";
+  }, [tour?.currency]);
 
-const totalPrice = useMemo(() => {
-  if (!selectedPackage) return 0;
-  const adultPrice = selectedPackage.adult_price ?? tour?.base_price ?? 0;
-  const childPrice = selectedPackage.child_price ?? selectedPackage.adult_price ?? tour?.base_price ?? 0;
-  return adults * adultPrice + children * childPrice;
+  const totalPrice = useMemo(() => {
+    if (!selectedPackage) return 0;
+    const adultPrice = selectedPackage.adult_price ?? tour?.base_price ?? 0;
+    const childPrice = selectedPackage.child_price ?? selectedPackage.adult_price ?? tour?.base_price ?? 0;
+    return adults * adultPrice + children * childPrice;
   }, [adults, children, selectedPackage, tour?.base_price]);
 
   const mutation = useMutation({
@@ -172,6 +176,9 @@ const totalPrice = useMemo(() => {
             ? "Đang chuyển tới cổng thanh toán Sepay."
             : "Chúng tôi đã gửi email xác nhận cho bạn.",
       });
+      if (cartItemId) {
+        removeItem(cartItemId);
+      }
       if (payload.payment_method === "sepay" && response.payment_url) {
         window.location.href = response.payment_url;
       } else if (response?.booking?.id) {
@@ -586,6 +593,9 @@ const totalPrice = useMemo(() => {
           </Form>
         )}
       </main>
+      <section className="container mx-auto px-4 pb-12">
+        <OrderHistory />
+      </section>
       <Footer />
     </div>
   );
