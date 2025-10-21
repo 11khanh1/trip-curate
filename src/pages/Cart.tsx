@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Minus, Plus, ShoppingBag, Trash2, ArrowRight } from "lucide-react";
+import { Minus, Plus, ShoppingBag, Trash2, ArrowRight, Loader2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 import TravelHeader from "@/components/TravelHeader";
@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useCart } from "@/context/CartContext";
 import { fetchTrendingTours, PublicTour } from "@/services/publicApi";
 import { apiClient } from "@/lib/api-client";
+import { useToast } from "@/hooks/use-toast";
 
 // ====================================================================================
 // TYPE DEFINITION & HELPER FUNCTIONS
@@ -137,8 +138,42 @@ const mapTourToCard = (tour: PublicTour): TourCardProps => {
 // ====================================================================================
 const CartPage = () => {
   const navigate = useNavigate();
-  const { items, updateItemQuantity, removeItem } = useCart();
+  const { toast } = useToast();
+  const { items, updateItemQuantity, removeItem, isLoading: isCartLoading, isSyncing, error } =
+    useCart();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const validIds = new Set(items.map((item) => item.id));
+    setSelectedIds((prev) => {
+      let changed = false;
+      const next = new Set<string>();
+      prev.forEach((id) => {
+        if (validIds.has(id)) {
+          next.add(id);
+        } else {
+          changed = true;
+        }
+      });
+      if (!changed && next.size === prev.size) {
+        return prev;
+      }
+      return next;
+    });
+  }, [items]);
+
+  const handleActionError = useCallback(
+    (err: unknown, fallback: string) => {
+      const description =
+        err instanceof Error && err.message ? err.message : fallback;
+      toast({
+        title: "Không thể thực hiện thao tác",
+        description,
+        variant: "destructive",
+      });
+    },
+    [toast],
+  );
 
   const formatter = useMemo(
     () => new Intl.NumberFormat("vi-VN", {
@@ -162,18 +197,20 @@ const CartPage = () => {
   const isAllSelected = items.length > 0 && selectedIds.size === items.length;
 
   const handleSelect = (itemId: string) => {
+    if (isSyncing || isCartLoading) return;
     setSelectedIds((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(itemId)) {
-        newSet.delete(itemId);
+      const next = new Set(prev);
+      if (next.has(itemId)) {
+        next.delete(itemId);
       } else {
-        newSet.add(itemId);
+        next.add(itemId);
       }
-      return newSet;
+      return next;
     });
   };
 
   const handleSelectAll = () => {
+    if (isSyncing || isCartLoading) return;
     if (isAllSelected) {
       setSelectedIds(new Set());
     } else {
@@ -181,15 +218,48 @@ const CartPage = () => {
     }
   };
 
-  const handleDeleteSelected = () => {
-    selectedIds.forEach((id) => removeItem(id));
-    setSelectedIds(new Set());
+  const handleDeleteSelected = async () => {
+    if (isSyncing || selectedIds.size === 0) return;
+    try {
+      for (const id of Array.from(selectedIds)) {
+        await removeItem(id);
+      }
+      setSelectedIds(new Set());
+    } catch (err) {
+      handleActionError(err, "Không thể xoá các dịch vụ đã chọn.");
+    }
+  };
+
+  const handleQuantityChange = async (
+    itemId: string,
+    payload: { adults: number; children: number },
+  ) => {
+    if (isSyncing) return;
+    try {
+      await updateItemQuantity(itemId, payload);
+    } catch (err) {
+      handleActionError(err, "Không thể cập nhật số lượng vé.");
+    }
+  };
+
+  const handleRemoveItem = async (itemId: string) => {
+    if (isSyncing) return;
+    try {
+      await removeItem(itemId);
+    } catch (err) {
+      handleActionError(err, "Không thể xoá dịch vụ khỏi giỏ hàng.");
+    }
   };
 
   const handleCheckout = () => {
+    if (isSyncing) return;
     if (selectedItems.length !== 1) {
-        alert("Vui lòng chỉ chọn 1 tour để tiến hành thanh toán.");
-        return;
+      toast({
+        title: "Vui lòng chọn một dịch vụ",
+        description: "Chỉ khi chọn đúng một dịch vụ, bạn mới có thể tiến hành thanh toán.",
+        variant: "destructive",
+      });
+      return;
     }
     const item = selectedItems[0];
     const params = new URLSearchParams({
@@ -211,6 +281,14 @@ const CartPage = () => {
       <main className="container mx-auto flex-1 px-4 py-8">
         <div className="mt-6 grid gap-8 lg:grid-cols-[3fr_1fr] lg:items-start">
           <div className="space-y-4">
+            {error && (
+              <Alert variant="destructive">
+                <AlertTitle>Không thể tải giỏ hàng</AlertTitle>
+                <AlertDescription>
+                  {error.message || "Đã xảy ra lỗi khi đồng bộ giỏ hàng. Vui lòng thử lại."}
+                </AlertDescription>
+              </Alert>
+            )}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -218,6 +296,7 @@ const CartPage = () => {
                     id="select-all"
                     checked={isAllSelected}
                     onCheckedChange={handleSelectAll}
+                    disabled={isCartLoading || isSyncing || items.length === 0}
                   />
                   <label htmlFor="select-all" className="text-sm font-medium cursor-pointer">
                     Tất cả ({items.length} dịch vụ)
@@ -227,21 +306,45 @@ const CartPage = () => {
                   variant="ghost"
                   size="sm"
                   onClick={handleDeleteSelected}
-                  disabled={selectedIds.size === 0}
+                  disabled={selectedIds.size === 0 || isSyncing}
                   className="text-red-600 hover:text-red-700"
                 >
-                  <Trash2 className="mr-2 h-4 w-4" />
+                  {isSyncing ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="mr-2 h-4 w-4" />
+                  )}
                   Xoá dịch vụ đã chọn
                 </Button>
               </CardHeader>
               <CardContent className="divide-y p-0">
-                {items.length === 0 ? (
+                {isCartLoading ? (
+                  <div className="space-y-6 p-4">
+                    {Array.from({ length: 3 }).map((_, index) => (
+                      <div key={index} className="flex items-start gap-4">
+                        <Skeleton className="mt-1 h-5 w-5 rounded-md" />
+                        <Skeleton className="h-24 w-24 rounded-lg" />
+                        <div className="flex-1 space-y-3">
+                          <Skeleton className="h-5 w-2/3" />
+                          <Skeleton className="h-4 w-1/2" />
+                          <Skeleton className="h-4 w-1/3" />
+                        </div>
+                        <div className="flex flex-col items-end gap-2">
+                          <Skeleton className="h-5 w-20" />
+                          <Skeleton className="h-8 w-24" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : items.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-16 text-center">
                     <ShoppingBag className="h-16 w-16 text-gray-300" />
                     <p className="mt-4 font-semibold text-foreground">Giỏ hàng của bạn đang trống</p>
-                    <p className="text-sm text-muted-foreground">Khám phá và thêm các hoạt động yêu thích!</p>
+                    <p className="text-sm text-muted-foreground">
+                      Khám phá và thêm các hoạt động yêu thích!
+                    </p>
                     <Button asChild className="mt-4">
-                        <Link to="/activities">Khám phá ngay</Link>
+                      <Link to="/activities">Khám phá ngay</Link>
                     </Button>
                   </div>
                 ) : (
@@ -251,6 +354,7 @@ const CartPage = () => {
                         checked={selectedIds.has(item.id)}
                         onCheckedChange={() => handleSelect(item.id)}
                         className="mt-1"
+                        disabled={isSyncing}
                       />
                       <img
                         src={item.thumbnail ?? "https://via.placeholder.com/150"}
@@ -260,45 +364,110 @@ const CartPage = () => {
                       <div className="flex-1 space-y-1">
                         <h3 className="font-semibold text-foreground">{item.tourTitle}</h3>
                         <p className="text-sm text-muted-foreground">{item.packageName}</p>
-                        {item.scheduleTitle && <p className="text-sm text-muted-foreground">Khởi hành: {item.scheduleTitle}</p>}
-                        <div className="flex items-center gap-6 pt-2">
-                           <div className="flex items-center gap-2">
-                                <span className="text-sm text-muted-foreground">Người lớn:</span>
-                                <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateItemQuantity(item.id, { adults: Math.max(1, item.adultCount - 1), children: item.childCount })}><Minus className="h-3 w-3" /></Button>
-                                <span className="w-5 text-center font-medium">{item.adultCount}</span>
-                                <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateItemQuantity(item.id, { adults: item.adultCount + 1, children: item.childCount })}><Plus className="h-3 w-3" /></Button>
-                           </div>
+                        {item.scheduleTitle && (
+                          <p className="text-sm text-muted-foreground">Khởi hành: {item.scheduleTitle}</p>
+                        )}
+                        <div className="flex flex-wrap items-center gap-6 pt-2">
                           <div className="flex items-center gap-2">
-                                <span className="text-sm text-muted-foreground">Trẻ em:</span>
-                                <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateItemQuantity(item.id, { adults: item.adultCount, children: Math.max(0, item.childCount - 1) })}><Minus className="h-3 w-3" /></Button>
-                                <span className="w-5 text-center font-medium">{item.childCount}</span>
-                                <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateItemQuantity(item.id, { adults: item.adultCount, children: item.childCount + 1 })}><Plus className="h-3 w-3" /></Button>
-                           </div>
+                            <span className="text-sm text-muted-foreground">Người lớn:</span>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-6 w-6"
+                              disabled={isSyncing}
+                              onClick={() =>
+                                handleQuantityChange(item.id, {
+                                  adults: Math.max(1, item.adultCount - 1),
+                                  children: item.childCount,
+                                })
+                              }
+                            >
+                              <Minus className="h-3 w-3" />
+                            </Button>
+                            <span className="w-5 text-center font-medium">{item.adultCount}</span>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-6 w-6"
+                              disabled={isSyncing}
+                              onClick={() =>
+                                handleQuantityChange(item.id, {
+                                  adults: item.adultCount + 1,
+                                  children: item.childCount,
+                                })
+                              }
+                            >
+                              <Plus className="h-3 w-3" />
+                            </Button>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-muted-foreground">Trẻ em:</span>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-6 w-6"
+                              disabled={isSyncing}
+                              onClick={() =>
+                                handleQuantityChange(item.id, {
+                                  adults: item.adultCount,
+                                  children: Math.max(0, item.childCount - 1),
+                                })
+                              }
+                            >
+                              <Minus className="h-3 w-3" />
+                            </Button>
+                            <span className="w-5 text-center font-medium">{item.childCount}</span>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-6 w-6"
+                              disabled={isSyncing}
+                              onClick={() =>
+                                handleQuantityChange(item.id, {
+                                  adults: item.adultCount,
+                                  children: item.childCount + 1,
+                                })
+                              }
+                            >
+                              <Plus className="h-3 w-3" />
+                            </Button>
+                          </div>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="font-semibold text-lg text-foreground">{formatter.format(item.totalPrice)}</p>
-                        <div className="flex gap-2 mt-2">
-                          <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              onClick={() => {
-                                const params = new URLSearchParams({
-                                  tab: "packages",
-                                  cartItemId: item.id,
-                                  packageId: item.packageId,
-                                  adults: String(item.adultCount),
-                                  children: String(item.childCount),
-                                });
-                                if (item.scheduleId) {
-                                  params.set("scheduleId", item.scheduleId);
-                                }
-                                navigate(`/activity/${item.tourId}?${params.toString()}`);
-                              }}
+                        <p className="font-semibold text-lg text-foreground">
+                          {formatter.format(item.totalPrice)}
+                        </p>
+                        <div className="mt-2 flex gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={isSyncing}
+                            onClick={() => {
+                              const params = new URLSearchParams({
+                                tab: "packages",
+                                cartItemId: item.id,
+                                packageId: item.packageId,
+                                adults: String(item.adultCount),
+                                children: String(item.childCount),
+                              });
+                              if (item.scheduleId) {
+                                params.set("scheduleId", item.scheduleId);
+                              }
+                              navigate(`/activity/${item.tourId}?${params.toString()}`);
+                            }}
                           >
-                              Sửa
-                          </Button>                            
-                          <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700" onClick={() => removeItem(item.id)}>Xoá</Button>
+                            Sửa
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-600 hover:text-red-700"
+                            disabled={isSyncing}
+                            onClick={() => handleRemoveItem(item.id)}
+                          >
+                            Xoá
+                          </Button>
                         </div>
                       </div>
                     </div>
@@ -315,7 +484,7 @@ const CartPage = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex justify-between text-muted-foreground">
-                  <span>Tổng cộng ({selectedIds.size} dịch vụ)</span>
+                  <span>Tổng cộng ({selectedItems.length} dịch vụ)</span>
                   <span className="font-semibold text-foreground">{formatter.format(totalSelectedAmount)}</span>
                 </div>
                  
@@ -324,14 +493,14 @@ const CartPage = () => {
                  <Button
                     size="lg"
                     className="w-full bg-orange-500 hover:bg-orange-600"
-                    disabled={selectedIds.size !== 1}
+                    disabled={selectedItems.length !== 1 || isSyncing}
                     onClick={handleCheckout}
                  >
                     Thanh toán
                 </Button>
               </CardFooter>
             </Card>
-             {selectedIds.size !== 1 && (
+             {selectedItems.length !== 1 && (
                 <p className="text-xs text-center text-muted-foreground">Vui lòng chọn 1 dịch vụ để tiến hành thanh toán.</p>
             )}
           </div>

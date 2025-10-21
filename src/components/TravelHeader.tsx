@@ -315,12 +315,18 @@ const TravelHeader = () => {
                           </Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          onClick={() => {
-                            clearCart({ persist: false });
+                          onClick={async () => {
+                            try {
+                              await clearCart({ persist: false });
+                            } catch (cartError) {
+                              console.error("Không thể xoá giỏ hàng khi đăng xuất:", cartError);
+                            }
                             localStorage.removeItem("token");
                             localStorage.removeItem("user");
                             setCurrentUser(null);
-                            setTimeout(() => { window.location.href = "/" }, 300);
+                            setTimeout(() => {
+                              window.location.href = "/";
+                            }, 300);
                           }}
                           className="cursor-pointer flex items-center gap-2 text-red-600"
                         >

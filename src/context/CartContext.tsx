@@ -1,4 +1,22 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
+import {
+  addCartItem as addCartItemRequest,
+  deleteCartItem as deleteCartItemRequest,
+  fetchCart as fetchCartRequest,
+  updateCartItem as updateCartItemRequest,
+  type CartApiItem,
+  type CartApiResponse,
+} from "@/services/cartApi";
 import { useUser } from "./UserContext";
 
 export interface CartItem {
@@ -34,20 +52,21 @@ export interface CartItemInput {
 
 interface CartContextValue {
   items: CartItem[];
-  addItem: (input: CartItemInput) => void;
-  updateItemQuantity: (id: string, params: { adults: number; children: number }) => void;
-  removeItem: (id: string) => void;
-  clearCart: (options?: { persist?: boolean }) => void;
+  addItem: (input: CartItemInput) => Promise<void>;
+  updateItemQuantity: (id: string, params: { adults: number; children: number }) => Promise<void>;
+  removeItem: (id: string) => Promise<void>;
+  clearCart: (options?: { persist?: boolean }) => Promise<void>;
   totalItems: number;
   totalAmount: number;
   totalAdults: number;
   totalChildren: number;
+  isLoading: boolean;
+  isSyncing: boolean;
+  error: Error | null;
+  refetch: () => Promise<void>;
 }
 
 const CartContext = createContext<CartContextValue | undefined>(undefined);
-
-const STORAGE_KEY_PREFIX = "trip-curate-cart";
-const LEGACY_STORAGE_KEY = STORAGE_KEY_PREFIX;
 
 const createId = () => {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -56,166 +75,415 @@ const createId = () => {
   return `cart-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
-const buildStorageKey = (identifier: string | null) =>
-  identifier ? `${STORAGE_KEY_PREFIX}-${identifier}` : null;
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
 
-const readCartFromStorage = (storageKey: string | null): CartItem[] => {
-  if (typeof window === "undefined" || !storageKey) return [];
-  try {
-    const raw = window.localStorage.getItem(storageKey);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((item): item is CartItem => typeof item === "object" && item !== null);
-  } catch {
-    return [];
+const firstString = (...values: Array<unknown>): string | undefined => {
+  for (const value of values) {
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (trimmed.length > 0) return trimmed;
+    }
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return String(value);
+    }
+    if (typeof value === "bigint") {
+      return value.toString();
+    }
   }
+  return undefined;
 };
 
-export const CartProvider = ({ children }: { children: React.ReactNode }) => {
+const firstNumber = (...values: Array<unknown>): number | undefined => {
+  for (const value of values) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+    if (typeof value === "bigint") {
+      return Number(value);
+    }
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (!trimmed) continue;
+      const parsed = Number(trimmed);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+  }
+  return undefined;
+};
+
+const firstStringFromCollection = (value: unknown): string | undefined => {
+  if (!Array.isArray(value)) return undefined;
+  for (const candidate of value) {
+    if (typeof candidate === "string") {
+      const trimmed = candidate.trim();
+      if (trimmed.length > 0) return trimmed;
+    } else if (isRecord(candidate)) {
+      const nested = firstString(
+        candidate.url,
+        candidate.src,
+        candidate.image,
+        candidate.thumbnail,
+      );
+      if (nested) return nested;
+    }
+  }
+  return undefined;
+};
+
+const parseCount = (value: unknown, fallback = 0) => {
+  const number = firstNumber(value);
+  if (number === undefined) return fallback;
+  return Math.max(0, Math.round(number));
+};
+
+const parsePrice = (value: unknown, fallback = 0) => {
+  const number = firstNumber(value);
+  if (number === undefined) return fallback;
+  return number >= 0 ? number : fallback;
+};
+
+const toIsoString = (value: unknown): string => {
+  const raw = firstString(value);
+  if (!raw) return new Date().toISOString();
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return new Date().toISOString();
+  return date.toISOString();
+};
+
+const mapCartApiItemToCartItem = (item: CartApiItem): CartItem => {
+  const tourData = isRecord(item.tour)
+    ? item.tour
+    : isRecord(item.tour_data)
+    ? item.tour_data
+    : isRecord(item.activity)
+    ? item.activity
+    : undefined;
+
+  const packageData = isRecord(item.package)
+    ? item.package
+    : isRecord(item.package_data)
+    ? item.package_data
+    : undefined;
+
+  const scheduleData = isRecord(item.schedule)
+    ? item.schedule
+    : isRecord(item.schedule_data)
+    ? item.schedule_data
+    : undefined;
+
+  const tourId =
+    firstString(item.tour_id, item.tourId, tourData?.id, tourData?.uuid) ?? createId();
+  const packageId =
+    firstString(item.package_id, item.packageId, packageData?.id, packageData?.uuid) ??
+    `${tourId}-default`;
+
+  const adultCount = parseCount(
+    item.adults ?? item.adult_count ?? item.adultCount ?? item.quantity_adults,
+    0,
+  );
+  const childCount = parseCount(
+    item.children ?? item.child_count ?? item.childCount ?? item.quantity_children,
+    0,
+  );
+
+  const adultPrice = parsePrice(
+    item.adult_price ??
+      item.adultPrice ??
+      packageData?.adult_price ??
+      packageData?.adultPrice ??
+      packageData?.price_per_adult ??
+      packageData?.priceAdult,
+    0,
+  );
+  const childPrice = parsePrice(
+    item.child_price ??
+      item.childPrice ??
+      packageData?.child_price ??
+      packageData?.childPrice ??
+      packageData?.price_per_child ??
+      packageData?.priceChild,
+    0,
+  );
+  const totalPriceValue =
+    firstNumber(item.total_price, item.totalPrice, item.subtotal) ??
+    adultCount * adultPrice +
+      childCount * childPrice;
+  const totalPrice = Math.max(0, totalPriceValue);
+
+  const thumbnail =
+    firstString(item.thumbnail, item.thumbnail_url, tourData?.thumbnail, tourData?.thumbnail_url) ??
+    firstStringFromCollection(tourData?.images) ??
+    firstStringFromCollection(tourData?.media);
+
+  const scheduleId = firstString(
+    item.schedule_id,
+    item.scheduleId,
+    scheduleData?.id,
+    scheduleData?.uuid,
+  );
+
+  return {
+    id:
+      firstString(item.id, item.uuid, item.cart_item_id, item.cartItemId, item.cart_item_uuid) ??
+      `${tourId}-${packageId}-${Math.random().toString(36).slice(2, 10)}`,
+    tourId,
+    tourTitle:
+      firstString(item.tour_title, item.tourTitle, tourData?.title, tourData?.name) ??
+      "Tour chưa đặt tên",
+    packageId,
+    packageName: firstString(item.package_name, item.packageName, packageData?.name),
+    scheduleId: scheduleId ?? undefined,
+    scheduleTitle: firstString(
+      item.schedule_title,
+      item.scheduleTitle,
+      scheduleData?.title,
+      scheduleData?.name,
+    ),
+    thumbnail: thumbnail ?? undefined,
+    adultCount,
+    childCount,
+    adultPrice,
+    childPrice,
+    totalPrice,
+    addedAt: toIsoString(
+      firstString(item.added_at, item.created_at, item.updated_at, item.inserted_at),
+    ),
+  };
+};
+
+const mapCartApiResponseToItems = (response?: CartApiResponse | null): CartItem[] => {
+  if (!response || !Array.isArray(response.items)) return [];
+  return response.items
+    .map((item) => {
+      try {
+        return mapCartApiItemToCartItem(item);
+      } catch (error) {
+        console.warn("Bỏ qua mục giỏ hàng không hợp lệ:", error, item);
+        return null;
+      }
+    })
+    .filter((item): item is CartItem => item !== null);
+};
+
+export const CartProvider = ({ children }: { children: ReactNode }) => {
   const { currentUser } = useUser();
   const [items, setItems] = useState<CartItem[]>([]);
-  const skipNextPersistRef = useRef(false);
-
-  const storageIdentifier = useMemo(() => {
+  const [error, setError] = useState<Error | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const userIdentifier = useMemo(() => {
     if (!currentUser) return null;
     if (currentUser.id !== undefined && currentUser.id !== null) {
       return String(currentUser.id);
     }
-    if (currentUser.email) {
+    if ("email" in currentUser && currentUser.email) {
       return `email:${currentUser.email}`;
     }
     return null;
   }, [currentUser]);
-
-  const activeStorageKey = useMemo(() => buildStorageKey(storageIdentifier), [storageIdentifier]);
+  const activeUserIdentifierRef = useRef<string | null>(userIdentifier);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    activeUserIdentifierRef.current = userIdentifier;
+  }, [userIdentifier]);
 
-    if (!storageIdentifier) {
+  const applyResource = useCallback((resource?: CartApiResponse | null) => {
+    setItems(mapCartApiResponseToItems(resource));
+  }, []);
+
+  const loadCart = useCallback(async () => {
+    if (!currentUser) {
       setItems([]);
+      setError(null);
+      return;
+    }
+    const targetIdentifier = userIdentifier;
+    try {
+      const resource = await fetchCartRequest();
+      if (targetIdentifier !== activeUserIdentifierRef.current) {
+        return;
+      }
+      applyResource(resource);
+      setError(null);
+    } catch (err) {
+      const normalized =
+        err instanceof Error ? err : new Error("Không thể tải giỏ hàng từ máy chủ");
+      setError(normalized);
+      console.error("Không thể tải giỏ hàng:", err);
+      throw normalized;
+    }
+  }, [currentUser, userIdentifier, applyResource]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!currentUser) {
+      setItems([]);
+      setError(null);
+      setIsLoading(false);
       return;
     }
 
-    const storedCart = readCartFromStorage(activeStorageKey);
-    if (storedCart.length > 0) {
-      setItems(storedCart);
-      return;
-    }
-
-    const legacyCart = readCartFromStorage(LEGACY_STORAGE_KEY);
-    if (legacyCart.length > 0) {
-      setItems(legacyCart);
+    const bootstrap = async () => {
+      if (!cancelled) {
+        setIsLoading(true);
+      }
       try {
-        window.localStorage.setItem(activeStorageKey!, JSON.stringify(legacyCart));
-        window.localStorage.removeItem(LEGACY_STORAGE_KEY);
-      } catch (error) {
-        console.warn("Không thể migrate giỏ hàng sang tài khoản:", error);
+        await loadCart();
+      } catch {
+        // loadCart đã xử lý lỗi và log
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
       }
-      return;
-    }
+    };
 
-    setItems([]);
-  }, [activeStorageKey, storageIdentifier]);
+    bootstrap();
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!activeStorageKey) return;
-    if (skipNextPersistRef.current) {
-      skipNextPersistRef.current = false;
-      return;
-    }
-    try {
-      window.localStorage.setItem(activeStorageKey, JSON.stringify(items));
-    } catch (error) {
-      console.warn("Không thể lưu giỏ hàng vào localStorage:", error);
-    }
-  }, [items, activeStorageKey]);
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser, loadCart]);
 
-  const addItem = (input: CartItemInput) => {
-    setItems((prev) => {
-      const key = `${input.tourId}-${input.packageId}-${input.scheduleId ?? "none"}`;
-      const existing = prev.find((item) => `${item.tourId}-${item.packageId}-${item.scheduleId ?? "none"}` === key);
-      const adultCount = Math.max(0, input.adultCount);
-      const childCount = Math.max(0, input.childCount);
-      const totalPrice = adultCount * input.adultPrice + childCount * input.childPrice;
-
-      if (existing) {
-        return prev.map((item) =>
-          item.id === existing.id
-            ? {
-                ...item,
-                adultCount: item.adultCount + adultCount,
-                childCount: item.childCount + childCount,
-                totalPrice:
-                  (item.adultCount + adultCount) * item.adultPrice +
-                  (item.childCount + childCount) * item.childPrice,
-                addedAt: new Date().toISOString(),
-              }
-            : item,
-        );
+  const addItem = useCallback(
+    async (input: CartItemInput) => {
+      if (!currentUser) {
+        const errorInstance = new Error("Vui lòng đăng nhập để thêm vào giỏ hàng.");
+        setError(errorInstance);
+        return Promise.reject(errorInstance);
       }
 
-      const newItem: CartItem = {
-        id: createId(),
-        tourId: input.tourId,
-        tourTitle: input.tourTitle,
-        packageId: input.packageId,
-        packageName: input.packageName,
-        scheduleId: input.scheduleId,
-        scheduleTitle: input.scheduleTitle,
-        thumbnail: input.thumbnail,
-        adultCount,
-        childCount,
-        adultPrice: input.adultPrice,
-        childPrice: input.childPrice,
-        totalPrice,
-        addedAt: new Date().toISOString(),
+      const payload = {
+        tour_id: input.tourId,
+        package_id: input.packageId,
+        schedule_id: input.scheduleId ?? null,
+        adults: Math.max(0, Math.round(input.adultCount)),
+        children: Math.max(0, Math.round(input.childCount)),
       };
-      return [newItem, ...prev];
-    });
-  };
 
-  const updateItemQuantity = (id: string, params: { adults: number; children: number }) => {
-    setItems((prev) =>
-      prev
-        .map((item) => {
-          if (item.id !== id) return item;
-          const adults = Math.max(0, params.adults);
-          const children = Math.max(0, params.children);
-          const totalPrice = adults * item.adultPrice + children * item.childPrice;
-          return {
-            ...item,
-            adultCount: adults,
-            childCount: children,
-            totalPrice,
-          };
-        })
-        .filter((item) => item.adultCount + item.childCount > 0),
-    );
-  };
+      setIsSyncing(true);
+      try {
+        const resource = await addCartItemRequest(payload);
+        applyResource(resource);
+        setError(null);
+      } catch (err) {
+        const normalized =
+          err instanceof Error ? err : new Error("Không thể thêm mục vào giỏ hàng");
+        setError(normalized);
+        console.error("Không thể thêm mục vào giỏ hàng:", err);
+        throw normalized;
+      } finally {
+        setIsSyncing(false);
+      }
+    },
+    [currentUser, applyResource],
+  );
 
-  const removeItem = (id: string) => {
-    setItems((prev) => prev.filter((item) => item.id !== id));
-  };
+  const updateItemQuantity = useCallback(
+    async (id: string, params: { adults: number; children: number }) => {
+      if (!currentUser) {
+        const errorInstance = new Error("Vui lòng đăng nhập để cập nhật giỏ hàng.");
+        setError(errorInstance);
+        return Promise.reject(errorInstance);
+      }
 
-  const clearCart = (options?: { persist?: boolean }) => {
-    if (options?.persist === false) {
-      skipNextPersistRef.current = true;
-      setItems([]);
-      return;
-    }
-    setItems([]);
-    if (typeof window === "undefined" || !activeStorageKey) return;
-    try {
-      window.localStorage.removeItem(activeStorageKey);
-    } catch (error) {
-      console.warn("Không thể xóa giỏ hàng khỏi localStorage:", error);
-    }
-  };
+      const payload = {
+        adults: Math.max(0, Math.round(params.adults)),
+        children: Math.max(0, Math.round(params.children)),
+      };
 
-  const totalItems = useMemo(() => items.length, [items]);
+      setIsSyncing(true);
+      try {
+        const resource = await updateCartItemRequest(id, payload);
+        applyResource(resource);
+        setError(null);
+      } catch (err) {
+        const normalized =
+          err instanceof Error ? err : new Error("Không thể cập nhật mục trong giỏ hàng");
+        setError(normalized);
+        console.error("Không thể cập nhật mục trong giỏ hàng:", err);
+        throw normalized;
+      } finally {
+        setIsSyncing(false);
+      }
+    },
+    [currentUser, applyResource],
+  );
+
+  const removeItem = useCallback(
+    async (id: string) => {
+      if (!currentUser) {
+        const errorInstance = new Error("Vui lòng đăng nhập để xoá mục khỏi giỏ hàng.");
+        setError(errorInstance);
+        return Promise.reject(errorInstance);
+      }
+
+      setIsSyncing(true);
+      try {
+        const resource = await deleteCartItemRequest(id);
+        applyResource(resource);
+        setError(null);
+      } catch (err) {
+        const normalized =
+          err instanceof Error ? err : new Error("Không thể xoá mục khỏi giỏ hàng");
+        setError(normalized);
+        console.error("Không thể xoá mục khỏi giỏ hàng:", err);
+        throw normalized;
+      } finally {
+        setIsSyncing(false);
+      }
+    },
+    [currentUser, applyResource],
+  );
+
+  const clearCart = useCallback(
+    async (options?: { persist?: boolean }) => {
+      if (options?.persist === false) {
+        setItems([]);
+        setError(null);
+        return;
+      }
+
+      if (!currentUser) {
+        setItems([]);
+        setError(null);
+        return;
+      }
+
+      if (items.length === 0) {
+        setError(null);
+        return;
+      }
+
+      setIsSyncing(true);
+      try {
+        for (const item of items) {
+          await deleteCartItemRequest(item.id);
+        }
+        await loadCart();
+        setError(null);
+      } catch (err) {
+        const normalized =
+          err instanceof Error ? err : new Error("Không thể xoá toàn bộ giỏ hàng");
+        setError(normalized);
+        console.error("Không thể xoá toàn bộ giỏ hàng:", err);
+        throw normalized;
+      } finally {
+        setIsSyncing(false);
+      }
+    },
+    [items, currentUser, loadCart],
+  );
+
+  const refetch = useCallback(async () => {
+    await loadCart();
+  }, [loadCart]);
+
+  const totalItems = items.length;
   const totalAmount = useMemo(
     () => items.reduce((sum, item) => sum + item.totalPrice, 0),
     [items],
@@ -239,6 +507,10 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
     totalAmount,
     totalAdults,
     totalChildren,
+    isLoading,
+    isSyncing,
+    error,
+    refetch,
   };
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

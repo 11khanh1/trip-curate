@@ -28,6 +28,7 @@ import {
   cancelBooking,
   fetchBookingDetail,
   type Booking,
+  type BookingContact,
   type BookingPassenger,
   type BookingPayment,
 } from "@/services/bookingApi";
@@ -100,6 +101,124 @@ const formatDateTime = (value?: string | null) => {
     month: "2-digit",
     year: "numeric",
   });
+};
+
+const coalesceString = (...values: Array<unknown>): string | null => {
+  for (const value of values) {
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (trimmed.length > 0) {
+        return trimmed;
+      }
+    }
+  }
+  return null;
+};
+
+const isUrl = (value: string | null | undefined): string | null => {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return null;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return null;
+};
+
+const toRecord = (value: unknown): Record<string, unknown> | undefined => {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return undefined;
+};
+
+const parseMetaRecord = (meta: unknown): Record<string, unknown> | undefined => {
+  if (!meta) return undefined;
+  if (typeof meta === "string") {
+    try {
+      const parsed = JSON.parse(meta);
+      return toRecord(parsed);
+    } catch {
+      return undefined;
+    }
+  }
+  return toRecord(meta);
+};
+
+const findUrlDeep = (source: unknown): string | null => {
+  if (typeof source === "string") {
+    return isUrl(source);
+  }
+  if (!source || typeof source !== "object") return null;
+  if (Array.isArray(source)) {
+    for (const item of source) {
+      const result = findUrlDeep(item);
+      if (result) return result;
+    }
+    return null;
+  }
+  const record = source as Record<string, unknown>;
+  for (const key of Object.keys(record)) {
+    const result = findUrlDeep(record[key]);
+    if (result) return result;
+  }
+  return null;
+};
+
+const extractPaymentUrl = (payment?: BookingPayment | null): string | null => {
+  if (!payment) return null;
+  const paymentRecord = toRecord(payment) ?? {};
+  const metaRecord = parseMetaRecord(paymentRecord.meta);
+  const nestedMetaData = metaRecord?.data ? parseMetaRecord(metaRecord.data) : undefined;
+  const candidateSources = [paymentRecord, metaRecord, nestedMetaData];
+  const candidateKeys = [
+    "payment_url",
+    "paymentUrl",
+    "payment_link",
+    "paymentLink",
+    "pay_url",
+    "payUrl",
+    "checkout_url",
+    "checkoutUrl",
+    "redirect_url",
+    "redirectUrl",
+    "gateway_url",
+    "gatewayUrl",
+    "intent_url",
+    "intentUrl",
+    "url",
+    "link",
+  ];
+
+  for (const source of candidateSources) {
+    if (!source) continue;
+    for (const key of candidateKeys) {
+      const value = source[key];
+      if (typeof value === "string") {
+        const normalized = isUrl(value);
+        if (normalized) return normalized;
+      }
+    }
+  }
+
+  const deepMetaUrl = metaRecord ? findUrlDeep(metaRecord) : null;
+  if (deepMetaUrl) return deepMetaUrl;
+
+  const deepPaymentUrl = findUrlDeep(paymentRecord);
+  if (deepPaymentUrl) return deepPaymentUrl;
+
+  return null;
+};
+
+const resolveBookingPaymentUrl = (booking?: Booking | null): string | null => {
+  if (!booking) return null;
+  const directUrl = coalesceString(booking.payment_url) ?? null;
+  if (directUrl) return directUrl;
+  if (Array.isArray(booking.payments)) {
+    for (const payment of booking.payments) {
+      const candidate = extractPaymentUrl(payment);
+      if (candidate) return candidate;
+    }
+  }
+  return null;
 };
 
 const BookingDetailSkeleton = () => (
@@ -176,12 +295,99 @@ const BookingDetailPage = () => {
     booking?.can_cancel ?? (booking?.status === "pending" || booking?.status === "confirmed"),
   );
 
-  const paymentUrl = booking?.payment_url;
-  const paymentPending =
-    booking?.payment_method === "sepay" &&
-    booking?.payment_status !== "paid" &&
-    typeof paymentUrl === "string" &&
-    paymentUrl.length > 0;
+  const bookingPaymentUrl = resolveBookingPaymentUrl(booking);
+  const paymentMethod = (booking?.payment_method ?? "").toString().toLowerCase();
+  const paymentStatusNormalized = (booking?.payment_status ?? booking?.status ?? "")
+    .toString()
+    .toLowerCase();
+  const isPaid =
+    paymentStatusNormalized === "paid" ||
+    paymentStatusNormalized === "success" ||
+    paymentStatusNormalized === "completed";
+  const canPayOnline =
+    paymentMethod === "sepay" &&
+    typeof bookingPaymentUrl === "string" &&
+    bookingPaymentUrl.length > 0 &&
+    !isPaid;
+  const paymentButtonConfig = (() => {
+    if (canPayOnline) {
+      return {
+        label: "Thanh toán ngay",
+        asChild: true,
+        disabled: false,
+        href: bookingPaymentUrl!,
+        hrefTarget: "_blank" as "_blank" | undefined,
+      };
+    }
+    if (isPaid) {
+      return {
+        label: "Đã thanh toán",
+        asChild: false,
+        disabled: true,
+        href: null,
+        hrefTarget: undefined,
+      };
+    }
+    if (paymentMethod === "offline") {
+      return {
+        label: "Thanh toán trực tiếp",
+        asChild: false,
+        disabled: true,
+        href: null,
+        hrefTarget: undefined,
+      };
+    }
+    if (bookingPaymentUrl) {
+      return {
+        label: "Xem liên kết thanh toán",
+        asChild: true,
+        disabled: false,
+        href: bookingPaymentUrl,
+        hrefTarget: "_blank" as "_blank" | undefined,
+      };
+    }
+    return {
+      label: "Thanh toán chưa khả dụng",
+      asChild: false,
+      disabled: true,
+      href: null,
+      hrefTarget: undefined,
+    };
+  })();
+
+  const renderPaymentButton = () => {
+    if (paymentButtonConfig.asChild && paymentButtonConfig.href) {
+      return (
+        <Button asChild disabled={paymentButtonConfig.disabled}>
+          <a
+            href={paymentButtonConfig.href}
+            target={paymentButtonConfig.hrefTarget}
+            rel="noopener noreferrer"
+          >
+            {paymentButtonConfig.label}
+          </a>
+        </Button>
+      );
+    }
+    return (
+      <Button disabled={paymentButtonConfig.disabled}>{paymentButtonConfig.label}</Button>
+    );
+  };
+
+  const contactRecord =
+    booking?.contact && typeof booking.contact === "object" && !Array.isArray(booking.contact)
+      ? (booking.contact as BookingContact)
+      : undefined;
+  const contactName = coalesceString(booking?.contact_name, contactRecord?.name) ?? "—";
+  const contactPhone = coalesceString(booking?.contact_phone, contactRecord?.phone) ?? "—";
+  const contactEmail = coalesceString(booking?.contact_email, contactRecord?.email) ?? "—";
+  const contactNotes = coalesceString(booking?.notes, contactRecord?.notes);
+  const contactCompany =
+    coalesceString(
+      contactRecord?.company_name,
+      (contactRecord as { company?: string | null } | undefined)?.company ?? undefined,
+      (booking as { company_name?: string | null } | undefined)?.company_name ?? undefined,
+    ) ?? null;
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -291,13 +497,7 @@ const BookingDetailPage = () => {
                 <Button variant="outline" onClick={() => navigate("/bookings")}>
                   Quay lại danh sách
                 </Button>
-                {paymentPending && (
-                  <Button asChild>
-                    <a href={paymentUrl} target="_blank" rel="noopener noreferrer">
-                      Thanh toán ngay
-                    </a>
-                  </Button>
-                )}
+                {renderPaymentButton()}
                 {canCancel && (
                   <Button
                     variant="destructive"
@@ -321,20 +521,26 @@ const BookingDetailPage = () => {
                 <CardContent className="space-y-3 text-sm text-muted-foreground">
                   <div className="flex items-center gap-2">
                     <CheckCircle className="h-4 w-4 text-primary" />
-                    <span>{booking.contact_name}</span>
+                    <span className="text-foreground">{contactName}</span>
                   </div>
+                  {contactCompany && (
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-primary" />
+                      <span className="text-foreground">{contactCompany}</span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2">
                     <Phone className="h-4 w-4 text-primary" />
-                    <span>{booking.contact_phone}</span>
+                    <span className="text-foreground">{contactPhone}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <MailIcon className="h-4 w-4 text-primary" />
-                    <span>{booking.contact_email}</span>
+                    <span className="text-foreground">{contactEmail}</span>
                   </div>
-                  {booking.notes && (
+                  {contactNotes && (
                     <div className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">
                       <p className="font-medium text-foreground">Ghi chú của bạn</p>
-                      <p>{booking.notes}</p>
+                      <p>{contactNotes}</p>
                     </div>
                   )}
                 </CardContent>
@@ -404,6 +610,7 @@ const BookingDetailPage = () => {
                         <TableHead>Số tiền</TableHead>
                         <TableHead>Trạng thái</TableHead>
                         <TableHead>Thời gian</TableHead>
+                        <TableHead className="text-right">Thanh toán</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -425,6 +632,26 @@ const BookingDetailPage = () => {
                               ? formatDateTime(payment.updated_at as string)
                               : "—"}
                           </TableCell>
+                          <TableCell className="text-right">
+                            {(() => {
+                              const paymentUrl = extractPaymentUrl(payment) ?? bookingPaymentUrl;
+                              const statusNormalized = (payment.status ?? "").toLowerCase();
+                              const isPaid =
+                                statusNormalized === "paid" ||
+                                statusNormalized === "success" ||
+                                statusNormalized === "completed";
+                              if (!isPaid && paymentUrl) {
+                                return (
+                                  <Button asChild size="sm">
+                                    <a href={paymentUrl} target="_blank" rel="noopener noreferrer">
+                                      Thanh toán
+                                    </a>
+                                  </Button>
+                                );
+                              }
+                              return "—";
+                            })()}
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -435,6 +662,15 @@ const BookingDetailPage = () => {
                     <AlertTitle>Chưa có giao dịch thanh toán</AlertTitle>
                     <AlertDescription>
                       Booking của bạn chưa phát sinh thanh toán hoặc đang chờ cập nhật từ hệ thống.
+                      {bookingPaymentUrl && (
+                        <div className="mt-3">
+                          <Button asChild size="sm">
+                            <a href={bookingPaymentUrl} target="_blank" rel="noopener noreferrer">
+                              Thanh toán ngay
+                            </a>
+                          </Button>
+                        </div>
+                      )}
                     </AlertDescription>
                   </Alert>
                 )}

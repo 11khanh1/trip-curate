@@ -459,7 +459,7 @@ const ActivityDetail = () => {
   const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(null);
   const [adultCount, setAdultCount] = useState(1);
   const [childCount, setChildCount] = useState(0);
-  const { addItem, removeItem } = useCart();
+  const { addItem } = useCart();
   const { toast } = useToast();
   const { currentUser } = useUser();
   const queryClient = useQueryClient();
@@ -944,7 +944,7 @@ const ActivityDetail = () => {
     setChildCount((prev) => Math.min(MAX_TRAVELLERS - safeAdultCount, prev + 1));
   const decrementChildren = () => setChildCount((prev) => Math.max(0, prev - 1));
 
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
     if (!activity || !selectedPackage) {
       toast({
         title: "Chưa thể thêm vào giỏ",
@@ -961,6 +961,14 @@ const ActivityDetail = () => {
       });
       return;
     }
+    if (!currentUser) {
+      toast({
+        title: "Vui lòng đăng nhập",
+        description: "Bạn cần đăng nhập để thêm dịch vụ vào giỏ hàng.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     const scheduleTitle =
       selectedSchedule?.title ??
@@ -968,33 +976,41 @@ const ActivityDetail = () => {
         ? new Date(selectedSchedule.start_date).toLocaleDateString("vi-VN")
         : undefined);
 
-    if (isEditingCartItem && editingCartItemId) {
-      removeItem(editingCartItemId);
-    }
+    try {
+      await addItem({
+        tourId: activity.id,
+        tourTitle: activity.title,
+        packageId: selectedPackage.packageId ?? selectedPackage.id,
+        packageName: selectedPackage.name,
+        scheduleId: selectedScheduleId ?? undefined,
+        scheduleTitle,
+        thumbnail: activity.images[0] ?? null,
+        adultCount: safeAdultCount,
+        childCount: safeChildCount,
+        adultPrice: adultUnitPrice,
+        childPrice: childUnitPrice,
+      });
 
-    addItem({
-      tourId: activity.id,
-      tourTitle: activity.title,
-      packageId: selectedPackage.packageId ?? selectedPackage.id,
-      packageName: selectedPackage.name,
-      scheduleId: selectedScheduleId ?? undefined,
-      scheduleTitle,
-      thumbnail: activity.images[0] ?? null,
-      adultCount: safeAdultCount,
-      childCount: safeChildCount,
-      adultPrice: adultUnitPrice,
-      childPrice: childUnitPrice,
-    });
+      toast({
+        title: isEditingCartItem ? "Giỏ hàng đã được cập nhật" : "Đã thêm vào giỏ hàng",
+        description: isEditingCartItem
+          ? "Chúng tôi đã cập nhật gói dịch vụ trong giỏ hàng của bạn."
+          : "Bạn có thể xem lại các hoạt động trong giỏ hàng để đặt sau.",
+      });
 
-    toast({
-      title: isEditingCartItem ? "Giỏ hàng đã được cập nhật" : "Đã thêm vào giỏ hàng",
-      description: isEditingCartItem
-        ? "Chúng tôi đã cập nhật gói dịch vụ trong giỏ hàng của bạn."
-        : "Bạn có thể xem lại các hoạt động trong giỏ hàng để đặt sau.",
-    });
-
-    if (isEditingCartItem) {
-      navigate("/cart");
+      if (isEditingCartItem) {
+        navigate("/cart");
+      }
+    } catch (error) {
+      const description =
+        error instanceof Error && error.message
+          ? error.message
+          : "Không thể thêm dịch vụ vào giỏ hàng. Vui lòng thử lại.";
+      toast({
+        title: "Thao tác không thành công",
+        description,
+        variant: "destructive",
+      });
     }
   };
 

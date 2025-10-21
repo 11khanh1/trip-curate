@@ -168,7 +168,7 @@ const BookingCheckout = () => {
 
   const mutation = useMutation({
     mutationFn: (payload: CreateBookingPayload) => createBooking(payload),
-    onSuccess: (response, payload) => {
+    onSuccess: async (response, payload) => {
       toast({
         title: "Đặt chỗ thành công",
         description:
@@ -177,7 +177,7 @@ const BookingCheckout = () => {
             : "Chúng tôi đã gửi email xác nhận cho bạn.",
       });
       if (cartItemId) {
-        removeItem(cartItemId);
+        await removeItem(cartItemId);
       }
       if (payload.payment_method === "sepay" && response.payment_url) {
         window.location.href = response.payment_url;
