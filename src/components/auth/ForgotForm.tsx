@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/context/UserContext";
+import { apiClient, ensureCsrfToken, persistAuthToken } from "@/lib/api-client";
 
 interface ForgotPasswordFormProps {
   onBackToLogin: () => void;
@@ -21,11 +22,16 @@ const ForgotPasswordForm = ({ onBackToLogin }: ForgotPasswordFormProps) => {
   // - "reset": dùng /api/reset-password (không cần otp_id, phù hợp khi verify trả token)
   const [resetMode, setResetMode] = useState<"set" | "reset">("set");
   const [loading, setLoading] = useState(false);
-  const isProd = import.meta.env.MODE === "production";
-  const BASE_URL = isProd
-    ? import.meta.env.VITE_API_BASE_URL_PROD
-    : import.meta.env.VITE_API_BASE_URL;
   const { setCurrentUser } = useUser();
+
+  const getErrorMessage = (error: unknown, fallback: string) => {
+    if (!error) return fallback;
+    if (typeof error === "string") return error;
+    const response = (error as any)?.response;
+    if (response?.data?.message) return response.data.message;
+    if (error instanceof Error && error.message) return error.message;
+    return fallback;
+  };
 
   const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(v.trim());
 
@@ -34,18 +40,16 @@ const ForgotPasswordForm = ({ onBackToLogin }: ForgotPasswordFormProps) => {
     if (!isValidEmail(email)) return alert("Email không hợp lệ");
     setLoading(true);
     try {
-      const res = await fetch(`${BASE_URL}/auth/send-otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ channel: "email", value: email.trim() }),
+      await ensureCsrfToken();
+      const { data } = await apiClient.post<{ otp_id?: string; message?: string }>("/auth/send-otp", {
+        channel: "email",
+        value: email.trim(),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.message || "Không thể gửi OTP");
       setOtpId(data?.otp_id ?? null);
       setStep("verify");
-      alert("Mã OTP đã gửi đến email của bạn!");
+      alert(data?.message || "Mã OTP đã gửi đến email của bạn!");
     } catch (err) {
-      alert((err as Error).message);
+      alert(getErrorMessage(err, "Không thể gửi OTP"));
     } finally {
       setLoading(false);
     }
@@ -56,15 +60,17 @@ const ForgotPasswordForm = ({ onBackToLogin }: ForgotPasswordFormProps) => {
     if (!otp) return alert("Vui lòng nhập mã OTP");
     setLoading(true);
     try {
-      const payload: any = { channel: "email", value: email.trim(), otp };
+      await ensureCsrfToken();
+      const payload: Record<string, unknown> = { channel: "email", value: email.trim(), otp };
       if (otpId) payload.otp_id = otpId;
-      const res = await fetch(`${BASE_URL}/auth/verify-otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.message || "OTP không đúng hoặc đã hết hạn");
+      const { data } = await apiClient.post<{
+        otp_id?: string;
+        message?: string;
+        access_token?: string;
+        token?: string;
+        user?: any;
+      }>("/auth/verify-otp", payload);
+      if (!data) throw new Error("OTP không đúng hoặc đã hết hạn");
 
       // Nếu có token (tài khoản tồn tại), chuyển qua chế độ reset-password
       if (data?.access_token || data?.token) {
@@ -81,7 +87,7 @@ const ForgotPasswordForm = ({ onBackToLogin }: ForgotPasswordFormProps) => {
       setPasswordConfirm("");
       setStep("setPassword");
     } catch (err) {
-      alert((err as Error).message);
+      alert(getErrorMessage(err, "OTP không đúng hoặc đã hết hạn"));
     } finally {
       setLoading(false);
     }
@@ -99,55 +105,56 @@ const ForgotPasswordForm = ({ onBackToLogin }: ForgotPasswordFormProps) => {
       return;
     }
 
+    setLoading(true);
     try {
-      let res: Response;
       let data: any;
 
       if (resetMode === "set") {
-        if (!otpId) return alert("Thiếu OTP ID. Vui lòng xác minh OTP lại.");
-        res = await fetch(`${BASE_URL}/auth/set-password`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json" },
-          body: JSON.stringify({
-            otp_id: otpId,
-            channel: "email",
-            value: email,
-            otp,
-            password,
-            password_confirmation: passwordConfirm,
-          }),
+        if (!otpId) {
+          alert("Thiếu OTP ID. Vui lòng xác minh OTP lại.");
+          return;
+        }
+        await ensureCsrfToken();
+        const response = await apiClient.post("/auth/set-password", {
+          otp_id: otpId,
+          channel: "email",
+          value: email,
+          otp,
+          password,
+          password_confirmation: passwordConfirm,
         });
-        data = await res.json().catch(() => ({}));
+        data = response.data;
       } else {
         // resetMode === "reset": dùng endpoint reset-password truyền thống
-        res = await fetch(`${BASE_URL}/reset-password`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json" },
-          body: JSON.stringify({
-            type: "email",
-            value: email,
-            otp,
-            new_password: password,
-            new_password_confirmation: passwordConfirm,
-          }),
+        await ensureCsrfToken();
+        const response = await apiClient.post("/reset-password", {
+          type: "email",
+          value: email,
+          otp,
+          new_password: password,
+          new_password_confirmation: passwordConfirm,
         });
-        data = await res.json().catch(() => ({}));
+        data = response.data;
       }
-      if (!res.ok) {
-        alert(data?.message || "Thiết lập mật khẩu thất bại");
+
+      if (!data) {
+        alert("Thiết lập mật khẩu thất bại");
         return;
       }
       // Nếu backend trả access_token + user thì lưu lại để đăng nhập luôn
       if (data?.access_token) {
-        localStorage.setItem("token", data.access_token);
+        persistAuthToken(data.access_token);
       }
       if (data?.user) {
         localStorage.setItem("user", JSON.stringify(data.user));
+        setCurrentUser(data.user);
       }
       alert("Thiết lập mật khẩu thành công!");
       onBackToLogin();
     } catch (err) {
-      alert("Lỗi kết nối. Vui lòng thử lại.");
+      alert(getErrorMessage(err, "Thiết lập mật khẩu thất bại"));
+    } finally {
+      setLoading(false);
     }
   };
 

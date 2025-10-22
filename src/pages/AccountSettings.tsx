@@ -11,6 +11,7 @@ import Footer from "@/components/Footer";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {  MapPin } from "lucide-react";
+import { apiClient, ensureCsrfToken } from "@/lib/api-client";
 
 
 type SectionType = "profile" | "security" | "notifications" | "payment" | "preferences";
@@ -29,10 +30,14 @@ const AccountSettings = () => {
     newPassword: "",
     confirmPassword: "",
   });
-  const isProd = import.meta.env.MODE === "production";
-  const BASE_URL = isProd
-    ? import.meta.env.VITE_API_BASE_URL_PROD
-    : import.meta.env.VITE_API_BASE_URL;
+  const getErrorMessage = (error: unknown, fallback: string) => {
+    if (!error) return fallback;
+    if (typeof error === "string") return error;
+    const response = (error as any)?.response;
+    if (response?.data?.message) return response.data.message;
+    if (error instanceof Error && error.message) return error.message;
+    return fallback;
+  };
 
   const menuItems = [
     { id: "profile" as SectionType, label: "Hồ sơ của tôi", icon: User },
@@ -78,40 +83,26 @@ const AccountSettings = () => {
     try {
       toast.loading("⏳ Đang xử lý yêu cầu...", { id: "changePwd" });
 
-      const res = await fetch(`${BASE_URL}/api/reset-password`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify({
-            type: "email",
-            value: currentUser?.email,
-            current_password: formData.currentPassword,
-            new_password: formData.newPassword,
-            new_password_confirmation: formData.confirmPassword,
-        }),
+      await ensureCsrfToken();
+      const response = await apiClient.post("/reset-password", {
+        type: "email",
+        value: currentUser?.email,
+        current_password: formData.currentPassword,
+        new_password: formData.newPassword,
+        new_password_confirmation: formData.confirmPassword,
       });
+      const data = response.data ?? {};
 
-      const data = await res.json();
-      console.log("Change password response:", data);
-
-      if (!res.ok) {
-        toast.error(data.message || "Đổi mật khẩu thất bại!", { id: "changePwd" });
-        return;
-      }
-
-      toast.success("✅ Đổi mật khẩu thành công!", { id: "changePwd" });
-      setFormData({
-        ...formData,
+      toast.success(data.message || "✅ Đổi mật khẩu thành công!", { id: "changePwd" });
+      setFormData((prev) => ({
+        ...prev,
         currentPassword: "",
         newPassword: "",
         confirmPassword: "",
-      });
+      }));
     } catch (error) {
       console.error("Lỗi đổi mật khẩu:", error);
-      toast.error("⚠️ Lỗi kết nối đến máy chủ!", { id: "changePwd" });
+      toast.error(getErrorMessage(error, "⚠️ Lỗi kết nối đến máy chủ!"), { id: "changePwd" });
     }
   };
 

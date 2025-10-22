@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useUser } from "@/context/UserContext";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { apiClient, primeCsrfToken } from "@/lib/api-client";
+import { apiClient, ensureCsrfToken, persistAuthToken } from "@/lib/api-client";
 
 interface LoginFormProps {
   onSwitchToRegister: () => void;
@@ -21,6 +21,10 @@ interface LoginResponse {
   message?: string;
 }
 
+interface SocialRedirectResponse {
+  url?: string;
+}
+
 const LoginForm = ({ onSwitchToRegister, onForgotPassword, onSuccess }: LoginFormProps) => {
   const { setCurrentUser } = useUser();
   const navigate = useNavigate();
@@ -32,29 +36,15 @@ const LoginForm = ({ onSwitchToRegister, onForgotPassword, onSuccess }: LoginFor
     ? import.meta.env.VITE_API_BASE_URL_PROD
     : import.meta.env.VITE_API_BASE_URL;
 
-  const ensureCsrfCookie = async () => {
-    if (typeof document === "undefined") return;
-    const hasToken = document.cookie.split(";").some((cookie) => cookie.trim().startsWith("XSRF-TOKEN="));
-    if (!hasToken) {
-      try {
-        await primeCsrfToken();
-      } catch (error) {
-        console.warn("Không thể làm mới cookie CSRF:", error);
-      }
-    }
-  };
-
   const handleChange = (field: string, value: string) =>
     setFormData((prev) => ({ ...prev, [field]: value }));
 
   const openSocialPopup = async (provider: "google" | "facebook") => {
     try {
-      const res = await fetch(`${BASE_URL}/auth/social/${provider}/redirect`, {
-        method: "GET",
-        headers: { Accept: "application/json" },
-      });
-      const data = await res.json().catch(() => ({}));
-      const url = data?.url || `${BASE_URL}/auth/social/${provider}/redirect`;
+      await ensureCsrfToken();
+      const response = await apiClient.get<SocialRedirectResponse>(`/auth/social/${provider}/redirect`);
+      const data = response.data ?? {};
+      const url = data.url || `${BASE_URL}/auth/social/${provider}/redirect`;
       const popup = window.open(url, `oauth-${provider}` , "width=520,height=600,menubar=no,location=no,status=no");
       if (!popup) {
         // Popup bị chặn → redirect toàn trang
@@ -66,15 +56,15 @@ const LoginForm = ({ onSwitchToRegister, onForgotPassword, onSuccess }: LoginFor
         if (!e.data || e.data.type !== "oauth-success") return;
         try {
           const token = e.data.token as string;
-          localStorage.setItem("token", token);
+          persistAuthToken(token);
           // Cố gắng lấy user info (tùy backend)
-          const me = await fetch(`${BASE_URL}/user`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } }).catch(() => null);
-          if (me && me.ok) {
-            const user = await me.json().catch(() => null);
-            if (user) {
-              localStorage.setItem("user", JSON.stringify(user));
-              setCurrentUser(user);
-            }
+          const me = await apiClient.get("/user", {
+            headers: { Authorization: `Bearer ${token}` },
+          }).catch(() => null);
+          if (me && me.status === 200) {
+            const user = me.data;
+            localStorage.setItem("user", JSON.stringify(user));
+            setCurrentUser(user);
           }
           alert("Đăng nhập thành công!");
           onSuccess();
@@ -99,7 +89,7 @@ const LoginForm = ({ onSwitchToRegister, onForgotPassword, onSuccess }: LoginFor
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await ensureCsrfCookie();
+      await ensureCsrfToken();
       const { data } = await apiClient.post<LoginResponse>("/login", {
         email: formData.email.trim(),
         password: formData.password,
@@ -109,7 +99,7 @@ const LoginForm = ({ onSwitchToRegister, onForgotPassword, onSuccess }: LoginFor
 
       const token = data.access_token ?? data.token;
       if (token) {
-        localStorage.setItem("token", token);
+        persistAuthToken(token);
       }
       if (data.user) {
         localStorage.setItem("user", JSON.stringify(data.user));

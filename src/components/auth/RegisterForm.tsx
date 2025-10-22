@@ -6,11 +6,16 @@ import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useUser } from "@/context/UserContext";
+import { apiClient, ensureCsrfToken, persistAuthToken } from "@/lib/api-client";
 
 
 interface RegisterFormProps {
   onSwitchToLogin: (email?: string) => void;
   onSuccess?: () => void;
+}
+
+interface SocialRedirectResponse {
+  url?: string;
 }
 
 const RegisterForm = ({ onSwitchToLogin, onSuccess }: RegisterFormProps) => {
@@ -38,6 +43,14 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }: RegisterFormProps) => {
     ? import.meta.env.VITE_API_BASE_URL_PROD
     : import.meta.env.VITE_API_BASE_URL;
   const { setCurrentUser } = useUser() as any;
+  const getErrorMessage = (error: unknown, fallback: string) => {
+    if (!error) return fallback;
+    if (typeof error === "string") return error;
+    const response = (error as any)?.response;
+    if (response?.data?.message) return response.data.message;
+    if (error instanceof Error && error.message) return error.message;
+    return fallback;
+  };
 
 
   // Gửi mã OTP
@@ -79,12 +92,10 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }: RegisterFormProps) => {
 
   const startSocial = async (provider: "google" | "facebook") => {
     try {
-      const res = await fetch(`${BASE_URL}/auth/social/${provider}/redirect`, {
-        method: "GET",
-        headers: { Accept: "application/json" },
-      });
-      const data = await res.json().catch(() => ({}));
-      const url = data?.url || `${BASE_URL}/auth/social/${provider}/redirect`;
+      await ensureCsrfToken();
+      const response = await apiClient.get<SocialRedirectResponse>(`/auth/social/${provider}/redirect`);
+      const data = response.data ?? {};
+      const url = data.url || `${BASE_URL}/auth/social/${provider}/redirect`;
       const popup = window.open(url, `oauth-${provider}`, "width=520,height=600,menubar=no,location=no,status=no");
       if (!popup) {
         window.location.href = url;
@@ -94,14 +105,14 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }: RegisterFormProps) => {
         if (!e.data || e.data.type !== "oauth-success") return;
         try {
           const token = e.data.token as string;
-          localStorage.setItem("token", token);
-          const me = await fetch(`${BASE_URL}/user`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } }).catch(() => null);
-          if (me && me.ok) {
-            const user = await me.json().catch(() => null);
-            if (user) {
-              localStorage.setItem("user", JSON.stringify(user));
-              setCurrentUser(user);
-            }
+          persistAuthToken(token);
+          const me = await apiClient.get("/user", {
+            headers: { Authorization: `Bearer ${token}` },
+          }).catch(() => null);
+          if (me && me.status === 200) {
+            const user = me.data;
+            localStorage.setItem("user", JSON.stringify(user));
+            setCurrentUser(user);
           }
           alert("Đăng nhập thành công!");
           if (onSuccess) onSuccess(); else onSwitchToLogin();
@@ -134,19 +145,18 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }: RegisterFormProps) => {
     }
     setLoading(true);
     try {
-      const res = await fetch(`${BASE_URL}/auth/send-otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channel: "email", value: trimmed }),
+      await ensureCsrfToken();
+      const { data } = await apiClient.post<{ otp_id?: string; message?: string }>("/auth/send-otp", {
+        channel: "email",
+        value: trimmed,
       });
-      if (!res.ok) throw new Error("Không thể gửi mã xác minh");
-      const data = await res.json().catch(() => ({}));
       setFormData((prev) => ({ ...prev, otpId: data?.otp_id ?? null }));
-      alert("Đã gửi mã xác minh tới email của bạn!");
+      setEmailError(null);
+      alert(data?.message || "Đã gửi mã xác minh tới email của bạn!");
       setStep("verifyEmail");
       startResendCountdown(60);
     } catch (err) {
-      alert((err as Error).message);
+      alert(getErrorMessage(err, "Không thể gửi mã xác minh"));
     } finally {
       setLoading(false);
     }
@@ -157,23 +167,27 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }: RegisterFormProps) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await fetch(`${BASE_URL}/auth/verify-otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify(
-          Object.assign(
-            { channel: "email", value: formData.email, otp: formData.otp },
-            formData.otpId ? { otp_id: formData.otpId } : {}
-          )
-        ),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.message || "Mã xác minh không đúng hoặc đã hết hạn!");
+      await ensureCsrfToken();
+      const payload: Record<string, unknown> = {
+        channel: "email",
+        value: formData.email,
+        otp: formData.otp,
+      };
+      if (formData.otpId) payload.otp_id = formData.otpId;
+      const { data } = await apiClient.post<{
+        otp_id?: string;
+        message?: string;
+        access_token?: string;
+        token?: string;
+        user?: any;
+        status?: string;
+      }>("/auth/verify-otp", payload);
+      if (!data) throw new Error("Mã xác minh không đúng hoặc đã hết hạn!");
 
       // Trường hợp đã có tài khoản: API trả về token + user -> đăng nhập ngay
       if (data?.access_token || data?.token) {
         const token = data.access_token || data.token;
-        localStorage.setItem("token", token);
+        persistAuthToken(token);
         if (data.user) {
           localStorage.setItem("user", JSON.stringify(data.user));
           setCurrentUser(data.user);
@@ -194,7 +208,7 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }: RegisterFormProps) => {
       if (data?.otp_id) setFormData((prev) => ({ ...prev, otpId: data.otp_id }));
       setStep("setPassword");
     } catch (err) {
-      alert((err as Error).message);
+      alert(getErrorMessage(err, "Mã xác minh không đúng hoặc đã hết hạn!"));
     } finally {
       setLoading(false);
     }
@@ -207,28 +221,20 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }: RegisterFormProps) => {
     if (formData.password !== formData.confirmPassword) return alert("Xác nhận mật khẩu không khớp");
     setLoading(true);
     try {
-      const res = await fetch(`${BASE_URL}/auth/set-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify(
-          Object.assign(
-            {
-              otp_id: formData.otpId,
-              channel: "email",
-              value: formData.email,
-              otp: formData.otp,
-              password: formData.password,
-              password_confirmation: formData.confirmPassword,
-            },
-            {}
-          )
-        ),
+      await ensureCsrfToken();
+      const response = await apiClient.post("/auth/set-password", {
+        otp_id: formData.otpId,
+        channel: "email",
+        value: formData.email,
+        otp: formData.otp,
+        password: formData.password,
+        password_confirmation: formData.confirmPassword,
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.message || "Thiết lập mật khẩu thất bại");
+      const data = response.data;
+      if (!data) throw new Error("Thiết lập mật khẩu thất bại");
 
       const token = data.access_token || data.token;
-      if (token) localStorage.setItem("token", token);
+      if (token) persistAuthToken(token);
       if (data.user) {
         localStorage.setItem("user", JSON.stringify(data.user));
         setCurrentUser(data.user);
@@ -236,7 +242,7 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }: RegisterFormProps) => {
       alert("Thiết lập mật khẩu thành công! Bạn đã được đăng nhập.");
       if (onSuccess) onSuccess(); else onSwitchToLogin(formData.email);
     } catch (err) {
-      alert((err as Error).message);
+      alert(getErrorMessage(err, "Thiết lập mật khẩu thất bại"));
     } finally {
       setLoading(false);
     }
@@ -246,18 +252,16 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }: RegisterFormProps) => {
     if (resendIn > 0 || resending) return;
     setResending(true);
     try {
-      const res = await fetch(`${BASE_URL}/auth/send-otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channel: "email", value: formData.email }),
+      await ensureCsrfToken();
+      const { data } = await apiClient.post<{ otp_id?: string; message?: string }>("/auth/send-otp", {
+        channel: "email",
+        value: formData.email,
       });
-      if (!res.ok) throw new Error("Không thể gửi lại mã xác minh");
-      const data = await res.json().catch(() => ({}));
       setFormData((prev) => ({ ...prev, otpId: data?.otp_id ?? prev.otpId }));
-      alert("Đã gửi lại mã xác minh!");
+      alert(data?.message || "Đã gửi lại mã xác minh!");
       startResendCountdown(60);
     } catch (err) {
-      alert((err as Error).message);
+      alert(getErrorMessage(err, "Không thể gửi lại mã xác minh"));
     } finally {
       setResending(false);
     }
