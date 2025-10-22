@@ -6,11 +6,19 @@ import { Button } from "@/components/ui/button";
 import { useUser } from "@/context/UserContext";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { apiClient, primeCsrfToken } from "@/lib/api-client";
 
 interface LoginFormProps {
   onSwitchToRegister: () => void;
   onForgotPassword: () => void;
   onSuccess: () => void;
+}
+
+interface LoginResponse {
+  access_token?: string;
+  token?: string;
+  user?: any;
+  message?: string;
 }
 
 const LoginForm = ({ onSwitchToRegister, onForgotPassword, onSuccess }: LoginFormProps) => {
@@ -24,6 +32,17 @@ const LoginForm = ({ onSwitchToRegister, onForgotPassword, onSuccess }: LoginFor
     ? import.meta.env.VITE_API_BASE_URL_PROD
     : import.meta.env.VITE_API_BASE_URL;
 
+  const ensureCsrfCookie = async () => {
+    if (typeof document === "undefined") return;
+    const hasToken = document.cookie.split(";").some((cookie) => cookie.trim().startsWith("XSRF-TOKEN="));
+    if (!hasToken) {
+      try {
+        await primeCsrfToken();
+      } catch (error) {
+        console.warn("Không thể làm mới cookie CSRF:", error);
+      }
+    }
+  };
 
   const handleChange = (field: string, value: string) =>
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -80,23 +99,35 @@ const LoginForm = ({ onSwitchToRegister, onForgotPassword, onSuccess }: LoginFor
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${BASE_URL}/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: formData.email.trim(), password: formData.password }),
+      await ensureCsrfCookie();
+      const { data } = await apiClient.post<LoginResponse>("/login", {
+        email: formData.email.trim(),
+        password: formData.password,
       });
-      const data = await res.json();
 
-      if (!res.ok) return alert(data.message || "Đăng nhập thất bại");
+      if (!data) throw new Error("Đăng nhập thất bại");
 
-      localStorage.setItem("token", data.access_token || data.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
-      setCurrentUser(data.user);
+      const token = data.access_token ?? data.token;
+      if (token) {
+        localStorage.setItem("token", token);
+      }
+      if (data.user) {
+        localStorage.setItem("user", JSON.stringify(data.user));
+        setCurrentUser(data.user);
+      }
       alert("Đăng nhập thành công!");
       onSuccess();
       navigate("/");
-    } catch {
-      alert("Lỗi mạng hoặc server.");
+    } catch (error) {
+      const response = (error as any)?.response;
+      if (response?.status === 419) {
+        alert("Phiên đã hết hạn. Vui lòng tải lại trang và thử lại.");
+        return;
+      }
+      const message =
+        response?.data?.message ??
+        (error instanceof Error ? error.message : "Đăng nhập thất bại");
+      alert(message || "Đăng nhập thất bại");
     }
   };
 
