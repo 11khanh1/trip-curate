@@ -56,6 +56,8 @@ import { fetchTourDetail, fetchTrendingTours, type PublicTour, type PublicTourSc
 import { useToast } from "@/hooks/use-toast";
 import { useCart } from "@/context/CartContext";
 import { useUser } from "@/context/UserContext";
+import { getTourStartingPrice } from "@/lib/tour-utils";
+import { addWishlistItem, removeWishlistItem, type WishlistItem } from "@/services/wishlistApi";
 import {
   createReview,
   deleteReview,
@@ -228,11 +230,18 @@ const toRelatedActivity = (tour: PublicTour): RelatedActivity => {
     ...(Array.isArray(tour.gallery) ? tour.gallery : []),
   ].filter(Boolean) as string[];
 
-  const price = tour.base_price ?? tour.season_price ?? 0;
-  const originalPrice = tour.season_price ?? undefined;
+  const basePrice =
+    typeof tour.base_price === "number" && Number.isFinite(tour.base_price)
+      ? Math.max(0, tour.base_price)
+      : undefined;
+  const price = basePrice ?? getTourStartingPrice(tour);
+  const originalPriceRaw =
+    typeof tour.season_price === "number" && Number.isFinite(tour.season_price)
+      ? Math.max(0, tour.season_price)
+      : undefined;
   const discount =
-    originalPrice && price && originalPrice > price
-      ? Math.round(((originalPrice - price) / originalPrice) * 100)
+    typeof originalPriceRaw === "number" && price > 0 && originalPriceRaw > price
+      ? Math.round(((originalPriceRaw - price) / originalPriceRaw) * 100)
       : undefined;
 
   return {
@@ -242,8 +251,8 @@ const toRelatedActivity = (tour: PublicTour): RelatedActivity => {
     image: images[0] ?? FALLBACK_IMAGE,
     rating: tour.rating_average ?? tour.average_rating ?? 4.5,
     reviewCount: tour.rating_count ?? tour.reviews_count ?? 0,
-    price: price ?? 0,
-    originalPrice: originalPrice ?? undefined,
+    price,
+    originalPrice: originalPriceRaw,
     discount,
     duration:
       typeof tour.duration === "number"
@@ -272,6 +281,9 @@ const normalizeTourDetail = (
     uniqueImages.push(FALLBACK_IMAGE);
   }
 
+const basePriceValue = parseFloatOrNull(tour.base_price);
+const seasonPriceValue = parseFloatOrNull(tour.season_price);
+
   const itineraryItems = Array.isArray(tour.itinerary)
     ? tour.itinerary
         .map((item) => {
@@ -291,36 +303,67 @@ const normalizeTourDetail = (
         .filter((entry): entry is string => Boolean(entry && entry.trim()))
     : [];
 
-  const packages: ActivityPackage[] =
-    Array.isArray(tour.packages) && tour.packages.length > 0
-      ? tour.packages.map((pkg, index) => ({
+  const packages: ActivityPackage[] = (() => {
+    if (Array.isArray(tour.packages) && tour.packages.length > 0) {
+      return tour.packages.map((pkg, index) => {
+        const adultPrice = parseFloatOrNull(
+          pkg?.adult_price ?? (pkg as Record<string, unknown>)?.adultPrice ?? pkg?.price ?? null,
+        );
+        const childPrice = parseFloatOrNull(
+          pkg?.child_price ?? (pkg as Record<string, unknown>)?.childPrice ?? null,
+        );
+        const effectivePrice = adultPrice ?? childPrice ?? basePriceValue ?? null;
+        return {
           id: String(pkg?.id ?? `${id}-package-${index}`),
           packageId: String(pkg?.id ?? `${id}-package-${index}`),
           name: pkg?.name ?? `Gói dịch vụ ${index + 1}`,
-          price: pkg?.adult_price ?? pkg?.child_price ?? tour.base_price ?? null,
-          originalPrice: tour.season_price ?? null,
-          adultPrice: pkg?.adult_price ?? null,
-          childPrice: pkg?.child_price ?? null,
+          price: effectivePrice,
+          originalPrice: seasonPriceValue ?? null,
+          adultPrice: adultPrice ?? null,
+          childPrice: childPrice ?? null,
           isActive: pkg?.is_active ?? true,
           includes: [],
           startDate: null,
           endDate: null,
           capacity: null,
           slotsAvailable: null,
-        }))
-      : Array.isArray(tour.schedules)
-      ? tour.schedules.map((schedule, index) => ({
+        };
+      });
+    }
+    if (Array.isArray(tour.schedules)) {
+      return tour.schedules.map((schedule, index) => {
+        const schedulePrice = parseFloatOrNull(
+          schedule?.season_price ??
+            (schedule as Record<string, unknown>)?.price ??
+            (schedule as Record<string, unknown>)?.price_from ??
+            null,
+        );
+        return {
           id: String(schedule?.id ?? `${id}-schedule-${index}`),
           name: schedule?.title ?? `Lịch trình ${index + 1}`,
-          price: schedule?.season_price ?? tour.base_price ?? null,
-          originalPrice: tour.season_price ?? null,
+          price: schedulePrice ?? basePriceValue ?? null,
+          originalPrice: seasonPriceValue ?? null,
           includes: [],
           startDate: schedule?.start_date ?? null,
           endDate: schedule?.end_date ?? null,
           capacity: schedule?.capacity ?? null,
           slotsAvailable: schedule?.slots_available ?? null,
-        }))
-      : [];
+        };
+      });
+    }
+    return [];
+  })();
+
+  const sortedPackages =
+    packages.length > 1
+      ? [...packages].sort((a, b) => {
+          const priceA =
+            (a.adultPrice ?? a.price ?? Number.POSITIVE_INFINITY) || Number.POSITIVE_INFINITY;
+          const priceB =
+            (b.adultPrice ?? b.price ?? Number.POSITIVE_INFINITY) || Number.POSITIVE_INFINITY;
+          return priceA - priceB;
+        })
+      : packages;
 
   const highlights =
     Array.isArray(tour.tags) && tour.tags.length > 0
@@ -391,14 +434,14 @@ const normalizeTourDetail = (
     rating: tour.rating_average ?? tour.average_rating ?? null,
     reviewCount: tour.rating_count ?? tour.reviews_count ?? null,
     bookedCount: tour.bookings_count ?? null,
-    price: tour.base_price ?? tour.season_price ?? null,
-    originalPrice: tour.season_price ?? null,
+    price: basePriceValue ?? sortedPackages[0]?.adultPrice ?? sortedPackages[0]?.price ?? seasonPriceValue ?? null,
+    originalPrice: seasonPriceValue ?? null,
     discount: null,
     duration: typeof tour.duration === "number" ? `${tour.duration} giờ` : tour.duration,
     images: uniqueImages,
     highlights,
     description: tour.description ?? null,
-    packages,
+    packages: sortedPackages,
     termsAndConditions,
     faqs: [],
     importantNotes,
@@ -469,6 +512,8 @@ const ActivityDetail = () => {
   const [reviewComment, setReviewComment] = useState("");
 
   const [editingCartItemId, setEditingCartItemId] = useState<string | null>(null);
+  const [isWishlisted, setIsWishlisted] = useState(false);
+  const [wishlistItemId, setWishlistItemId] = useState<string | null>(null);
 
   const cartItemIdParam = searchParams.get("cartItemId");
   const packageIdParam = searchParams.get("packageId");
@@ -587,6 +632,54 @@ const ActivityDetail = () => {
     },
   });
 
+  const addWishlistMutation = useMutation<WishlistItem, unknown, string>({
+    mutationFn: (tourId: string) => addWishlistItem(tourId),
+    onSuccess: (item) => {
+      setIsWishlisted(true);
+      setWishlistItemId(item.id);
+      queryClient.setQueryData<WishlistItem[]>(["wishlist"], (previous) => {
+        if (!previous) return [item];
+        const filtered = previous.filter((entry) => entry.id !== item.id);
+        return [item, ...filtered];
+      });
+      queryClient.invalidateQueries({ queryKey: ["wishlist"] });
+      toast({
+        title: "Đã thêm vào yêu thích",
+        description: "Bạn có thể xem lại tour này trong mục Wishlist.",
+      });
+    },
+    onError: (error: unknown) => {
+      toast({
+        title: "Không thể thêm vào wishlist",
+        description: resolveErrorMessage(error),
+        variant: "destructive",
+      });
+    },
+  });
+
+  const removeWishlistMutation = useMutation<void, unknown, string>({
+    mutationFn: (id: string) => removeWishlistItem(id),
+    onSuccess: (_, removedId) => {
+      setIsWishlisted(false);
+      setWishlistItemId(null);
+      queryClient.setQueryData<WishlistItem[]>(["wishlist"], (previous) =>
+        (previous ?? []).filter((entry) => entry.id !== removedId),
+      );
+      queryClient.invalidateQueries({ queryKey: ["wishlist"] });
+      toast({
+        title: "Đã xoá khỏi yêu thích",
+        description: "Tour đã được gỡ khỏi danh sách Wishlist.",
+      });
+    },
+    onError: (error: unknown) => {
+      toast({
+        title: "Không thể xoá khỏi wishlist",
+        description: resolveErrorMessage(error),
+        variant: "destructive",
+      });
+    },
+  });
+
   const {
     data: tourDetail,
     isLoading: isTourLoading,
@@ -618,10 +711,29 @@ const ActivityDetail = () => {
     staleTime: 60 * 1000,
   });
 
-  const activity = useMemo(
-    () => normalizeTourDetail(tourDetail, trendingTours ?? []),
-    [tourDetail, trendingTours],
-  );
+const activity = useMemo(
+  () => normalizeTourDetail(tourDetail, trendingTours ?? []),
+  [tourDetail, trendingTours],
+);
+
+  useEffect(() => {
+    if (!activity?.id) {
+      setIsWishlisted(false);
+      setWishlistItemId(null);
+      return;
+    }
+    const cached = queryClient.getQueryData<WishlistItem[]>(["wishlist"]);
+    if (Array.isArray(cached)) {
+      const matched = cached.find(
+        (entry) => String(entry.tour_id) === String(activity.id ?? ""),
+      );
+      setIsWishlisted(Boolean(matched));
+      setWishlistItemId(matched?.id ?? null);
+    } else {
+      setIsWishlisted(false);
+      setWishlistItemId(null);
+    }
+  }, [activity?.id, queryClient]);
   const schedules = tourDetail?.schedules ?? [];
 
   const bookingsForTour = useMemo(() => {
@@ -800,9 +912,27 @@ const ActivityDetail = () => {
 
   useEffect(() => {
     if (activity?.packages.length) {
-      const fallback = activity.packages[0]?.id ?? null;
       const availableIds = new Set(activity.packages.map((pkg) => pkg.id));
-      setSelectedPackageId((prev) => (prev && availableIds.has(prev) ? prev : fallback));
+      const cheapestPackage = activity.packages.reduce<{
+        id: string | null;
+        price: number;
+      }>(
+        (best, pkg) => {
+          const price = pkg.adultPrice ?? pkg.price ?? Number.POSITIVE_INFINITY;
+          if (price < best.price) {
+            return { id: pkg.id, price };
+          }
+          return best;
+        },
+        { id: activity.packages[0]?.id ?? null, price: Number.POSITIVE_INFINITY },
+      );
+
+      setSelectedPackageId((prev) => {
+        if (prev && availableIds.has(prev)) {
+          return prev;
+        }
+        return cheapestPackage.id;
+      });
     } else {
       setSelectedPackageId(null);
     }
@@ -850,6 +980,59 @@ const ActivityDetail = () => {
     const computed = Math.round(adultUnitPrice * CHILD_PRICE_RATIO);
     return Math.max(0, computed);
   }, [adultUnitPrice]);
+  const { mutate: addToWishlist, isPending: isAddingWishlist } = addWishlistMutation;
+  const { mutate: removeFromWishlist, isPending: isRemovingWishlist } = removeWishlistMutation;
+  const isWishlistMutating = isAddingWishlist || isRemovingWishlist;
+
+  const handleWishlistToggle = useCallback(() => {
+    if (!activity?.id) {
+      toast({
+        title: "Không thể lưu tour",
+        description: "Thông tin tour chưa sẵn sàng. Vui lòng thử lại.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!currentUser) {
+      toast({
+        title: "Vui lòng đăng nhập",
+        description: "Bạn cần đăng nhập để thêm tour vào danh sách yêu thích.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (isWishlistMutating) return;
+
+    if (isWishlisted) {
+      const cached = queryClient.getQueryData<WishlistItem[]>(["wishlist"]) ?? [];
+      const targetId =
+        wishlistItemId ?? cached.find((entry) => String(entry.tour_id) === String(activity.id))?.id ?? null;
+      if (!targetId) {
+        toast({
+          title: "Không thể xoá khỏi wishlist",
+          description: "Không tìm thấy tour trong danh sách yêu thích. Vui lòng thử lại.",
+          variant: "destructive",
+        });
+        return;
+      }
+      removeFromWishlist(targetId);
+      return;
+    }
+
+    addToWishlist(String(activity.id));
+  }, [
+    activity?.id,
+    addToWishlist,
+    currentUser,
+    isWishlisted,
+    isWishlistMutating,
+    queryClient,
+    removeFromWishlist,
+    toast,
+    wishlistItemId,
+  ]);
 
   const formatPriceLabel = (value: number) => {
     if (value <= 0) return "Liên hệ";
@@ -857,17 +1040,29 @@ const ActivityDetail = () => {
   };
 
   const displayPrice = useMemo(() => {
+    const candidates: number[] = [];
     if (adultUnitPrice > 0) {
-      return adultUnitPrice;
+      candidates.push(adultUnitPrice);
     }
-    if (!activity) return null;
-    const prices = activity.packages
-      .map((pkg) => (typeof pkg.price === "number" ? pkg.price : null))
-      .filter((price): price is number => price !== null);
-    if (prices.length > 0) {
-      return Math.min(...prices);
+    if (activity) {
+      const packageCandidates = activity.packages
+        .map((pkg) => {
+          const candidate =
+            pkg.adultPrice ?? pkg.price ?? (typeof pkg.childPrice === "number" ? pkg.childPrice : null);
+          return typeof candidate === "number" && Number.isFinite(candidate) && candidate > 0
+            ? candidate
+            : null;
+        })
+        .filter((value): value is number => value !== null);
+      if (packageCandidates.length > 0) {
+        candidates.push(Math.min(...packageCandidates));
+      }
+      if (typeof activity.price === "number" && Number.isFinite(activity.price) && activity.price > 0) {
+        candidates.push(activity.price);
+      }
     }
-    return typeof activity.price === "number" ? activity.price : null;
+    if (candidates.length === 0) return null;
+    return Math.min(...candidates);
   }, [activity, adultUnitPrice]);
 
   const handleTabChange = (nextTab: string) => {
@@ -1269,11 +1464,20 @@ const ActivityDetail = () => {
                     className="w-full h-[400px] object-cover cursor-zoom-in transition-transform group-hover:scale-[1.01]"
                   />
                   <Button
+                    type="button"
                     variant="ghost"
                     size="icon"
+                    aria-pressed={isWishlisted}
+                    aria-label={isWishlisted ? "Bỏ yêu thích tour" : "Thêm tour vào yêu thích"}
+                    disabled={isWishlistMutating}
+                    onClick={handleWishlistToggle}
                     className="absolute top-4 right-4 bg-white/80 hover:bg-white"
                   >
-                    <Heart className="h-5 w-5" />
+                    <Heart
+                      className={`h-5 w-5 transition-colors ${
+                        isWishlisted ? "fill-red-500 text-red-500" : "text-gray-600"
+                      }`}
+                    />
                   </Button>
                 </div>
 

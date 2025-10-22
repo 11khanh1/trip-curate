@@ -182,6 +182,35 @@ export async function cancelBooking(id: string | number) {
   return res.data as CancelBookingResponse;
 }
 
+export interface BookingPaymentIntentPayload {
+  method?: "offline" | "sepay" | string;
+  [key: string]: unknown;
+}
+
+export interface BookingPaymentIntentResponse {
+  booking?: Booking;
+  payment_url?: string | null;
+  paymentUrl?: string | null;
+  url?: string | null;
+  payment_id?: string | number | null;
+  paymentId?: string | number | null;
+  message?: string | null;
+  [key: string]: unknown;
+}
+
+export async function initiateBookingPayment(
+  id: string | number,
+  payload: BookingPaymentIntentPayload = {},
+): Promise<BookingPaymentIntentResponse> {
+  const res = await apiClient.post(`/bookings/${id}/pay`, payload);
+  const data = res.data;
+  if (data && typeof data === "object" && "data" in data) {
+    const nested = (data as { data: BookingPaymentIntentResponse }).data;
+    return nested;
+  }
+  return data as BookingPaymentIntentResponse;
+}
+
 export interface SepayReturnQuery {
   order_code: string;
   status: string;

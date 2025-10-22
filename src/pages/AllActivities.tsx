@@ -22,6 +22,7 @@ import {
   type PublicTour,
 } from "@/services/publicApi";
 import { apiClient } from "@/lib/api-client";
+import { getTourStartingPrice } from "@/lib/tour-utils";
 
 const PER_PAGE = 50;
 
@@ -93,22 +94,6 @@ const normalizeDuration = (duration?: number | string | null) => {
   return trimmed.length > 0 ? trimmed : "Linh hoạt";
 };
 
-const normalizePrice = (tour: PublicTour) => {
-  if (typeof tour.base_price === "number" && Number.isFinite(tour.base_price)) {
-    return Math.max(0, tour.base_price);
-  }
-  if (typeof tour.season_price === "number" && Number.isFinite(tour.season_price)) {
-    return Math.max(0, tour.season_price);
-  }
-  const schedulePrice = tour.schedules?.find(
-    (schedule) => typeof schedule.season_price === "number" && Number.isFinite(schedule.season_price),
-  )?.season_price;
-  if (typeof schedulePrice === "number") {
-    return Math.max(0, schedulePrice);
-  }
-  return 0;
-};
-
 const mapTourToCard = (tour: PublicTour) => {
   const title = tour.title ?? tour.name ?? "Tour chưa đặt tên";
   const location = tour.destination ?? tour.partner?.company_name ?? "Việt Nam";
@@ -129,7 +114,7 @@ const mapTourToCard = (tour: PublicTour) => {
     return `${normalizedBase}${trimmed.startsWith("/") ? trimmed.slice(1) : trimmed}`;
   };
   const image = resolveTourImage();
-  const price = normalizePrice(tour);
+  const price = getTourStartingPrice(tour);
   const category =
     tour.categories && tour.categories.length > 0
       ? tour.categories[0]?.name ?? "Tour"

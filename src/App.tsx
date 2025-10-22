@@ -56,6 +56,7 @@ import BookingDetail from "./pages/bookings/BookingDetail";
 import BookingCheckout from "./pages/bookings/BookingCheckout";
 import SepayReturn from "./pages/payments/SepayReturn";
 import CartPage from "./pages/Cart";
+import Wishlist from "./pages/Wishlist";
 
 const App = () => (
   <TooltipProvider>
@@ -86,6 +87,7 @@ const App = () => (
         <Route path="/bookings/:id" element={<BookingDetail />} />
         <Route path="/payments/sepay/return" element={<SepayReturn />} />
         <Route path="/cart" element={<CartPage />} />
+        <Route path="/wishlist" element={<Wishlist />} />
         <Route path="/account-settings" element={<AccountSettings />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/about/our-story" element={<OurStory />} />

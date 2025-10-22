@@ -1,8 +1,13 @@
-import { Star, MapPin, Clock, Users, Heart } from "lucide-react";
+import { useCallback, useEffect, useState, type MouseEvent } from "react";
+import { Star, MapPin, Clock, Users, Heart, Loader2 } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import { useToast } from "@/hooks/use-toast";
+import { useUser } from "@/context/UserContext";
+import { addWishlistItem, removeWishlistItem, type WishlistItem } from "@/services/wishlistApi";
 
 interface TourCardProps {
   id: string;
@@ -20,21 +25,160 @@ interface TourCardProps {
   features: string[];
 }
 
-const TourCard = ({ 
+const TourCard = ({
   id,
-  title, 
-  location, 
-  image, 
-  rating, 
-  reviewCount, 
-  price, 
-  originalPrice, 
-  discount, 
-  duration, 
+  title,
+  location,
+  image,
+  rating,
+  reviewCount,
+  price,
+  originalPrice,
+  discount,
+  duration,
   category,
   isPopular,
-  features 
+  features,
 }: TourCardProps) => {
+  const { currentUser } = useUser();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [wishlistItemId, setWishlistItemId] = useState<string | null>(null);
+
+  const syncWishlistState = useCallback(() => {
+    const cached = queryClient.getQueryData<WishlistItem[]>(["wishlist"]);
+    if (!Array.isArray(cached)) {
+      setWishlistItemId(null);
+      return;
+    }
+    const matched = cached.find((entry) => String(entry.tour_id) === String(id));
+    setWishlistItemId(matched?.id ?? null);
+  }, [id, queryClient]);
+
+  useEffect(() => {
+    syncWishlistState();
+    const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
+      if (event.query?.queryKey?.[0] === "wishlist") {
+        syncWishlistState();
+      }
+    });
+    return unsubscribe;
+  }, [queryClient, syncWishlistState]);
+
+  const addWishlistMutation = useMutation<WishlistItem, unknown, string>({
+    mutationFn: (tourId: string) => addWishlistItem(tourId),
+    onSuccess: (item) => {
+      setWishlistItemId(item.id);
+      queryClient.setQueryData<WishlistItem[]>(["wishlist"], (previous) => {
+        const existing = Array.isArray(previous) ? previous : [];
+        const filtered = existing.filter((entry) => entry.id !== item.id);
+        return [item, ...filtered];
+      });
+      queryClient.invalidateQueries({ queryKey: ["wishlist"] });
+      toast({
+        title: "Đã thêm vào yêu thích",
+        description: "Tour đã được lưu trong mục Wishlist của bạn.",
+      });
+    },
+    onError: (error) => {
+      const description =
+        error instanceof Error && error.message
+          ? error.message
+          : "Không thể thêm tour vào danh sách yêu thích.";
+      toast({
+        title: "Thao tác thất bại",
+        description,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const removeWishlistMutation = useMutation<void, unknown, string>({
+    mutationFn: (wishlistId: string) => removeWishlistItem(wishlistId),
+    onSuccess: (_, removedId) => {
+      setWishlistItemId(null);
+      queryClient.setQueryData<WishlistItem[]>(["wishlist"], (previous) =>
+        (previous ?? []).filter((entry) => entry.id !== removedId),
+      );
+      queryClient.invalidateQueries({ queryKey: ["wishlist"] });
+      toast({
+        title: "Đã xoá khỏi yêu thích",
+        description: "Tour đã được gỡ khỏi danh sách Wishlist.",
+      });
+    },
+    onError: (error) => {
+      const description =
+        error instanceof Error && error.message
+          ? error.message
+          : "Không thể xoá tour khỏi danh sách yêu thích.";
+      toast({
+        title: "Thao tác thất bại",
+        description,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const resolveWishlistId = useCallback(() => {
+    if (wishlistItemId) return wishlistItemId;
+    const cached = queryClient.getQueryData<WishlistItem[]>(["wishlist"]);
+    const matched = cached?.find((entry) => String(entry.tour_id) === String(id));
+    return matched?.id ?? null;
+  }, [id, queryClient, wishlistItemId]);
+
+  const isWishlisted = Boolean(wishlistItemId);
+  const isWishlistMutating = addWishlistMutation.isPending || removeWishlistMutation.isPending;
+
+  const handleWishlistToggle = useCallback(
+    (event: MouseEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!id) return;
+      if (!currentUser) {
+        toast({
+          title: "Yêu cầu đăng nhập",
+          description: "Đăng nhập để quản lý danh sách yêu thích.",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (isWishlistMutating) return;
+      if (isWishlisted) {
+        const targetId = resolveWishlistId();
+        if (!targetId) {
+          toast({
+            title: "Không thể xoá khỏi yêu thích",
+            description: "Không tìm thấy tour trong danh sách của bạn. Vui lòng thử lại.",
+            variant: "destructive",
+          });
+          syncWishlistState();
+          return;
+        }
+        removeWishlistMutation.mutate(targetId);
+      } else {
+        addWishlistMutation.mutate(id);
+      }
+    },
+    [
+      addWishlistMutation,
+      currentUser,
+      id,
+      isWishlisted,
+      isWishlistMutating,
+      removeWishlistMutation,
+      resolveWishlistId,
+      syncWishlistState,
+      toast,
+    ],
+  );
+
+  const hasPrice = typeof price === "number" && Number.isFinite(price) && price > 0;
+  const formattedPrice = hasPrice ? `₫ ${price.toLocaleString("vi-VN")}` : "Liên hệ";
+  const showOriginalPrice =
+    typeof originalPrice === "number" &&
+    Number.isFinite(originalPrice) &&
+    hasPrice &&
+    originalPrice > price;
   return (
     <Link to={`/activity/${id}`}>
       <Card className="overflow-hidden hover:shadow-hover transition-all duration-300 group cursor-pointer h-full min-h-[440px] flex flex-col">
@@ -57,11 +201,18 @@ const TourCard = ({
           )}
         </div>
         <Button
+          type="button"
           variant="ghost" 
           size="icon"
-          className="absolute top-3 right-3 bg-white/80 hover:bg-white"
+          className={`absolute top-3 right-3 bg-white/80 hover:bg-white ${isWishlisted ? "text-red-500" : ""}`}
+          onClick={handleWishlistToggle}
+          disabled={isWishlistMutating}
         >
-          <Heart className="h-4 w-4" />
+          {isWishlistMutating ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Heart className={`h-4 w-4 ${isWishlisted ? "fill-current" : ""}`} />
+          )}
         </Button>
       </div>
       
@@ -106,16 +257,16 @@ const TourCard = ({
         <div className="flex items-center justify-between pt-2 border-t mt-auto">
           <div className="space-y-1">
             <div className="flex items-center space-x-2">
-              {originalPrice && (
+              {showOriginalPrice && (
                 <span className="text-sm text-muted-foreground line-through">
-                  ₫ {originalPrice.toLocaleString()}
+                  ₫ {originalPrice!.toLocaleString("vi-VN")}
                 </span>
               )}
             </div>
             <div className="flex items-center">
               <span className="text-sm text-muted-foreground">Từ</span>
               <span className="text-lg font-bold text-primary ml-1">
-                ₫ {price.toLocaleString()}
+                {formattedPrice}
               </span>
             </div>
           </div>

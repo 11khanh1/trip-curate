@@ -27,10 +27,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import {
   cancelBooking,
   fetchBookingDetail,
+  initiateBookingPayment,
   type Booking,
   type BookingContact,
   type BookingPassenger,
   type BookingPayment,
+  type BookingPaymentIntentResponse,
 } from "@/services/bookingApi";
 import { useToast } from "@/hooks/use-toast";
 
@@ -221,6 +223,25 @@ const resolveBookingPaymentUrl = (booking?: Booking | null): string | null => {
   return null;
 };
 
+const extractPaymentIntentUrl = (
+  intent?: BookingPaymentIntentResponse | null,
+  fallbackBooking?: Booking | null,
+): string | null => {
+  if (!intent) {
+    return resolveBookingPaymentUrl(fallbackBooking);
+  }
+  const direct = coalesceString(
+    (intent as Record<string, unknown>)?.payment_url as string | undefined,
+    (intent as Record<string, unknown>)?.paymentUrl as string | undefined,
+    (intent as Record<string, unknown>)?.url as string | undefined,
+  );
+  if (direct) return direct;
+  if (intent.booking) {
+    return resolveBookingPaymentUrl(intent.booking);
+  }
+  return resolveBookingPaymentUrl(fallbackBooking);
+};
+
 const BookingDetailSkeleton = () => (
   <div className="space-y-4">
     <Skeleton className="h-10 w-2/3" />
@@ -309,70 +330,83 @@ const BookingDetailPage = () => {
     typeof bookingPaymentUrl === "string" &&
     bookingPaymentUrl.length > 0 &&
     !isPaid;
-  const paymentButtonConfig = (() => {
+  const paymentMutation = useMutation({
+    mutationFn: () =>
+      initiateBookingPayment(String(id), {
+        method: booking?.payment_method ?? "sepay",
+      }),
+    onSuccess: (response) => {
+      const nextUrl = extractPaymentIntentUrl(response, response?.booking ?? booking);
+      if (nextUrl) {
+        window.open(nextUrl, "_blank", "noopener,noreferrer");
+        toast({
+          title: "Đang chuyển tới cổng thanh toán",
+          description: "Chúng tôi đã mở trang thanh toán trong tab mới.",
+        });
+      } else {
+        toast({
+          title: "Không tìm thấy liên kết thanh toán",
+          description: response?.message ?? "Vui lòng thử lại sau ít phút.",
+          variant: "destructive",
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: ["booking-detail", id] });
+      queryClient.invalidateQueries({ queryKey: ["bookings"] });
+      queryClient.invalidateQueries({ queryKey: ["order-history"] });
+    },
+    onError: (mutationError: unknown) => {
+      const message =
+        mutationError instanceof Error
+          ? mutationError.message
+          : "Không thể khởi tạo thanh toán. Vui lòng thử lại.";
+      toast({
+        title: "Khởi tạo thanh toán thất bại",
+        description: message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleInitiatePayment = () => {
+    if (!id || paymentMutation.isPending) return;
+    paymentMutation.mutate();
+  };
+
+  const paymentButtonState = (() => {
     if (canPayOnline) {
       return {
-        label: "Thanh toán ngay",
-        asChild: true,
-        disabled: false,
-        href: bookingPaymentUrl!,
-        hrefTarget: "_blank" as "_blank" | undefined,
+        label: paymentMutation.isPending ? "Đang xử lý..." : "Thanh toán ngay",
+        disabled: paymentMutation.isPending,
+        onClick: handleInitiatePayment,
       };
     }
     if (isPaid) {
       return {
         label: "Đã thanh toán",
-        asChild: false,
         disabled: true,
-        href: null,
-        hrefTarget: undefined,
+        onClick: undefined,
       };
     }
     if (paymentMethod === "offline") {
       return {
         label: "Thanh toán trực tiếp",
-        asChild: false,
         disabled: true,
-        href: null,
-        hrefTarget: undefined,
+        onClick: undefined,
       };
     }
     if (bookingPaymentUrl) {
       return {
-        label: "Xem liên kết thanh toán",
-        asChild: true,
+        label: "Mở liên kết thanh toán",
         disabled: false,
-        href: bookingPaymentUrl,
-        hrefTarget: "_blank" as "_blank" | undefined,
+        onClick: () => window.open(bookingPaymentUrl, "_blank", "noopener,noreferrer"),
       };
     }
     return {
       label: "Thanh toán chưa khả dụng",
-      asChild: false,
       disabled: true,
-      href: null,
-      hrefTarget: undefined,
+      onClick: undefined,
     };
   })();
-
-  const renderPaymentButton = () => {
-    if (paymentButtonConfig.asChild && paymentButtonConfig.href) {
-      return (
-        <Button asChild disabled={paymentButtonConfig.disabled}>
-          <a
-            href={paymentButtonConfig.href}
-            target={paymentButtonConfig.hrefTarget}
-            rel="noopener noreferrer"
-          >
-            {paymentButtonConfig.label}
-          </a>
-        </Button>
-      );
-    }
-    return (
-      <Button disabled={paymentButtonConfig.disabled}>{paymentButtonConfig.label}</Button>
-    );
-  };
 
   const contactRecord =
     booking?.contact && typeof booking.contact === "object" && !Array.isArray(booking.contact)
@@ -497,7 +531,12 @@ const BookingDetailPage = () => {
                 <Button variant="outline" onClick={() => navigate("/bookings")}>
                   Quay lại danh sách
                 </Button>
-                {renderPaymentButton()}
+                <Button
+                  onClick={paymentButtonState.onClick}
+                  disabled={paymentButtonState.disabled || !paymentButtonState.onClick}
+                >
+                  {paymentButtonState.label}
+                </Button>
                 {canCancel && (
                   <Button
                     variant="destructive"
@@ -613,49 +652,66 @@ const BookingDetailPage = () => {
                         <TableHead className="text-right">Thanh toán</TableHead>
                       </TableRow>
                     </TableHeader>
-                    <TableBody>
-                      {booking.payments.map((payment: BookingPayment, index) => (
-                        <TableRow key={payment.id ?? index}>
-                          <TableCell className="font-medium text-foreground">
-                            {payment.order_code ?? payment.transaction_id ?? "—"}
-                          </TableCell>
-                          <TableCell>{formatCurrency(payment.amount, payment.currency ?? "VND")}</TableCell>
-                          <TableCell>
-                            <Badge variant={statusVariant(payment.status)}>{statusLabel(payment.status)}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            {payment.paid_at
-                              ? formatDateTime(payment.paid_at)
-                              : payment.status === "pending"
-                              ? "Đang chờ"
-                              : payment.updated_at
-                              ? formatDateTime(payment.updated_at as string)
-                              : "—"}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {(() => {
-                              const paymentUrl = extractPaymentUrl(payment) ?? bookingPaymentUrl;
-                              const statusNormalized = (payment.status ?? "").toLowerCase();
-                              const isPaid =
-                                statusNormalized === "paid" ||
-                                statusNormalized === "success" ||
-                                statusNormalized === "completed";
-                              if (!isPaid && paymentUrl) {
-                                return (
-                                  <Button asChild size="sm">
-                                    <a href={paymentUrl} target="_blank" rel="noopener noreferrer">
-                                      Thanh toán
-                                    </a>
-                                  </Button>
-                                );
-                              }
-                              return "—";
-                            })()}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      <TableBody>
+                        {booking.payments.map((payment: BookingPayment, index) => (
+                          <TableRow key={payment.id ?? index}>
+                            <TableCell className="font-medium text-foreground">
+                              {payment.order_code ?? payment.transaction_id ?? "—"}
+                            </TableCell>
+                            <TableCell>{formatCurrency(payment.amount, payment.currency ?? "VND")}</TableCell>
+                            <TableCell>
+                              <Badge variant={statusVariant(payment.status)}>{statusLabel(payment.status)}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              {payment.paid_at
+                                ? formatDateTime(payment.paid_at)
+                                : payment.status === "pending"
+                                ? "Đang chờ"
+                                : payment.updated_at
+                                ? formatDateTime(payment.updated_at as string)
+                                : "—"}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {(() => {
+                                const rowStatus = (payment.status ?? "").toString().toLowerCase();
+                                const rowPaid =
+                                  rowStatus === "paid" ||
+                                  rowStatus === "success" ||
+                                  rowStatus === "completed";
+                                if (rowPaid) {
+                                  return "—";
+                                }
+                                if (canPayOnline) {
+                                  return (
+                                    <Button
+                                      size="sm"
+                                      onClick={handleInitiatePayment}
+                                      disabled={paymentMutation.isPending}
+                                    >
+                                      {paymentMutation.isPending ? "Đang xử lý..." : "Thanh toán"}
+                                    </Button>
+                                  );
+                                }
+                                if (bookingPaymentUrl && paymentMethod !== "offline") {
+                                  return (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() =>
+                                        window.open(bookingPaymentUrl, "_blank", "noopener,noreferrer")
+                                      }
+                                    >
+                                      Mở liên kết
+                                    </Button>
+                                  );
+                                }
+                                return "—";
+                              })()}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
                 ) : (
                   <Alert>
                     <CreditCard className="h-4 w-4" />

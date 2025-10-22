@@ -6,6 +6,7 @@ import TourCard from "./TourCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchTrendingTours, type PublicTour } from "@/services/publicApi";
 import { apiClient } from "@/lib/api-client";
+import { getTourStartingPrice } from "@/lib/tour-utils";
 
 interface PopularActivitiesProps {
   tours?: PublicTour[];
@@ -67,21 +68,6 @@ const normalizeDuration = (duration?: number | string | null) => {
   return trimmed.length > 0 ? trimmed : "Linh hoạt";
 };
 
-const normalizePrice = (tour: PublicTour) => {
-  if (typeof tour.base_price === "number" && Number.isFinite(tour.base_price)) {
-    return Math.max(0, tour.base_price);
-  }
-  if (typeof tour.season_price === "number" && Number.isFinite(tour.season_price)) {
-    return Math.max(0, tour.season_price);
-  }
-  const schedulePrice = tour.schedules?.find(
-    (schedule) =>
-      typeof schedule.season_price === "number" && Number.isFinite(schedule.season_price),
-  )?.season_price;
-  if (typeof schedulePrice === "number") return Math.max(0, schedulePrice);
-  return 0;
-};
-
 const featureFromSchedule = (tour: PublicTour) => {
   const firstSchedule = tour.schedules?.[0];
   if (firstSchedule?.start_date) {
@@ -116,7 +102,7 @@ const mapTourToCard = (tour: PublicTour) => {
     return `${normalizedBase}${trimmed.startsWith("/") ? trimmed.slice(1) : trimmed}`;
   };
   const image = resolveTourImage();
-  const price = normalizePrice(tour);
+  const price = getTourStartingPrice(tour);
   const category =
     tour.categories && tour.categories.length > 0
       ? tour.categories[0]?.name ?? "Tour"
@@ -148,7 +134,7 @@ const mapTourToCard = (tour: PublicTour) => {
   };
 };
 
-const POPULAR_LIMIT = 9;
+const POPULAR_LIMIT = 6;
 
 const PopularActivities = ({ tours }: PopularActivitiesProps) => {
   const shouldFetch = !tours;

@@ -21,6 +21,7 @@ import { useUser } from "./UserContext";
 
 export interface CartItem {
   id: string;
+  apiId?: string | null;
   tourId: string;
   tourTitle: string;
   packageId: string;
@@ -174,6 +175,16 @@ const mapCartApiItemToCartItem = (item: CartApiItem): CartItem => {
     ? item.schedule_data
     : undefined;
 
+  const apiId = firstString(
+    item.id,
+    item.uuid,
+    item.cart_item_id,
+    item.cartItemId,
+    item.cart_item_uuid,
+    item.item_id,
+    item.itemId,
+  );
+
   const tourId =
     firstString(item.tour_id, item.tourId, tourData?.id, tourData?.uuid) ?? createId();
   const packageId =
@@ -181,11 +192,21 @@ const mapCartApiItemToCartItem = (item: CartApiItem): CartItem => {
     `${tourId}-default`;
 
   const adultCount = parseCount(
-    item.adults ?? item.adult_count ?? item.adultCount ?? item.quantity_adults,
+    item.adults ??
+      item.adult_count ??
+      item.adultCount ??
+      item.adult_quantity ??
+      item.quantity_adults ??
+      item.quantity_adult,
     0,
   );
   const childCount = parseCount(
-    item.children ?? item.child_count ?? item.childCount ?? item.quantity_children,
+    item.children ??
+      item.child_count ??
+      item.childCount ??
+      item.child_quantity ??
+      item.quantity_children ??
+      item.quantity_child,
     0,
   );
 
@@ -208,7 +229,7 @@ const mapCartApiItemToCartItem = (item: CartApiItem): CartItem => {
     0,
   );
   const totalPriceValue =
-    firstNumber(item.total_price, item.totalPrice, item.subtotal) ??
+    firstNumber(item.total_price, item.totalPrice, item.total_amount, item.subtotal) ??
     adultCount * adultPrice +
       childCount * childPrice;
   const totalPrice = Math.max(0, totalPriceValue);
@@ -226,9 +247,8 @@ const mapCartApiItemToCartItem = (item: CartApiItem): CartItem => {
   );
 
   return {
-    id:
-      firstString(item.id, item.uuid, item.cart_item_id, item.cartItemId, item.cart_item_uuid) ??
-      `${tourId}-${packageId}-${Math.random().toString(36).slice(2, 10)}`,
+    id: apiId ?? `${tourId}-${packageId}-${Math.random().toString(36).slice(2, 10)}`,
+    apiId: apiId ?? null,
     tourId,
     tourTitle:
       firstString(item.tour_title, item.tourTitle, tourData?.title, tourData?.name) ??
@@ -271,6 +291,7 @@ const mapCartApiResponseToItems = (response?: CartApiResponse | null): CartItem[
 export const CartProvider = ({ children }: { children: ReactNode }) => {
   const { currentUser } = useUser();
   const [items, setItems] = useState<CartItem[]>([]);
+  const itemsRef = useRef<CartItem[]>([]);
   const [error, setError] = useState<Error | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -290,13 +311,33 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     activeUserIdentifierRef.current = userIdentifier;
   }, [userIdentifier]);
 
-  const applyResource = useCallback((resource?: CartApiResponse | null) => {
-    setItems(mapCartApiResponseToItems(resource));
+  const commitItems = useCallback((next: CartItem[]) => {
+    itemsRef.current = next;
+    setItems(next);
   }, []);
+
+  const resolveApiItemId = useCallback(
+    (id: string) => {
+      const trimmed = id?.trim?.() ?? id;
+      const target =
+        itemsRef.current.find((item) => item.id === trimmed) ??
+        itemsRef.current.find((item) => item.apiId === trimmed);
+      return target?.apiId?.trim?.() ?? trimmed;
+    },
+    [],
+  );
+
+  const applyResource = useCallback(
+    (resource?: CartApiResponse | null) => {
+      const mapped = mapCartApiResponseToItems(resource);
+      commitItems(mapped);
+    },
+    [commitItems],
+  );
 
   const loadCart = useCallback(async () => {
     if (!currentUser) {
-      setItems([]);
+      commitItems([]);
       setError(null);
       return;
     }
@@ -321,7 +362,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     let cancelled = false;
 
     if (!currentUser) {
-      setItems([]);
+      commitItems([]);
       setError(null);
       setIsLoading(false);
       return;
@@ -347,7 +388,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       cancelled = true;
     };
-  }, [currentUser, loadCart]);
+  }, [currentUser, loadCart, commitItems]);
 
   const addItem = useCallback(
     async (input: CartItemInput) => {
@@ -380,7 +421,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         setIsSyncing(false);
       }
     },
-    [currentUser, applyResource],
+    [currentUser, applyResource, resolveApiItemId],
   );
 
   const updateItemQuantity = useCallback(
@@ -398,7 +439,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
       setIsSyncing(true);
       try {
-        const resource = await updateCartItemRequest(id, payload);
+        const apiId = resolveApiItemId(id);
+        const resource = await updateCartItemRequest(apiId, payload);
         applyResource(resource);
         setError(null);
       } catch (err) {
@@ -411,7 +453,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         setIsSyncing(false);
       }
     },
-    [currentUser, applyResource],
+    [currentUser, applyResource, resolveApiItemId],
   );
 
   const removeItem = useCallback(
@@ -422,12 +464,49 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         return Promise.reject(errorInstance);
       }
 
+      const apiId = resolveApiItemId(id);
+      const snapshot = itemsRef.current;
+      const nextItems = snapshot.filter(
+        (item) => item.id !== id && item.apiId !== id && item.apiId !== apiId,
+      );
+      commitItems(nextItems);
+
       setIsSyncing(true);
       try {
-        const resource = await deleteCartItemRequest(id);
-        applyResource(resource);
+        const resource = await deleteCartItemRequest(apiId);
+        if (resource && Array.isArray(resource.items)) {
+          applyResource(resource);
+        } else {
+          const reconciled = itemsRef.current.filter(
+            (item) => item.id !== id && item.apiId !== apiId && item.apiId !== id,
+          );
+          commitItems(reconciled);
+        }
         setError(null);
       } catch (err) {
+        const maybeResponse =
+          err && typeof err === "object" && "response" in err
+            ? ((err as { response?: { status?: number } }).response ?? null)
+            : null;
+        if (maybeResponse?.status === 404) {
+          setError(null);
+          return;
+        }
+
+        try {
+          await loadCart();
+          const stillExists = itemsRef.current.some(
+            (item) => item.id === id || item.apiId === id || item.apiId === apiId,
+          );
+          if (!stillExists) {
+            setError(null);
+            return;
+          }
+        } catch (refreshError) {
+          console.error("Không thể làm mới giỏ hàng sau khi xoá thất bại:", refreshError);
+        }
+
+        commitItems(snapshot);
         const normalized =
           err instanceof Error ? err : new Error("Không thể xoá mục khỏi giỏ hàng");
         setError(normalized);
@@ -437,32 +516,34 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         setIsSyncing(false);
       }
     },
-    [currentUser, applyResource],
+    [currentUser, applyResource, commitItems, loadCart, resolveApiItemId],
   );
 
   const clearCart = useCallback(
     async (options?: { persist?: boolean }) => {
       if (options?.persist === false) {
-        setItems([]);
+        commitItems([]);
         setError(null);
         return;
       }
 
       if (!currentUser) {
-        setItems([]);
+        commitItems([]);
         setError(null);
         return;
       }
 
-      if (items.length === 0) {
+      const snapshot = itemsRef.current;
+      if (snapshot.length === 0) {
         setError(null);
         return;
       }
 
       setIsSyncing(true);
       try {
-        for (const item of items) {
-          await deleteCartItemRequest(item.id);
+        for (const item of snapshot) {
+          const apiId = resolveApiItemId(item.id);
+          await deleteCartItemRequest(apiId);
         }
         await loadCart();
         setError(null);
@@ -476,7 +557,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         setIsSyncing(false);
       }
     },
-    [items, currentUser, loadCart],
+    [currentUser, loadCart, commitItems, resolveApiItemId],
   );
 
   const refetch = useCallback(async () => {

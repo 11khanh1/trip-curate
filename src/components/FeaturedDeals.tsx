@@ -81,7 +81,7 @@ const mapPromotionToDeal = (promotion: HomePromotion, index: number) => {
   };
 };
 
-const PROMOTION_LIMIT = 5;
+const PROMOTION_LIMIT = 3;
 
 const FeaturedDeals = ({ promotions }: FeaturedDealsProps) => {
   const shouldFetch = !promotions;

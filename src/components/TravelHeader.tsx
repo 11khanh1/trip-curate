@@ -1,4 +1,4 @@
-import { Search, Menu, User, ShoppingBag, Gift, ChevronDown, HelpCircle, Clock, Settings, Shield, LogOut, Briefcase, Receipt } from "lucide-react";
+import { Search, Menu, User, ShoppingBag, Gift, ChevronDown, HelpCircle, Clock, Settings, Shield, LogOut, Briefcase, Receipt, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Link, useNavigate } from "react-router-dom";
@@ -238,6 +238,17 @@ const TravelHeader = () => {
               <Button variant="ghost" size="sm" className="hidden md:flex text-gray-600 hover:text-gray-800 text-sm">Mở ứng dụng</Button>
               <Button variant="ghost" size="sm" className="hidden md:flex text-gray-600 hover:text-gray-800 text-sm"><HelpCircle className="w-4 h-4 mr-1" />Trợ giúp</Button>
               <Button variant="ghost" size="sm" className="hidden md:flex text-gray-600 hover:text-gray-800 text-sm"><Clock className="w-4 h-4 mr-1" />Xem gần đây</Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="hidden items-center gap-2 text-gray-600 hover:text-gray-800 text-sm md:flex"
+                asChild
+              >
+                <Link to="/wishlist">
+                  <Heart className="h-4 w-4" />
+                  Yêu thích
+                </Link>
+              </Button>
 
               {/* GIỎ HÀNG CHO DESKTOP */}
               <Popover>
@@ -273,6 +284,16 @@ const TravelHeader = () => {
                   <CartPopoverContent />
                 </PopoverContent>
               </Popover>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="md:hidden text-gray-600 hover:text-gray-800"
+                asChild
+              >
+                <Link to="/wishlist">
+                  <Heart className="h-5 w-5" />
+                </Link>
+              </Button>
 
               {currentUser ? (
                 <div className="flex items-center gap-2">

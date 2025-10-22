@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/pagination";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchTours, type PublicTour, type TourSortOption } from "@/services/publicApi";
+import { getTourStartingPrice } from "@/lib/tour-utils";
 
 const PER_PAGE = 12;
 
@@ -41,29 +42,13 @@ const sortMapping: Record<string, TourSortOption | undefined> = {
   "price-desc": "price_desc",
 };
 
-const normalizePrice = (tour: PublicTour) => {
-  if (typeof tour.base_price === "number" && Number.isFinite(tour.base_price)) {
-    return Math.max(0, tour.base_price);
-  }
-  if (typeof tour.season_price === "number" && Number.isFinite(tour.season_price)) {
-    return Math.max(0, tour.season_price);
-  }
-  const schedulePrice = tour.schedules?.find(
-    (schedule) => typeof schedule.season_price === "number" && Number.isFinite(schedule.season_price),
-  )?.season_price;
-  if (typeof schedulePrice === "number") {
-    return Math.max(0, schedulePrice);
-  }
-  return 0;
-};
-
 const mapTourToActivityCard = (tour: PublicTour) => {
   const title = tour.title ?? tour.name ?? "Tour du lịch";
   const location = tour.destination ?? tour.partner?.company_name ?? "Việt Nam";
   const image =
     (tour.thumbnail_url && tour.thumbnail_url.length > 0 ? tour.thumbnail_url : undefined) ??
     "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=800&h=600&fit=crop";
-  const price = normalizePrice(tour);
+  const price = getTourStartingPrice(tour);
   const category =
     tour.categories && tour.categories.length > 0
       ? tour.categories[0]?.name ?? "Tour"
@@ -169,7 +154,7 @@ const ResultSearch = () => {
 
   const priceStats = useMemo(() => {
     const prices = (toursData ?? [])
-      .map((tour) => normalizePrice(tour))
+      .map((tour) => getTourStartingPrice(tour))
       .filter((value) => Number.isFinite(value) && value > 0);
     if (!prices.length) return null;
     prices.sort((a, b) => a - b);

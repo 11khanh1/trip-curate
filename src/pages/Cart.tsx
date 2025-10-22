@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Minus, Plus, ShoppingBag, Trash2, ArrowRight, Loader2 } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { Minus, Plus, ShoppingBag, Trash2, ArrowRight, Loader2, Heart } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import TravelHeader from "@/components/TravelHeader";
 import Footer from "@/components/Footer";
 // FIXED: Removed the incorrect import of TourCardProps
 import TourCard from "@/components/TourCard";
+import CollectionTourCard from "@/components/CollectionTourCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -14,8 +15,11 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCart } from "@/context/CartContext";
+import { useUser } from "@/context/UserContext";
 import { fetchTrendingTours, PublicTour } from "@/services/publicApi";
+import { addWishlistItem, type WishlistItem } from "@/services/wishlistApi";
 import { apiClient } from "@/lib/api-client";
+import { getTourStartingPrice } from "@/lib/tour-utils";
 import { useToast } from "@/hooks/use-toast";
 
 // ====================================================================================
@@ -52,21 +56,6 @@ const normalizeDuration = (duration?: number | string | null) => {
   return trimmed.length > 0 ? trimmed : "Linh hoạt";
 };
 
-const normalizePrice = (tour: PublicTour) => {
-  if (typeof tour.base_price === "number" && Number.isFinite(tour.base_price)) {
-    return Math.max(0, tour.base_price);
-  }
-  if (typeof tour.season_price === "number" && Number.isFinite(tour.season_price)) {
-    return Math.max(0, tour.season_price);
-  }
-  const schedulePrice = tour.schedules?.find(
-    (schedule) =>
-      typeof schedule.season_price === "number" && Number.isFinite(schedule.season_price),
-  )?.season_price;
-  if (typeof schedulePrice === "number") return Math.max(0, schedulePrice);
-  return 0;
-};
-
 const featureFromSchedule = (tour: PublicTour) => {
   const firstSchedule = tour.schedules?.[0];
   if (firstSchedule?.start_date) {
@@ -101,7 +90,7 @@ const mapTourToCard = (tour: PublicTour): TourCardProps => {
     return `${normalizedBase}${trimmed.startsWith("/") ? trimmed.slice(1) : trimmed}`;
   };
   const image = resolveTourImage();
-  const price = normalizePrice(tour);
+  const price = getTourStartingPrice(tour);
   const category =
     tour.categories && tour.categories.length > 0
       ? tour.categories[0]?.name ?? "Tour"
@@ -139,9 +128,101 @@ const mapTourToCard = (tour: PublicTour): TourCardProps => {
 const CartPage = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { currentUser } = useUser();
   const { items, updateItemQuantity, removeItem, isLoading: isCartLoading, isSyncing, error } =
     useCart();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [wishlistTourIds, setWishlistTourIds] = useState<Set<string>>(() => new Set());
+  const [pendingWishlistTourId, setPendingWishlistTourId] = useState<string | null>(null);
+
+  const syncWishlistFromCache = useCallback(() => {
+    const cached = queryClient.getQueryData<WishlistItem[]>(["wishlist"]);
+    setWishlistTourIds(() => {
+      if (!Array.isArray(cached)) {
+        return new Set<string>();
+      }
+      const next = new Set<string>();
+      cached.forEach((entry) => {
+        if (entry && "tour_id" in entry) {
+          next.add(String(entry.tour_id));
+        }
+      });
+      return next;
+    });
+  }, [queryClient]);
+
+  useEffect(() => {
+    syncWishlistFromCache();
+    const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
+      if (event.query?.queryKey?.[0] === "wishlist") {
+        syncWishlistFromCache();
+      }
+    });
+    return unsubscribe;
+  }, [queryClient, syncWishlistFromCache]);
+
+  const addToWishlistMutation = useMutation<WishlistItem, unknown, string>({
+    mutationFn: (tourId: string) => addWishlistItem(tourId),
+    onMutate: (tourId) => {
+      setPendingWishlistTourId(String(tourId));
+    },
+    onSuccess: (item, tourId) => {
+      setWishlistTourIds((prev) => {
+        const next = new Set(prev);
+        next.add(String(item.tour_id ?? tourId));
+        return next;
+      });
+      queryClient.setQueryData<WishlistItem[]>(["wishlist"], (previous) => {
+        const existing = Array.isArray(previous) ? previous : [];
+        const filtered = existing.filter((entry) => entry.id !== item.id);
+        return [item, ...filtered];
+      });
+      queryClient.invalidateQueries({ queryKey: ["wishlist"] });
+      toast({
+        title: "Đã lưu vào yêu thích",
+        description: "Bạn có thể xem lại tour này trong mục Wishlist.",
+      });
+    },
+    onError: (err) => {
+      const description =
+        err instanceof Error && err.message
+          ? err.message
+          : "Không thể lưu tour vào danh sách yêu thích.";
+      toast({
+        title: "Thao tác thất bại",
+        description,
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      setPendingWishlistTourId(null);
+    },
+  });
+
+  const handleSaveToWishlist = useCallback(
+    (tourId: string) => {
+      if (!tourId) return;
+      if (!currentUser) {
+        toast({
+          title: "Yêu cầu đăng nhập",
+          description: "Đăng nhập để lưu tour vào danh sách yêu thích.",
+          variant: "destructive",
+        });
+        return;
+      }
+      const normalizedId = String(tourId);
+      if (wishlistTourIds.has(normalizedId)) {
+        toast({
+          title: "Tour đã được lưu",
+          description: "Tour này đã có trong danh sách yêu thích của bạn.",
+        });
+        return;
+      }
+      addToWishlistMutation.mutate(tourId);
+    },
+    [addToWishlistMutation, currentUser, toast, wishlistTourIds],
+  );
 
   useEffect(() => {
     const validIds = new Set(items.map((item) => item.id));
@@ -348,130 +429,186 @@ const CartPage = () => {
                     </Button>
                   </div>
                 ) : (
-                  items.map((item) => (
-                    <div key={item.id} className="flex items-start gap-4 p-4">
-                      <Checkbox
-                        checked={selectedIds.has(item.id)}
-                        onCheckedChange={() => handleSelect(item.id)}
-                        className="mt-1"
-                        disabled={isSyncing}
-                      />
-                      <img
-                        src={item.thumbnail ?? "https://via.placeholder.com/150"}
-                        alt={item.tourTitle}
-                        className="h-24 w-24 rounded-lg object-cover"
-                      />
-                      <div className="flex-1 space-y-1">
-                        <h3 className="font-semibold text-foreground">{item.tourTitle}</h3>
-                        <p className="text-sm text-muted-foreground">{item.packageName}</p>
-                        {item.scheduleTitle && (
-                          <p className="text-sm text-muted-foreground">Khởi hành: {item.scheduleTitle}</p>
-                        )}
-                        <div className="flex flex-wrap items-center gap-6 pt-2">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm text-muted-foreground">Người lớn:</span>
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className="h-6 w-6"
+                  <div className="space-y-4">
+                    {items.map((item) => {
+                      const features = [
+                        item.packageName ? `Gói: ${item.packageName}` : null,
+                        item.scheduleTitle ? `Khởi hành: ${item.scheduleTitle}` : null,
+                        `Người lớn: ${item.adultCount}`,
+                        item.childCount > 0 ? `Trẻ em: ${item.childCount}` : null,
+                      ].filter((value): value is string => Boolean(value));
+                      const normalizedTourId = String(item.tourId);
+                      const isWishlisted = wishlistTourIds.has(normalizedTourId);
+                      const isSavingWishlist = pendingWishlistTourId === normalizedTourId;
+
+                      return (
+                        <CollectionTourCard
+                          key={item.id}
+                          className="border border-slate-100 transition hover:-translate-y-1 hover:shadow-lg"
+                          href={`/activity/${item.tourId}`}
+                          image={item.thumbnail ?? "https://via.placeholder.com/400x300"}
+                          title={item.tourTitle}
+                          category={item.packageName ?? "Gói dịch vụ"}
+                          location={item.scheduleTitle ?? "Lịch khởi hành linh hoạt"}
+                          duration={null}
+                          rating={null}
+                          ratingCount={null}
+                          priceLabel={formatter.format(item.totalPrice)}
+                          features={features}
+                          topLeftOverlay={
+                            <Checkbox
+                              checked={selectedIds.has(item.id)}
+                              onCheckedChange={() => handleSelect(item.id)}
+                              className="h-5 w-5 rounded-full border-white bg-white shadow-sm data-[state=checked]:border-primary data-[state=checked]:bg-primary"
                               disabled={isSyncing}
-                              onClick={() =>
-                                handleQuantityChange(item.id, {
-                                  adults: Math.max(1, item.adultCount - 1),
-                                  children: item.childCount,
-                                })
-                              }
-                            >
-                              <Minus className="h-3 w-3" />
-                            </Button>
-                            <span className="w-5 text-center font-medium">{item.adultCount}</span>
+                            />
+                          }
+                          topRightOverlay={
                             <Button
-                              variant="outline"
+                              variant="ghost"
                               size="icon"
-                              className="h-6 w-6"
+                              className="bg-white/80 text-red-500 hover:bg-white"
                               disabled={isSyncing}
-                              onClick={() =>
-                                handleQuantityChange(item.id, {
-                                  adults: item.adultCount + 1,
-                                  children: item.childCount,
-                                })
-                              }
+                              onClick={() => handleRemoveItem(item.id)}
                             >
-                              <Plus className="h-3 w-3" />
+                              <Trash2 className="h-4 w-4" />
                             </Button>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm text-muted-foreground">Trẻ em:</span>
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className="h-6 w-6"
-                              disabled={isSyncing}
-                              onClick={() =>
-                                handleQuantityChange(item.id, {
-                                  adults: item.adultCount,
-                                  children: Math.max(0, item.childCount - 1),
-                                })
-                              }
-                            >
-                              <Minus className="h-3 w-3" />
-                            </Button>
-                            <span className="w-5 text-center font-medium">{item.childCount}</span>
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className="h-6 w-6"
-                              disabled={isSyncing}
-                              onClick={() =>
-                                handleQuantityChange(item.id, {
-                                  adults: item.adultCount,
-                                  children: item.childCount + 1,
-                                })
-                              }
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-semibold text-lg text-foreground">
-                          {formatter.format(item.totalPrice)}
-                        </p>
-                        <div className="mt-2 flex gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={isSyncing}
-                            onClick={() => {
-                              const params = new URLSearchParams({
-                                tab: "packages",
-                                cartItemId: item.id,
-                                packageId: item.packageId,
-                                adults: String(item.adultCount),
-                                children: String(item.childCount),
-                              });
-                              if (item.scheduleId) {
-                                params.set("scheduleId", item.scheduleId);
-                              }
-                              navigate(`/activity/${item.tourId}?${params.toString()}`);
-                            }}
-                          >
-                            Sửa
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-red-600 hover:text-red-700"
-                            disabled={isSyncing}
-                            onClick={() => handleRemoveItem(item.id)}
-                          >
-                            Xoá
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ))
+                          }
+                          footerContent={
+                            <div className="flex flex-col gap-4">
+                              <div className="grid gap-3 sm:grid-cols-2">
+                                <div className="flex items-center justify-between rounded-lg border px-3 py-2">
+                                  <span className="text-sm text-muted-foreground">Người lớn</span>
+                                  <div className="flex items-center gap-2">
+                                    <Button
+                                      variant="outline"
+                                      size="icon"
+                                      className="h-7 w-7"
+                                      disabled={isSyncing}
+                                      onClick={() =>
+                                        handleQuantityChange(item.id, {
+                                          adults: Math.max(1, item.adultCount - 1),
+                                          children: item.childCount,
+                                        })
+                                      }
+                                    >
+                                      <Minus className="h-3 w-3" />
+                                    </Button>
+                                    <span className="w-6 text-center font-semibold">{item.adultCount}</span>
+                                    <Button
+                                      variant="outline"
+                                      size="icon"
+                                      className="h-7 w-7"
+                                      disabled={isSyncing}
+                                      onClick={() =>
+                                        handleQuantityChange(item.id, {
+                                          adults: item.adultCount + 1,
+                                          children: item.childCount,
+                                        })
+                                      }
+                                    >
+                                      <Plus className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                </div>
+                                <div className="flex items-center justify-between rounded-lg border px-3 py-2">
+                                  <span className="text-sm text-muted-foreground">Trẻ em</span>
+                                  <div className="flex items-center gap-2">
+                                    <Button
+                                      variant="outline"
+                                      size="icon"
+                                      className="h-7 w-7"
+                                      disabled={isSyncing}
+                                      onClick={() =>
+                                        handleQuantityChange(item.id, {
+                                          adults: item.adultCount,
+                                          children: Math.max(0, item.childCount - 1),
+                                        })
+                                      }
+                                    >
+                                      <Minus className="h-3 w-3" />
+                                    </Button>
+                                    <span className="w-6 text-center font-semibold">{item.childCount}</span>
+                                    <Button
+                                      variant="outline"
+                                      size="icon"
+                                      className="h-7 w-7"
+                                      disabled={isSyncing}
+                                      onClick={() =>
+                                        handleQuantityChange(item.id, {
+                                          adults: item.adultCount,
+                                          children: item.childCount + 1,
+                                        })
+                                      }
+                                    >
+                                      <Plus className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                <Button
+                                  variant={isWishlisted ? "secondary" : "outline"}
+                                  size="sm"
+                                  disabled={isSyncing || isWishlisted || isSavingWishlist}
+                                  onClick={() => handleSaveToWishlist(item.tourId)}
+                                  className={
+                                    isWishlisted ? "border-primary bg-primary/10 text-primary" : undefined
+                                  }
+                                >
+                                  {isSavingWishlist ? (
+                                    <>
+                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                      Đang lưu
+                                    </>
+                                  ) : isWishlisted ? (
+                                    <>
+                                      <Heart className="mr-2 h-4 w-4 fill-current" />
+                                      Đã lưu
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Heart className="mr-2 h-4 w-4" />
+                                      Lưu yêu thích
+                                    </>
+                                  )}
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={isSyncing}
+                                  onClick={() => {
+                                    const params = new URLSearchParams({
+                                      tab: "packages",
+                                      cartItemId: item.id,
+                                      packageId: item.packageId,
+                                      adults: String(item.adultCount),
+                                      children: String(item.childCount),
+                                    });
+                                    if (item.scheduleId) {
+                                      params.set("scheduleId", item.scheduleId);
+                                    }
+                                    navigate(`/activity/${item.tourId}?${params.toString()}`);
+                                  }}
+                                >
+                                  Sửa lựa chọn
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-red-600 hover:text-red-700"
+                                  disabled={isSyncing}
+                                  onClick={() => handleRemoveItem(item.id)}
+                                >
+                                  Xoá khỏi giỏ
+                                </Button>
+                              </div>
+                            </div>
+                          }
+                        />
+                      );
+                    })}
+                  </div>
                 )}
               </CardContent>
             </Card>
