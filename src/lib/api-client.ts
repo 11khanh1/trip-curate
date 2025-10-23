@@ -36,7 +36,8 @@ const assignAuthorizationHeader = (headers: any, token: string) => {
 const resolveBaseURL = () => {
   const primary = isProd ? import.meta.env.VITE_API_BASE_URL_PROD : import.meta.env.VITE_API_BASE_URL;
   const fallback = isProd ? import.meta.env.VITE_API_BASE_URL : import.meta.env.VITE_API_BASE_URL_PROD;
-  const candidate = primary ?? fallback ?? "http://localhost:8080/api";
+  const defaultBaseURL = isProd ? "https://travel-backend-heov.onrender.com/api" : "http://localhost:8080/api";
+  const candidate = (primary ?? fallback ?? defaultBaseURL) as string;
   return candidate.replace(/\/+$/, "");
 };
 

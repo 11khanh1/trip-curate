@@ -36,6 +36,7 @@ import {
   type PaginatedResponse,
   type PartnerStatus,
 } from "@/services/adminApi";
+import { isValidVietnamPhone, normalizeVietnamPhone } from "@/lib/validators";
 
 const STATUS_OPTIONS: { value: PartnerStatus; label: string }[] = [
   { value: "pending", label: "Chờ duyệt" },
@@ -232,6 +233,7 @@ export default function AdminPartners() {
     mutationFn: () =>
       createAdminPartner({
         ...form,
+        phone: form.phone ? normalizeVietnamPhone(form.phone) : "",
         tax_code: form.tax_code || null,
         address: form.address || null,
       }),
@@ -282,7 +284,7 @@ export default function AdminPartners() {
         status: editForm.status,
         name: editForm.name.trim(),
         email: editForm.email.trim(),
-        phone: editForm.phone.trim(),
+        phone: editForm.phone ? normalizeVietnamPhone(editForm.phone.trim()) : "",
       });
     },
     onSuccess: () => {
@@ -432,11 +434,12 @@ export default function AdminPartners() {
   };
 
   const handleDetailClose = () => {
+    const closedId = detailPartnerId;
     setIsDetailOpen(false);
     setDetailPartnerId(null);
     setDetailPartner(null);
-    if (partnerDetailQuery.remove) {
-      partnerDetailQuery.remove();
+    if (closedId !== null) {
+      queryClient.removeQueries({ queryKey: ["admin-partner", closedId] });
     }
   };
 
@@ -454,6 +457,14 @@ export default function AdminPartners() {
       toast({
         title: "Thiếu email",
         description: "Vui lòng nhập email của đối tác.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (form.phone && !isValidVietnamPhone(form.phone)) {
+      toast({
+        title: "Số điện thoại không hợp lệ",
+        description: "Vui lòng nhập số điện thoại Việt Nam gồm 10 số bắt đầu bằng 0 hoặc 84.",
         variant: "destructive",
       });
       return;
@@ -492,6 +503,14 @@ export default function AdminPartners() {
       toast({
         title: "Thiếu email",
         description: "Vui lòng nhập email của đối tác.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (editForm.phone && !isValidVietnamPhone(editForm.phone)) {
+      toast({
+        title: "Số điện thoại không hợp lệ",
+        description: "Vui lòng nhập số điện thoại Việt Nam gồm 10 số bắt đầu bằng 0 hoặc 84.",
         variant: "destructive",
       });
       return;

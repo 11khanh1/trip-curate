@@ -30,6 +30,13 @@ import {
 } from "@/services/bookingApi";
 import { fetchTourDetail, type PublicTour, type PublicTourPackage, type PublicTourSchedule } from "@/services/publicApi";
 import { deduceSepayQrImage, deriveQrFromPaymentUrl } from "@/lib/sepay";
+import {
+  isPastDate,
+  isValidCitizenId,
+  isValidVietnamPhone,
+  normalizeCitizenId,
+  normalizeVietnamPhone,
+} from "@/lib/validators";
 
 const extractOrderCode = (url: string): string | null => {
   try {
@@ -41,12 +48,29 @@ const extractOrderCode = (url: string): string | null => {
 };
 
 
-const passengerSchema = z.object({
-  type: z.enum(["adult", "child"]),
-  full_name: z.string().min(1, "Yêu cầu họ tên"),
-  date_of_birth: z.string().optional(),
-  document_number: z.string().optional(),
-});
+const passengerSchema = z
+  .object({
+    type: z.enum(["adult", "child"]),
+    full_name: z.string().min(1, "Yêu cầu họ tên"),
+    date_of_birth: z.string().optional(),
+    document_number: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.date_of_birth && !isPastDate(data.date_of_birth)) {
+      ctx.addIssue({
+        path: ["date_of_birth"],
+        code: z.ZodIssueCode.custom,
+        message: "Ngày sinh phải trước ngày hiện tại.",
+      });
+    }
+    if (data.document_number && !isValidCitizenId(data.document_number)) {
+      ctx.addIssue({
+        path: ["document_number"],
+        code: z.ZodIssueCode.custom,
+        message: "CMND/CCCD phải gồm 9 hoặc 12 chữ số.",
+      });
+    }
+  });
 
 const bookingSchema = z.object({
   package_id: z.string().min(1, "Yêu cầu chọn gói dịch vụ"),
@@ -55,7 +79,10 @@ const bookingSchema = z.object({
   children: z.number().int().min(0),
   contact_name: z.string().min(1, "Yêu cầu họ tên người liên hệ"),
   contact_email: z.string().email("Email không hợp lệ"),
-  contact_phone: z.string().min(6, "Số điện thoại chưa hợp lệ"),
+  contact_phone: z
+    .string()
+    .min(6, "Số điện thoại chưa hợp lệ")
+    .refine(isValidVietnamPhone, "Số điện thoại không hợp lệ"),
   notes: z.string().optional(),
   payment_method: z.enum(["offline", "sepay"]),
   passengers: z.array(passengerSchema).min(1, "Cần tối thiểu 1 hành khách"),
@@ -453,7 +480,9 @@ const BookingCheckout = () => {
       type: passenger.type,
       full_name: passenger.full_name.trim(),
       date_of_birth: passenger.date_of_birth?.trim() || undefined,
-      document_number: passenger.document_number?.trim() || undefined,
+      document_number: passenger.document_number
+        ? normalizeCitizenId(passenger.document_number.trim())
+        : undefined,
     }));
 
     const payload: CreateBookingPayload = {
@@ -463,7 +492,7 @@ const BookingCheckout = () => {
       adults: values.adults,
       contact_name: values.contact_name.trim(),
       contact_email: values.contact_email.trim(),
-      contact_phone: values.contact_phone.trim(),
+      contact_phone: normalizeVietnamPhone(values.contact_phone.trim()),
       notes: values.notes?.trim() ? values.notes.trim() : undefined,
       payment_method: values.payment_method,
       passengers: payloadPassengers,

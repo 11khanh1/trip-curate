@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {  MapPin } from "lucide-react";
 import { apiClient, ensureCsrfToken } from "@/lib/api-client";
+import { isPastDate, isValidVietnamPhone, normalizeVietnamPhone } from "@/lib/validators";
 
 
 type SectionType = "profile" | "security" | "notifications" | "payment" | "preferences";
@@ -22,7 +23,7 @@ const AccountSettings = () => {
   const [formData, setFormData] = useState({
     name: currentUser?.name || "",
     email: currentUser?.email || "",
-    phone: "",
+    phone: currentUser?.phone || "",
     dateOfBirth: "",
     gender: "",
     currentPassword: "",
@@ -55,17 +56,29 @@ const AccountSettings = () => {
   };
 
   const handleUpdateProfile = (e: React.FormEvent) => {
-      e.preventDefault();
-      // Update user in context and localStorage
-      const updatedUser = {
-        ...currentUser,
-        name: formData.name,
-        email: formData.email,
-      };
-      setCurrentUser(updatedUser);
-      localStorage.setItem("user", JSON.stringify(updatedUser));
-      toast.success("Cập nhật thông tin thành công!");
+    e.preventDefault();
+    if (formData.phone && !isValidVietnamPhone(formData.phone)) {
+      toast.error("⚠️ Số điện thoại không hợp lệ. Vui lòng nhập 10 số bắt đầu bằng 0 hoặc +84.");
+      return;
+    }
+    if (formData.dateOfBirth && !isPastDate(formData.dateOfBirth)) {
+      toast.error("⚠️ Ngày sinh phải trước ngày hiện tại.");
+      return;
+    }
+
+    const updatedUser = {
+      ...currentUser,
+      name: formData.name,
+      email: formData.email,
+      phone: formData.phone ? normalizeVietnamPhone(formData.phone) : formData.phone,
     };
+    setCurrentUser(updatedUser);
+    localStorage.setItem("user", JSON.stringify(updatedUser));
+    toast.success("Cập nhật thông tin thành công!");
+    if (formData.phone) {
+      setFormData((prev) => ({ ...prev, phone: normalizeVietnamPhone(formData.phone) }));
+    }
+  };
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();

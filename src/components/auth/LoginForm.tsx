@@ -47,6 +47,45 @@ const LoginForm = ({ onSwitchToRegister, onForgotPassword, onSuccess }: LoginFor
     ? import.meta.env.VITE_API_BASE_URL_PROD
     : import.meta.env.VITE_API_BASE_URL;
 
+  type UserRole = "customer" | "partner" | "admin";
+
+  const normalizeRole = (role?: string | null): UserRole => {
+    const normalized = (role ?? "").toString().toLowerCase();
+    if (normalized === "admin" || normalized === "partner" || normalized === "customer") {
+      return normalized;
+    }
+    if (normalized === "user") {
+      return "customer";
+    }
+    return "customer";
+  };
+
+  const normalizeUser = (user: any) => {
+    if (!user || typeof user !== "object") return null;
+    return {
+      ...user,
+      role: normalizeRole((user as { role?: string | null }).role),
+    };
+  };
+
+  const isAccountSuspended = (status?: string | null) => {
+    const normalized = (status ?? "").toString().toLowerCase();
+    const suspendedStatuses = ["inactive", "disabled", "locked", "suspended", "banned", "blocked"];
+    return suspendedStatuses.includes(normalized);
+  };
+
+  const redirectAfterLogin = (role?: string | null) => {
+    const normalized = normalizeRole(role);
+    switch (normalized) {
+      case "admin":
+        return "/admin";
+      case "partner":
+        return "/partner";
+      default:
+        return "/";
+    }
+  };
+
   const handleChange = (field: "email" | "otp" | "password", value: string) =>
     setFormData((prev) => ({ ...prev, [field]: value }));
 
@@ -82,13 +121,27 @@ const LoginForm = ({ onSwitchToRegister, onForgotPassword, onSuccess }: LoginFor
             headers: { Authorization: `Bearer ${token}` },
           }).catch(() => null);
           if (me && me.status === 200) {
-            const user = me.data;
-            localStorage.setItem("user", JSON.stringify(user));
-            setCurrentUser(user);
+            const normalizedUser = normalizeUser(me.data);
+            if (normalizedUser) {
+              if (isAccountSuspended((normalizedUser as { status?: string | null }).status)) {
+                persistAuthToken(null);
+                try {
+                  window.localStorage.removeItem("user");
+                } catch {
+                  // ignore storage errors
+                }
+                alert("Tài khoản của bạn đã bị tạm ngưng. Vui lòng liên hệ quản trị viên để được hỗ trợ.");
+                return;
+              }
+              localStorage.setItem("user", JSON.stringify(normalizedUser));
+              setCurrentUser(normalizedUser);
+              navigate(redirectAfterLogin(normalizedUser.role));
+            } else {
+              navigate("/");
+            }
           }
           alert("Đăng nhập thành công!");
           onSuccess();
-          navigate("/");
         } finally {
           window.removeEventListener("message", onMessage);
           popup.close();
@@ -193,13 +246,24 @@ const LoginForm = ({ onSwitchToRegister, onForgotPassword, onSuccess }: LoginFor
       if (token) {
         persistAuthToken(token);
       }
-      if (data.user) {
-        localStorage.setItem("user", JSON.stringify(data.user));
-        setCurrentUser(data.user);
+      const normalizedUser = normalizeUser(data.user);
+      if (normalizedUser) {
+        if (isAccountSuspended((normalizedUser as { status?: string | null }).status)) {
+          persistAuthToken(null);
+          try {
+            window.localStorage.removeItem("user");
+          } catch {
+            // ignore storage errors
+          }
+          alert("Tài khoản của bạn đã bị tạm ngưng. Vui lòng liên hệ quản trị viên để được hỗ trợ.");
+          return;
+        }
+        localStorage.setItem("user", JSON.stringify(normalizedUser));
+        setCurrentUser(normalizedUser);
       }
       alert("Đăng nhập thành công!");
       onSuccess();
-      navigate("/");
+      navigate(redirectAfterLogin(normalizedUser?.role));
     } catch (error) {
       const response = (error as any)?.response;
       const message =
@@ -230,13 +294,24 @@ const LoginForm = ({ onSwitchToRegister, onForgotPassword, onSuccess }: LoginFor
       if (token) {
         persistAuthToken(token);
       }
-      if (data.user) {
-        localStorage.setItem("user", JSON.stringify(data.user));
-        setCurrentUser(data.user);
+      const normalizedUser = normalizeUser(data.user);
+      if (normalizedUser) {
+        if (isAccountSuspended((normalizedUser as { status?: string | null }).status)) {
+          persistAuthToken(null);
+          try {
+            window.localStorage.removeItem("user");
+          } catch {
+            // ignore storage errors
+          }
+          alert("Tài khoản của bạn đã bị tạm ngưng. Vui lòng liên hệ quản trị viên để được hỗ trợ.");
+          return;
+        }
+        localStorage.setItem("user", JSON.stringify(normalizedUser));
+        setCurrentUser(normalizedUser);
       }
       alert("Đăng nhập thành công!");
       onSuccess();
-      navigate("/");
+      navigate(redirectAfterLogin(normalizedUser?.role));
     } catch (error) {
       const response = (error as any)?.response;
       if (response?.status === 419) {
