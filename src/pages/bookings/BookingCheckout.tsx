@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -17,13 +17,29 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import OrderHistory from "@/components/orders/OrderHistory";
-
-import { Check, MoreHorizontal } from "lucide-react";
+import CheckoutProgress, { type CheckoutStep } from "@/components/checkout/CheckoutProgress";
+import { Info, Loader2 } from "lucide-react";
 import { isAxiosError } from "axios";
 import { useToast } from "@/hooks/use-toast";
 import { useCart } from "@/context/CartContext";
-import { createBooking, type CreateBookingPayload } from "@/services/bookingApi";
+import {
+  createBooking,
+  fetchBookingPaymentStatus,
+  type BookingPaymentStatusResponse,
+  type CreateBookingPayload,
+} from "@/services/bookingApi";
 import { fetchTourDetail, type PublicTour, type PublicTourPackage, type PublicTourSchedule } from "@/services/publicApi";
+import { deduceSepayQrImage, deriveQrFromPaymentUrl } from "@/lib/sepay";
+
+const extractOrderCode = (url: string): string | null => {
+  try {
+    const parsed = new URL(url);
+    return parsed.searchParams.get("order_code");
+  } catch {
+    return null;
+  }
+};
+
 
 const passengerSchema = z.object({
   type: z.enum(["adult", "child"]),
@@ -49,11 +65,42 @@ type BookingFormValues = z.infer<typeof bookingSchema>;
 
 const ensurePositive = (value: number, fallback: number) => (Number.isFinite(value) && value >= 0 ? value : fallback);
 
+interface SepayPanelState {
+  bookingId: string;
+  paymentUrl: string;
+  orderCode?: string;
+  bookingCode?: string;
+  paymentId?: string;
+  amount?: number | null;
+  currency: string;
+  qrImage?: string | null;
+  providerName: string;
+}
+
+const normalizeStatus = (status?: string | null) => (status ?? "").toString().trim().toLowerCase();
+const SUCCESS_STATUSES = new Set(["success", "paid", "completed"]);
+const PENDING_STATUSES = new Set(["pending", "processing", "waiting"]);
+
+const formatCurrency = (value?: number | null, currency = "VND") => {
+  if (typeof value !== "number") return "Đang cập nhật";
+  try {
+    return value.toLocaleString("vi-VN", {
+      style: "currency",
+      currency,
+      minimumFractionDigits: 0,
+    });
+  } catch {
+    return `${value.toLocaleString("vi-VN")} ${currency}`;
+  }
+};
+
 const BookingCheckout = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { removeItem } = useCart();
   const [searchParams] = useSearchParams();
+  const [sepayPanel, setSepayPanel] = useState<SepayPanelState | null>(null);
+  const [shouldPollSepayStatus, setShouldPollSepayStatus] = useState(false);
 
   const tourId = searchParams.get("tourId") ?? "";
   const cartItemId = searchParams.get("cartItemId") ?? "";
@@ -110,7 +157,7 @@ const BookingCheckout = () => {
       return;
     }
     const current = getValues("schedule_id");
-     if (!current || !schedules.some(s => String(s.id) === current)) {
+      if (!current || !schedules.some(s => String(s.id) === current)) {
       setValue("schedule_id", String(schedules[0]?.id ?? ""));
     }
   }, [schedules, getValues, setValue]);
@@ -155,6 +202,19 @@ const BookingCheckout = () => {
     [schedules, scheduleId],
   );
 
+  const tourTitle = useMemo(
+    () => tour?.title ?? tour?.name ?? "Tour chưa cập nhật",
+    [tour?.name, tour?.title],
+  );
+
+  const providerName = useMemo(() => {
+    const partnerCompany = tour?.partner?.company_name;
+    if (typeof partnerCompany === "string" && partnerCompany.trim().length > 0) {
+      return partnerCompany.trim();
+    }
+    return "CÔNG TY CỔ PHẦN SALEMALL";
+  }, [tour?.partner?.company_name]);
+
   const displayCurrency = useMemo(() => {
     const raw = typeof tour?.currency === "string" ? tour.currency.trim() : "";
     return raw.length > 0 ? raw : "VND";
@@ -174,15 +234,95 @@ const BookingCheckout = () => {
         title: "Đặt chỗ thành công",
         description:
           payload.payment_method === "sepay"
-            ? "Đang chuyển tới cổng thanh toán Sepay."
+            ? "Chúng tôi đã tạo yêu cầu thanh toán. Vui lòng quét mã để hoàn tất giao dịch."
             : "Chúng tôi đã gửi email xác nhận cho bạn.",
       });
       if (cartItemId) {
         await removeItem(cartItemId);
       }
-      if (payload.payment_method === "sepay" && response.payment_url) {
-        window.location.href = response.payment_url;
-      } else if (response?.booking?.id) {
+
+      if (payload.payment_method === "sepay") {
+        const bookingIdentifier =
+          response?.booking?.id ??
+          (response as { booking_id?: string | number | null })?.booking_id ??
+          null;
+        const directPaymentUrl =
+          response.payment_url ??
+          (response.booking?.payment_url && String(response.booking.payment_url).trim().length
+            ? String(response.booking.payment_url)
+            : undefined);
+        if (bookingIdentifier) {
+          if (directPaymentUrl) {
+            const derivedOrderCode =
+              extractOrderCode(directPaymentUrl) ??
+              (response.booking?.code ? String(response.booking.code) : undefined) ??
+              (response.payment_id ? String(response.payment_id) : undefined);
+            const amountFromResponse =
+              typeof response.booking?.total_amount === "number"
+                ? response.booking.total_amount
+                : typeof response.booking?.total_price === "number"
+                ? response.booking.total_price
+                : totalPrice;
+            const currencyFromResponse =
+              (response.booking?.currency && String(response.booking.currency).trim()) || displayCurrency;
+            const qrImage =
+              deduceSepayQrImage(response) ??
+              deduceSepayQrImage(response.booking) ??
+              deriveQrFromPaymentUrl(directPaymentUrl);
+
+            setSepayPanel({
+              bookingId: String(bookingIdentifier),
+              paymentUrl: directPaymentUrl,
+              orderCode: derivedOrderCode ?? undefined,
+              bookingCode: response.booking?.code ? String(response.booking.code) : undefined,
+              paymentId: response.payment_id ? String(response.payment_id) : undefined,
+              amount: amountFromResponse,
+              currency: currencyFromResponse,
+              qrImage: qrImage ?? null,
+              providerName,
+            });
+            setShouldPollSepayStatus(true);
+            return;
+          }
+
+          const derivedOrderCode =
+            extractOrderCode(response.payment_url ?? "") ??
+            (response.booking?.code ? String(response.booking.code) : undefined) ??
+            (response.payment_id ? String(response.payment_id) : undefined);
+          if (response.payment_url) {
+            const amountFromResponse =
+              typeof response.booking?.total_amount === "number"
+                ? response.booking.total_amount
+                : typeof response.booking?.total_price === "number"
+                ? response.booking.total_price
+                : totalPrice;
+            const currencyFromResponse =
+              (response.booking?.currency && String(response.booking.currency).trim()) || displayCurrency;
+            const qrImage = deduceSepayQrImage(response) ?? deriveQrFromPaymentUrl(response.payment_url);
+
+            setSepayPanel({
+              bookingId: String(bookingIdentifier),
+              paymentUrl: response.payment_url,
+              orderCode: derivedOrderCode ?? undefined,
+              bookingCode: response.booking?.code ? String(response.booking.code) : undefined,
+              paymentId: response.payment_id ? String(response.payment_id) : undefined,
+              amount: amountFromResponse,
+              currency: currencyFromResponse,
+              qrImage: qrImage ?? null,
+              providerName,
+            });
+            setShouldPollSepayStatus(true);
+            return;
+          }
+        }
+        if (response.payment_url) {
+          setShouldPollSepayStatus(true);
+          window.location.href = response.payment_url;
+          return;
+        }
+      }
+
+      if (response?.booking?.id) {
         navigate(`/bookings/${response.booking.id}`);
       } else {
          navigate(`/`); // Fallback to home page
@@ -206,6 +346,99 @@ const BookingCheckout = () => {
     },
   });
 
+  const sepayPaymentQuery = useQuery<BookingPaymentStatusResponse>({
+    queryKey: ["sepay-payment-status", sepayPanel?.bookingId],
+    queryFn: () => fetchBookingPaymentStatus(String(sepayPanel?.bookingId)),
+    enabled: Boolean(sepayPanel?.bookingId && shouldPollSepayStatus),
+    refetchInterval: shouldPollSepayStatus ? 5000 : false,
+    retry: (failureCount, error) => {
+      if (isAxiosError(error) && error.response?.status === 404) {
+        return false;
+      }
+      return failureCount < 3;
+    },
+  });
+  const sepayPaymentStatus = sepayPaymentQuery.data;
+  const isSepayPaymentFetching = sepayPaymentQuery.isFetching;
+  const sepayPaymentError = sepayPaymentQuery.error;
+
+  useEffect(() => {
+    if (!sepayPanel?.bookingId) return;
+    const normalized = normalizeStatus(sepayPaymentStatus?.status ?? sepayPaymentStatus?.payment?.status);
+    if (SUCCESS_STATUSES.has(normalized)) {
+      const timer = window.setTimeout(() => {
+        navigate(`/bookings/${sepayPanel.bookingId}`);
+      }, 2000);
+      return () => window.clearTimeout(timer);
+    }
+    return undefined;
+  }, [navigate, sepayPanel?.bookingId, sepayPaymentStatus?.payment?.status, sepayPaymentStatus?.status]);
+
+  useEffect(() => {
+    if (isAxiosError(sepayPaymentError) && sepayPaymentError.response?.status === 404) {
+      setShouldPollSepayStatus(false);
+    }
+  }, [sepayPaymentError]);
+
+  useEffect(() => {
+    if (sepayPanel) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [sepayPanel]);
+
+  const handleOpenSepayPayment = () => {
+    if (!sepayPanel?.paymentUrl) return;
+    window.open(sepayPanel.paymentUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const hasSelectedTour = Boolean(tourId);
+  const steps: CheckoutStep[] = useMemo(() => {
+    if (sepayPanel) {
+      return [
+        { id: "select", label: "Chọn đơn hàng", status: "complete" },
+        { id: "info", label: "Điền thông tin", status: "complete" },
+        { id: "pay", label: "Thanh toán", status: "current" },
+      ];
+    }
+    return [
+      {
+        id: "select",
+        label: "Chọn đơn hàng",
+        status: hasSelectedTour ? "complete" : "current",
+      },
+      {
+        id: "info",
+        label: "Điền thông tin",
+        status: hasSelectedTour ? "current" : "upcoming",
+      },
+      {
+        id: "pay",
+        label: "Thanh toán",
+        status: "upcoming",
+      },
+    ];
+  }, [hasSelectedTour, sepayPanel]);
+
+  const sepayQrImage = useMemo(() => {
+    if (!sepayPanel) return null;
+    if (sepayPanel.qrImage) return sepayPanel.qrImage;
+    return deriveQrFromPaymentUrl(sepayPanel.paymentUrl);
+  }, [sepayPanel]);
+
+  const sepayAmountLabel = sepayPanel ? formatCurrency(sepayPanel.amount, sepayPanel.currency) : "";
+  const sepayFeeLabel = sepayPanel ? formatCurrency(0, sepayPanel.currency) : "";
+  const sepayStatusNormalized = normalizeStatus(
+    sepayPaymentStatus?.status ?? sepayPaymentStatus?.payment?.status,
+  );
+  const sepayStatusLabel = sepayPanel
+    ? SUCCESS_STATUSES.has(sepayStatusNormalized)
+      ? "Thanh toán thành công"
+      : sepayStatusNormalized === "failed"
+      ? "Thanh toán thất bại"
+      : sepayStatusNormalized === "refunded"
+      ? "Đã hoàn tiền"
+      : "Đang chờ thanh toán"
+    : "";
   const handleSubmit = (values: BookingFormValues) => {
     if (!tourId || !tour) {
       toast({
@@ -249,44 +482,230 @@ const BookingCheckout = () => {
       return;
     }
 
+    setSepayPanel(null);
+    setShouldPollSepayStatus(false);
     mutation.mutate(payload);
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="flex min-h-screen flex-col bg-muted/10">
       <TravelHeader />
-      <main className="container mx-auto flex-1 px-4 py-8">
-        {!tourId ? (
-          <Alert variant="destructive">
-            <AlertTitle>Thiếu thông tin tour</AlertTitle>
-            <AlertDescription>Đường dẫn không chứa mã tour hợp lệ.</AlertDescription>
-          </Alert>
-        ) : isLoading ? (
-          <div className="space-y-4">
-            <Skeleton className="h-48 w-full rounded-xl" />
-            <Skeleton className="h-64 w-full rounded-xl" />
-          </div>
-        ) : isError ? (
-          <Alert variant="destructive">
-            <AlertTitle>Không thể tải dữ liệu tour</AlertTitle>
-            <AlertDescription>
-              {error instanceof Error ? error.message : "Vui lòng thử lại sau hoặc liên hệ hỗ trợ."}
-            </AlertDescription>
-          </Alert>
+      <main className="flex-1 bg-gradient-to-b from-muted/40 via-transparent to-transparent">
+        <div className="container mx-auto px-4 py-10 space-y-8">
+          <CheckoutProgress steps={steps} />
+          {!tourId ? (
+            <Alert variant="destructive">
+              <AlertTitle>Thiếu thông tin tour</AlertTitle>
+              <AlertDescription>Đường dẫn không chứa mã tour hợp lệ.</AlertDescription>
+            </Alert>
+          ) : isLoading ? (
+            <div className="space-y-4">
+              <Skeleton className="h-48 w-full rounded-2xl" />
+              <Skeleton className="h-64 w-full rounded-2xl" />
+            </div>
+          ) : isError ? (
+            <Alert variant="destructive">
+              <AlertTitle>Không thể tải dữ liệu tour</AlertTitle>
+              <AlertDescription>
+                {error instanceof Error ? error.message : "Vui lòng thử lại sau hoặc liên hệ hỗ trợ."}
+              </AlertDescription>
+            </Alert>
         ) : !tour ? (
           <Alert>
             <AlertTitle>Tour đang cập nhật</AlertTitle>
             <AlertDescription>Chúng tôi chưa tìm thấy thông tin cho tour này.</AlertDescription>
           </Alert>
+        ) : sepayPanel ? (
+          <div className="space-y-6">
+            <Alert className="border-l-4 border-amber-500 bg-amber-50 text-amber-900">
+              <AlertTitle className="flex items-center gap-2 text-sm font-medium">
+                <Info className="h-4 w-4" />
+                Lưu ý quan trọng
+              </AlertTitle>
+              <AlertDescription className="text-sm">
+                Quý khách vui lòng không tắt trình duyệt cho đến khi nhận được kết quả giao dịch trên website. Xin cảm
+                ơn!
+              </AlertDescription>
+            </Alert>
+
+            <Card className="overflow-hidden border-none shadow-lg">
+              <CardHeader className="bg-white pb-4 text-center shadow-sm">
+                <div className="flex flex-col items-center gap-2">
+                  <p className="text-sm font-medium text-blue-600">SePay QR</p>
+                  <p className="text-2xl font-semibold text-foreground">Quét mã để thanh toán</p>
+                  <p className="text-sm text-muted-foreground">
+                    Sử dụng ứng dụng ngân hàng hỗ trợ VietQR hoặc SePay để hoàn tất giao dịch của bạn.
+                  </p>
+                </div>
+              </CardHeader>
+              <CardContent className="grid gap-10 bg-white py-10 lg:grid-cols-[1.1fr_1fr]">
+                <div className="space-y-6">
+                  <div>
+                    <h2 className="text-lg font-semibold text-foreground">Thông tin đơn hàng</h2>
+                    <p className="text-sm text-muted-foreground">
+                      Vui lòng kiểm tra lại thông tin trước khi thanh toán. Chúng tôi sẽ chuyển bạn về trang booking khi
+                      giao dịch thành công.
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border bg-muted/40 p-6 text-sm text-muted-foreground">
+                    <dl className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <dt className="text-muted-foreground">Số tiền thanh toán</dt>
+                        <dd className="text-lg font-semibold text-foreground">{sepayAmountLabel}</dd>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <dt>Giá trị đơn hàng</dt>
+                        <dd className="font-medium text-foreground">{sepayAmountLabel}</dd>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <dt>Phí giao dịch</dt>
+                        <dd className="font-medium text-foreground">{sepayFeeLabel}</dd>
+                      </div>
+                    </dl>
+                    <Separator className="my-4" />
+                    <dl className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <dt>Mã đơn hàng</dt>
+                        <dd className="font-medium text-foreground">
+                          {sepayPanel.bookingCode ?? sepayPanel.orderCode ?? "Đang cập nhật"}
+                        </dd>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <dt>Mã giao dịch</dt>
+                        <dd className="font-medium text-foreground">{sepayPanel.orderCode ?? "Đang cập nhật"}</dd>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <dt>Nhà cung cấp</dt>
+                        <dd className="font-medium text-foreground">{sepayPanel.providerName}</dd>
+                      </div>
+                    </dl>
+                  </div>
+                  <div className="rounded-2xl border bg-white p-6 text-sm text-muted-foreground shadow-sm">
+                    <p>
+                      Tour: <span className="font-medium text-foreground">{tourTitle}</span>
+                    </p>
+                    {selectedSchedule?.start_date && (
+                      <p>
+                        Khởi hành:{" "}
+                        <span className="font-medium text-foreground">
+                          {new Date(selectedSchedule.start_date).toLocaleDateString("vi-VN")}
+                        </span>
+                      </p>
+                    )}
+                    <p>
+                      Số lượng:{" "}
+                      <span className="font-medium text-foreground">
+                        {adults} người lớn{children > 0 ? `, ${children} trẻ em` : ""}
+                      </span>
+                    </p>
+                    {selectedPackage?.name && (
+                      <p>
+                        Gói dịch vụ: <span className="font-medium text-foreground">{selectedPackage.name}</span>
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-col items-center gap-5">
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="flex items-center gap-2 text-[#1d4ed8]">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[#1d4ed8]/20 bg-[#eef3ff]">
+                        <span className="text-lg font-semibold">S</span>
+                      </div>
+                      <span className="text-lg font-semibold">SePay</span>
+                    </div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Thanh toán QR
+                    </p>
+                  </div>
+                  <div className="w-full max-w-[280px] rounded-2xl border border-[#1d4ed8] bg-white p-3">
+                    {sepayQrImage ? (
+                      <img
+                        src={sepayQrImage}
+                        alt="QR thanh toán SePay"
+                        className="h-auto w-full rounded-xl object-contain"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="flex h-60 w-full items-center justify-center rounded-xl border border-dashed border-[#1d4ed8]/40 bg-muted/30 px-6 text-xs text-muted-foreground">
+                        Đang tải mã QR... Vui lòng thử mở trang thanh toán trực tiếp.
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-center gap-4 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <span>
+                      <span className="text-[#1d4ed8]">napas</span>
+                      <span className="text-emerald-500">247</span>
+                    </span>
+                    <span className="text-[#ef4444]">MB</span>
+                    <span className="text-[#2563eb]">VietQR</span>
+                  </div>
+                  <div className="flex w-full flex-col gap-3">
+                    {sepayPanel.paymentUrl && (
+                      <Button
+                        size="lg"
+                        className="w-full bg-[#ff5b00] text-white hover:bg-[#e24c00]"
+                        onClick={handleOpenSepayPayment}
+                      >
+                        Mở trang thanh toán
+                      </Button>
+                    )}
+                    <Button
+                      variant="outline"
+                      className="w-full border-muted-foreground/30 text-muted-foreground hover:border-muted-foreground/60"
+                      onClick={() => navigate(sepayPanel.bookingId ? `/bookings/${sepayPanel.bookingId}` : "/")}
+                    >
+                      Xem booking của bạn
+                    </Button>
+                  </div>
+                    <div className="flex flex-col items-center gap-1 text-center text-xs text-muted-foreground">
+                      <span>Trạng thái: {sepayStatusLabel}</span>
+                      {isSepayPaymentFetching && (
+                        <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          Đang cập nhật trạng thái giao dịch...
+                        </span>
+                      )}
+                      {sepayPaymentError && (
+                        <span className="text-[11px] text-destructive">
+                          Không thể kiểm tra trạng thái tự động. Vui lòng mở booking để kiểm tra thủ công.
+                        </span>
+                      )}
+                      {!SUCCESS_STATUSES.has(sepayStatusNormalized) && (
+                        <span>
+                          Nếu đã thanh toán thành công, trạng thái sẽ tự động cập nhật trong ít phút.
+                        </span>
+                      )}
+                  </div>
+                </div>
+              </CardContent>
+              <CardFooter className="flex flex-col items-center gap-3 border-t bg-white py-6 sm:flex-row sm:justify-center">
+                <Button variant="secondary" onClick={() => navigate("/")}>
+                  Về trang chủ
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSepayPanel(null);
+                    setShouldPollSepayStatus(false);
+                  }}
+                >
+                  Thực hiện giao dịch mới
+                </Button>
+              </CardFooter>
+            </Card>
+          </div>
         ) : (
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleSubmit)} className="grid gap-8 lg:grid-cols-[2fr_1fr] lg:items-start">
-              <div className="space-y-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Thông tin đặt chỗ</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
+            <Form {...form}>
+              <form
+                onSubmit={form.handleSubmit(handleSubmit)}
+                className="grid gap-8 lg:grid-cols-[2fr_1fr] lg:items-start"
+              >
+                <div className="space-y-6">
+                  <Card className="border-none bg-white shadow-sm">
+                    <CardHeader>
+                      <CardTitle>Thông tin đặt chỗ</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
                     <FormField
                       control={form.control}
                       name="package_id"
@@ -340,20 +759,60 @@ const BookingCheckout = () => {
                       )}
                     />
 
-                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <FormField
+                          control={form.control}
+                          name="adults"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Người lớn</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  min={1}
+                                  {...field}
+                                  onChange={(event) => field.onChange(event.target.value === '' ? '' : Number(event.target.value))}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="children"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Trẻ em</FormLabel>
+                              <FormControl>
+                                  <Input
+                                  type="number"
+                                  min={0}
+                                  {...field}
+                                  onChange={(event) => field.onChange(event.target.value === '' ? '' : Number(event.target.value))}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-none bg-white shadow-sm">
+                    <CardHeader>
+                      <CardTitle>Thông tin liên hệ</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid gap-4 md:grid-cols-2">
                       <FormField
                         control={form.control}
-                        name="adults"
+                        name="contact_name"
                         render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Người lớn</FormLabel>
+                          <FormItem className="md:col-span-2">
+                            <FormLabel>Họ và tên</FormLabel>
                             <FormControl>
-                              <Input
-                                type="number"
-                                min={1}
-                                {...field}
-                                onChange={(event) => field.onChange(event.target.value === '' ? '' : Number(event.target.value))}
-                              />
+                              <Input placeholder="Nguyễn Văn A" {...field} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -361,241 +820,203 @@ const BookingCheckout = () => {
                       />
                       <FormField
                         control={form.control}
-                        name="children"
+                        name="contact_email"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Trẻ em</FormLabel>
+                            <FormLabel>Email</FormLabel>
                             <FormControl>
-                               <Input
-                                type="number"
-                                min={0}
-                                {...field}
-                                onChange={(event) => field.onChange(event.target.value === '' ? '' : Number(event.target.value))}
-                              />
+                              <Input type="email" placeholder="tenban@example.com" {...field} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
-                    </div>
-                  </CardContent>
-                </Card>
+                      <FormField
+                        control={form.control}
+                        name="contact_phone"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Số điện thoại</FormLabel>
+                            <FormControl>
+                              <Input placeholder="0123456789" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="notes"
+                        render={({ field }) => (
+                          <FormItem className="md:col-span-2">
+                            <FormLabel>Ghi chú</FormLabel>
+                            <FormControl>
+                              <Textarea rows={3} placeholder="Yêu cầu đặc biệt (nếu có)" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </CardContent>
+                  </Card>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Thông tin liên hệ</CardTitle>
-                  </CardHeader>
-                  <CardContent className="grid gap-4 md:grid-cols-2">
-                    <FormField
-                      control={form.control}
-                      name="contact_name"
-                      render={({ field }) => (
-                        <FormItem className="md:col-span-2">
-                          <FormLabel>Họ và tên</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Nguyễn Văn A" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="contact_email"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Email</FormLabel>
-                          <FormControl>
-                            <Input type="email" placeholder="tenban@example.com" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="contact_phone"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Số điện thoại</FormLabel>
-                          <FormControl>
-                            <Input placeholder="0123456789" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="notes"
-                      render={({ field }) => (
-                        <FormItem className="md:col-span-2">
-                          <FormLabel>Ghi chú</FormLabel>
-                          <FormControl>
-                            <Textarea rows={3} placeholder="Yêu cầu đặc biệt (nếu có)" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Thông tin hành khách</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {form.getValues("passengers").length === 0 ? (
-                      <p className="text-sm text-muted-foreground">
-                        Tăng số lượng người lớn hoặc trẻ em để thêm hành khách.
-                      </p>
-                    ) : (
-                      form.getValues("passengers").map((passenger, index) => (
-                        <div key={`passenger-${index}`} className="rounded-lg border p-4">
-                          <p className="mb-3 text-sm font-semibold text-foreground">
-                            Hành khách {index + 1} · {passenger.type === "child" ? "Trẻ em" : "Người lớn"}
-                          </p>
-                          <div className="grid gap-4 md:grid-cols-2">
-                            <FormField
-                              control={form.control}
-                              name={`passengers.${index}.full_name`}
-                              render={({ field }) => (
-                                <FormItem className="md:col-span-2">
-                                  <FormLabel>Họ và tên</FormLabel>
-                                  <FormControl>
-                                    <Input placeholder="Nhập họ và tên" {...field} />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={form.control}
-                              name={`passengers.${index}.date_of_birth`}
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Ngày sinh (tùy chọn)</FormLabel>
-                                  <FormControl>
-                                    <Input type="date" {...field} />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={form.control}
-                              name={`passengers.${index}.document_number`}
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Giấy tờ tùy thân (tùy chọn)</FormLabel>
-                                  <FormControl>
-                                    <Input placeholder="CMND/Hộ chiếu" {...field} />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* **IMPROVEMENT**: Added sticky positioning for the summary card */}
-              <div className="lg:sticky lg:top-24">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Tóm tắt đơn hàng</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4 text-sm text-muted-foreground">
-                    <div>
-                      <p className="font-medium text-foreground">{tour.title ?? tour.name ?? "Tour không tên"}</p>
-                      {selectedSchedule?.start_date && (
-                        <p>
-                          Khởi hành:{" "}
-                          {new Date(selectedSchedule.start_date).toLocaleString("vi-VN", {
-                            day: "2-digit",
-                            month: "2-digit",
-                            year: "numeric",
-                          })}
+                  <Card className="border-none bg-white shadow-sm">
+                    <CardHeader>
+                      <CardTitle>Thông tin hành khách</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {form.getValues("passengers").length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          Tăng số lượng người lớn hoặc trẻ em để thêm hành khách.
                         </p>
+                      ) : (
+                        form.getValues("passengers").map((passenger, index) => (
+                          <div key={`passenger-${index}`} className="rounded-lg border p-4">
+                            <p className="mb-3 text-sm font-semibold text-foreground">
+                              Hành khách {index + 1} · {passenger.type === "child" ? "Trẻ em" : "Người lớn"}
+                            </p>
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <FormField
+                                control={form.control}
+                                name={`passengers.${index}.full_name`}
+                                render={({ field }) => (
+                                  <FormItem className="md:col-span-2">
+                                    <FormLabel>Họ và tên</FormLabel>
+                                    <FormControl>
+                                      <Input placeholder="Nhập họ và tên" {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={form.control}
+                                name={`passengers.${index}.date_of_birth`}
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Ngày sinh (tùy chọn)</FormLabel>
+                                    <FormControl>
+                                      <Input type="date" {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={form.control}
+                                name={`passengers.${index}.document_number`}
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Giấy tờ tùy thân (tùy chọn)</FormLabel>
+                                    <FormControl>
+                                      <Input placeholder="CMND/Hộ chiếu" {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                          </div>
+                        ))
                       )}
-                    </div>
-                    <Separator />
-                    <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <span>Người lớn:</span>
-                        <span className="font-medium text-foreground">{adults}</span>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="lg:sticky lg:top-24">
+                  <Card className="border-none bg-white shadow-lg">
+                    <CardHeader>
+                      <CardTitle>Tóm tắt đơn hàng</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4 text-sm text-muted-foreground">
+                      <div>
+                        <p className="font-medium text-foreground">{tourTitle}</p>
+                        {selectedSchedule?.start_date && (
+                          <p>
+                            Khởi hành:{" "}
+                            {new Date(selectedSchedule.start_date).toLocaleString("vi-VN", {
+                              day: "2-digit",
+                              month: "2-digit",
+                              year: "numeric",
+                            })}
+                          </p>
+                        )}
                       </div>
-                       <div className="flex justify-between">
-                        <span>Trẻ em:</span>
-                        <span className="font-medium text-foreground">{children}</span>
+                      <Separator />
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <span>Người lớn:</span>
+                          <span className="font-medium text-foreground">{adults}</span>
+                        </div>
+                          <div className="flex justify-between">
+                          <span>Trẻ em:</span>
+                          <span className="font-medium text-foreground">{children}</span>
+                        </div>
+                          <div className="flex justify-between">
+                          <span>Gói dịch vụ:</span>
+                          <span className="font-medium text-foreground text-right">
+                            {selectedPackage?.name ?? "Chưa chọn"}
+                          </span>
+                        </div>
                       </div>
-                       <div className="flex justify-between">
-                        <span>Gói dịch vụ:</span>
-                        <span className="font-medium text-foreground text-right">
-                          {selectedPackage?.name ?? "Chưa chọn"}
+                      <Separator />
+                      <div className="flex items-center justify-between text-base font-semibold text-foreground">
+                        <span>Tổng cộng</span>
+                        <span>
+                          {totalPrice.toLocaleString("vi-VN", {
+                            style: "currency",
+                            currency: displayCurrency,
+                            minimumFractionDigits: 0,
+                          })}
                         </span>
                       </div>
-                    </div>
-                    <Separator />
-                    <div className="flex items-center justify-between text-base font-semibold text-foreground">
-                      <span>Tổng cộng</span>
-                      <span>
-                        {totalPrice.toLocaleString("vi-VN", {
-                          style: "currency",
-                          currency: displayCurrency,
-                          minimumFractionDigits: 0,
-                        })}
-                      </span>
-                    </div>
-                    <Separator />
-                    <FormField
-                      control={form.control}
-                      name="payment_method"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Phương thức thanh toán</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="sepay">Thanh toán qua Ví điện tử</SelectItem>
-                              <SelectItem value="offline">Thanh toán sau</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </CardContent>
-                  <CardFooter className="flex flex-col gap-3">
-                    <Button
-                      type="submit"
-                      size="lg"
-                      className="w-full"
-                      disabled={mutation.isPending || packages.length === 0}
-                    >
-                      {mutation.isPending ? "Đang xử lý..." : "Hoàn tất đặt chỗ"}
-                    </Button>
-                    <p className="text-center text-xs text-muted-foreground">
-                       Khi tiếp tục, bạn đồng ý với điều khoản sử dụng và chính sách của chúng tôi.
-                    </p>
-                  </CardFooter>
-                </Card>
-              </div>
-            </form>
-          </Form>
-        )}
+                      <Separator />
+                      <FormField
+                        control={form.control}
+                        name="payment_method"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Phương thức thanh toán</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="sepay">Thanh toán qua Ví điện tử</SelectItem>
+                                <SelectItem value="offline">Thanh toán sau</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </CardContent>
+                    <CardFooter className="flex flex-col gap-3">
+                      <Button
+                        type="submit"
+                        size="lg"
+                        className="w-full"
+                        disabled={mutation.isPending || packages.length === 0}
+                      >
+                        {mutation.isPending ? "Đang xử lý..." : "Hoàn tất đặt chỗ"}
+                      </Button>
+                      <p className="text-center text-xs text-muted-foreground">
+                          Khi tiếp tục, bạn đồng ý với điều khoản sử dụng và chính sách của chúng tôi.
+                      </p>
+                    </CardFooter>
+                  </Card>
+                </div>
+              </form>
+            </Form>
+          )}
+        </div>
       </main>
-      <section className="container mx-auto px-4 pb-12">
-        <OrderHistory />
+      <section className="bg-background">
+        <div className="container mx-auto px-4 pb-12">
+          <OrderHistory />
+        </div>
       </section>
       <Footer />
     </div>

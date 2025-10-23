@@ -561,17 +561,7 @@ const TravelHeader = () => {
                 <Clock className="w-4 h-4 mr-1" />
                 Xem gần đây
               </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="hidden items-center gap-2 text-gray-600 hover:text-gray-800 text-sm md:flex"
-                asChild
-              >
-                <Link to="/wishlist">
-                  <Heart className="h-4 w-4" />
-                  Yêu thích
-                </Link>
-              </Button>
+            
 
               {/* GIỎ HÀNG CHO DESKTOP */}
               <Popover>
@@ -629,12 +619,7 @@ const TravelHeader = () => {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-48 bg-white">
-                        <DropdownMenuItem asChild>
-                          <Link to="/account-settings" className="flex items-center gap-2 cursor-pointer">
-                            <Settings className="w-4 h-4" />
-                            Cài đặt
-                          </Link>
-                        </DropdownMenuItem>
+                        
                         {currentUser.role === 'admin' && (
                           <DropdownMenuItem asChild>
                             <Link to="/admin" className="flex items-center gap-2 cursor-pointer">
@@ -651,18 +636,29 @@ const TravelHeader = () => {
                             </Link>
                           </DropdownMenuItem>
                         )}
+                        {currentUser.role === 'customer' && (
+                           <DropdownMenuItem asChild>
+                              <Link to="/wishlist" className="flex items-center gap-2 cursor-pointer">
+                                <Heart className="w-4 h-4" />
+                                Danh sách yêu thích
+                              </Link>
+                            </DropdownMenuItem>
+                        )}
+                        {currentUser.role === 'customer' && (
+                          <DropdownMenuItem asChild>
+                            <Link to="/bookings" className="flex items-center gap-2 cursor-pointer">
+                              <Receipt className="w-4 h-4" />
+                              Lịch sử đơn hàng
+                            </Link>
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuItem asChild>
-                          <Link to="/wishlist" className="flex items-center gap-2 cursor-pointer">
-                            <Heart className="w-4 h-4" />
-                            Danh sách yêu thích
+                          <Link to="/account-settings" className="flex items-center gap-2 cursor-pointer">
+                            <Settings className="w-4 h-4" />
+                            Cài đặt
                           </Link>
                         </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                          <Link to="/bookings" className="flex items-center gap-2 cursor-pointer">
-                            <Receipt className="w-4 h-4" />
-                            Lịch sử đơn hàng
-                          </Link>
-                        </DropdownMenuItem>
+                        
                         <DropdownMenuItem
                           onClick={async () => {
                             try {

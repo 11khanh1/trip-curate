@@ -230,3 +230,18 @@ export async function verifySepayReturn(params: SepayReturnQuery): Promise<Sepay
   const res = await apiClient.get("/payments/sepay/return", { params });
   return res.data as SepayReturnResponse;
 }
+
+export interface BookingPaymentStatusResponse {
+  booking_id?: string | number;
+  status?: string;
+  message?: string | null;
+  payment?: (BookingPayment & { method?: string | null }) | null;
+  [key: string]: unknown;
+}
+
+export async function fetchBookingPaymentStatus(
+  id: string | number,
+): Promise<BookingPaymentStatusResponse> {
+  const res = await apiClient.get(`/bookings/${id}/payment-status`);
+  return res.data as BookingPaymentStatusResponse;
+}

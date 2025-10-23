@@ -54,6 +54,7 @@ import ScrollToTop from "@/components/ScrollToTop";
 import BookingsList from "./pages/bookings/BookingsList";
 import BookingDetail from "./pages/bookings/BookingDetail";
 import BookingCheckout from "./pages/bookings/BookingCheckout";
+import SepayGateway from "./pages/payments/SepayGateway";
 import SepayReturn from "./pages/payments/SepayReturn";
 import CartPage from "./pages/Cart";
 import Wishlist from "./pages/Wishlist";
@@ -85,6 +86,7 @@ const App = () => (
         <Route path="/bookings" element={<BookingsList />} />
         <Route path="/bookings/new" element={<BookingCheckout />} />
         <Route path="/bookings/:id" element={<BookingDetail />} />
+        <Route path="/payments/sepay/gateway" element={<SepayGateway />} />
         <Route path="/payments/sepay/return" element={<SepayReturn />} />
         <Route path="/cart" element={<CartPage />} />
         <Route path="/wishlist" element={<Wishlist />} />
