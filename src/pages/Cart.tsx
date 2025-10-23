@@ -130,6 +130,7 @@ const CartPage = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { currentUser } = useUser();
+  const wishlistQueryKey = ["wishlist", currentUser?.id != null ? String(currentUser.id) : "guest"] as const;
   const { items, updateItemQuantity, removeItem, isLoading: isCartLoading, isSyncing, error } =
     useCart();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -137,7 +138,7 @@ const CartPage = () => {
   const [pendingWishlistTourId, setPendingWishlistTourId] = useState<string | null>(null);
 
   const syncWishlistFromCache = useCallback(() => {
-    const cached = queryClient.getQueryData<WishlistItem[]>(["wishlist"]);
+    const cached = queryClient.getQueryData<WishlistItem[]>(wishlistQueryKey);
     setWishlistTourIds(() => {
       if (!Array.isArray(cached)) {
         return new Set<string>();
@@ -150,17 +151,24 @@ const CartPage = () => {
       });
       return next;
     });
-  }, [queryClient]);
+  }, [queryClient, wishlistQueryKey]);
 
   useEffect(() => {
+    if (!currentUser) {
+      setWishlistTourIds(new Set());
+      return;
+    }
     syncWishlistFromCache();
     const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
-      if (event.query?.queryKey?.[0] === "wishlist") {
+      if (
+        event.query?.queryKey?.[0] === "wishlist" &&
+        event.query?.queryKey?.[1] === wishlistQueryKey[1]
+      ) {
         syncWishlistFromCache();
       }
     });
     return unsubscribe;
-  }, [queryClient, syncWishlistFromCache]);
+  }, [currentUser, queryClient, syncWishlistFromCache, wishlistQueryKey]);
 
   const addToWishlistMutation = useMutation<WishlistItem, unknown, string>({
     mutationFn: (tourId: string) => addWishlistItem(tourId),
@@ -173,7 +181,7 @@ const CartPage = () => {
         next.add(String(item.tour_id ?? tourId));
         return next;
       });
-      queryClient.setQueryData<WishlistItem[]>(["wishlist"], (previous) => {
+      queryClient.setQueryData<WishlistItem[]>(wishlistQueryKey, (previous) => {
         const existing = Array.isArray(previous) ? previous : [];
         const filtered = existing.filter((entry) => entry.id !== item.id);
         return [item, ...filtered];

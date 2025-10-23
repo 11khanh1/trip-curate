@@ -43,33 +43,45 @@ const TourCard = ({
   const { currentUser } = useUser();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const userWishlistKey = ["wishlist", currentUser?.id != null ? String(currentUser.id) : "guest"] as const;
   const [wishlistItemId, setWishlistItemId] = useState<string | null>(null);
 
   const syncWishlistState = useCallback(() => {
-    const cached = queryClient.getQueryData<WishlistItem[]>(["wishlist"]);
+    const cached = queryClient.getQueryData<WishlistItem[]>(userWishlistKey);
     if (!Array.isArray(cached)) {
       setWishlistItemId(null);
       return;
     }
     const matched = cached.find((entry) => String(entry.tour_id) === String(id));
     setWishlistItemId(matched?.id ?? null);
-  }, [id, queryClient]);
+  }, [id, queryClient, userWishlistKey]);
 
   useEffect(() => {
     syncWishlistState();
     const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
-      if (event.query?.queryKey?.[0] === "wishlist") {
+      if (
+        event.query?.queryKey?.[0] === "wishlist" &&
+        event.query?.queryKey?.[1] === userWishlistKey[1]
+      ) {
         syncWishlistState();
       }
     });
     return unsubscribe;
-  }, [queryClient, syncWishlistState]);
+  }, [queryClient, syncWishlistState, userWishlistKey]);
+
+  useEffect(() => {
+    if (!currentUser) {
+      setWishlistItemId(null);
+    } else {
+      syncWishlistState();
+    }
+  }, [currentUser, syncWishlistState]);
 
   const addWishlistMutation = useMutation<WishlistItem, unknown, string>({
     mutationFn: (tourId: string) => addWishlistItem(tourId),
     onSuccess: (item) => {
       setWishlistItemId(item.id);
-      queryClient.setQueryData<WishlistItem[]>(["wishlist"], (previous) => {
+      queryClient.setQueryData<WishlistItem[]>(userWishlistKey, (previous) => {
         const existing = Array.isArray(previous) ? previous : [];
         const filtered = existing.filter((entry) => entry.id !== item.id);
         return [item, ...filtered];
@@ -97,7 +109,7 @@ const TourCard = ({
     mutationFn: (wishlistId: string) => removeWishlistItem(wishlistId),
     onSuccess: (_, removedId) => {
       setWishlistItemId(null);
-      queryClient.setQueryData<WishlistItem[]>(["wishlist"], (previous) =>
+      queryClient.setQueryData<WishlistItem[]>(userWishlistKey, (previous) =>
         (previous ?? []).filter((entry) => entry.id !== removedId),
       );
       queryClient.invalidateQueries({ queryKey: ["wishlist"] });
@@ -121,10 +133,10 @@ const TourCard = ({
 
   const resolveWishlistId = useCallback(() => {
     if (wishlistItemId) return wishlistItemId;
-    const cached = queryClient.getQueryData<WishlistItem[]>(["wishlist"]);
+    const cached = queryClient.getQueryData<WishlistItem[]>(userWishlistKey);
     const matched = cached?.find((entry) => String(entry.tour_id) === String(id));
     return matched?.id ?? null;
-  }, [id, queryClient, wishlistItemId]);
+  }, [id, queryClient, userWishlistKey, wishlistItemId]);
 
   const isWishlisted = Boolean(wishlistItemId);
   const isWishlistMutating = addWishlistMutation.isPending || removeWishlistMutation.isPending;

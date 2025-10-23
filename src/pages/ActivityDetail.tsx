@@ -514,6 +514,7 @@ const ActivityDetail = () => {
   const [editingCartItemId, setEditingCartItemId] = useState<string | null>(null);
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [wishlistItemId, setWishlistItemId] = useState<string | null>(null);
+  const wishlistQueryKey = ["wishlist", currentUser?.id != null ? String(currentUser.id) : "guest"] as const;
 
   const cartItemIdParam = searchParams.get("cartItemId");
   const packageIdParam = searchParams.get("packageId");
@@ -637,7 +638,7 @@ const ActivityDetail = () => {
     onSuccess: (item) => {
       setIsWishlisted(true);
       setWishlistItemId(item.id);
-      queryClient.setQueryData<WishlistItem[]>(["wishlist"], (previous) => {
+      queryClient.setQueryData<WishlistItem[]>(wishlistQueryKey, (previous) => {
         if (!previous) return [item];
         const filtered = previous.filter((entry) => entry.id !== item.id);
         return [item, ...filtered];
@@ -662,7 +663,7 @@ const ActivityDetail = () => {
     onSuccess: (_, removedId) => {
       setIsWishlisted(false);
       setWishlistItemId(null);
-      queryClient.setQueryData<WishlistItem[]>(["wishlist"], (previous) =>
+      queryClient.setQueryData<WishlistItem[]>(wishlistQueryKey, (previous) =>
         (previous ?? []).filter((entry) => entry.id !== removedId),
       );
       queryClient.invalidateQueries({ queryKey: ["wishlist"] });
@@ -717,12 +718,12 @@ const activity = useMemo(
 );
 
   useEffect(() => {
-    if (!activity?.id) {
+    if (!activity?.id || !currentUser) {
       setIsWishlisted(false);
       setWishlistItemId(null);
       return;
     }
-    const cached = queryClient.getQueryData<WishlistItem[]>(["wishlist"]);
+    const cached = queryClient.getQueryData<WishlistItem[]>(wishlistQueryKey);
     if (Array.isArray(cached)) {
       const matched = cached.find(
         (entry) => String(entry.tour_id) === String(activity.id ?? ""),
@@ -733,7 +734,7 @@ const activity = useMemo(
       setIsWishlisted(false);
       setWishlistItemId(null);
     }
-  }, [activity?.id, queryClient]);
+  }, [activity?.id, currentUser, queryClient, wishlistQueryKey]);
   const schedules = tourDetail?.schedules ?? [];
 
   const bookingsForTour = useMemo(() => {
@@ -1006,7 +1007,7 @@ const activity = useMemo(
     if (isWishlistMutating) return;
 
     if (isWishlisted) {
-      const cached = queryClient.getQueryData<WishlistItem[]>(["wishlist"]) ?? [];
+      const cached = queryClient.getQueryData<WishlistItem[]>(wishlistQueryKey) ?? [];
       const targetId =
         wishlistItemId ?? cached.find((entry) => String(entry.tour_id) === String(activity.id))?.id ?? null;
       if (!targetId) {
@@ -1032,6 +1033,7 @@ const activity = useMemo(
     removeFromWishlist,
     toast,
     wishlistItemId,
+    wishlistQueryKey,
   ]);
 
   const formatPriceLabel = (value: number) => {
@@ -2365,7 +2367,7 @@ const activity = useMemo(
 
     <Dialog open={isGalleryOpen} onOpenChange={setIsGalleryOpen}>
       <DialogContent className="max-w-7xl w-full p-0 border-none bg-transparent shadow-none">
-        <div className="flex h-[90vh] flex-col overflow-hidden rounded-lg bg-black/90 text-white">
+        <div className="flex h-[90vh] flex-col overflow-hidden rounded-lg  text-white">
           <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
             <h3 className="font-semibold truncate pr-4">{activity.title}</h3>
             <Button

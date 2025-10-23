@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import OrderHistory from "@/components/orders/OrderHistory";
 
+import { Check, MoreHorizontal } from "lucide-react";
 import { isAxiosError } from "axios";
 import { useToast } from "@/hooks/use-toast";
 import { useCart } from "@/context/CartContext";

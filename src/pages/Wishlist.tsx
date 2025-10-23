@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -149,6 +149,7 @@ type WishlistStatusBadge = {
 
 const WishlistPage = () => {
   const { currentUser } = useUser();
+  const wishlistQueryKey = ["wishlist", currentUser?.id != null ? String(currentUser.id) : "guest"] as const;
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -162,9 +163,9 @@ const WishlistPage = () => {
     error,
     refetch,
   } = useQuery<WishlistItem[]>({
-    queryKey: ["wishlist"],
+    queryKey: wishlistQueryKey,
     queryFn: fetchWishlist,
-    enabled: Boolean(currentUser),
+    enabled: Boolean(currentUser?.id),
   });
 
   const removeMutation = useMutation({
@@ -206,6 +207,13 @@ const WishlistPage = () => {
       });
     },
   });
+
+  useEffect(() => {
+    if (!currentUser) {
+      setSelectedTourIds([]);
+      setComparedTours([]);
+    }
+  }, [currentUser]);
 
   const handleToggleTour = (tourId: string) => {
     if (!tourId) return;
