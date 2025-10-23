@@ -21,9 +21,9 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Edit, Trash2, MapPin, List, Image, Calendar, Loader2, Eye, Send, ChevronLeft, ChevronRight } from "lucide-react";
-import axios from "axios";
+import { apiClient } from "@/lib/api-client";
 
-const PARTNER_TOUR_ENDPOINT = "/api/partner/tours";
+const PARTNER_TOUR_ENDPOINT = "/partner/tours";
 
 // ---------------------------- INTERFACES ----------------------------
 interface ItineraryItem {
@@ -206,11 +206,6 @@ export default function PartnerActivities() {
     status: (t.status as Tour["status"]) || "pending",
   });
 
-  const getTokenHeader = () => {
-  const token = localStorage.getItem("token");
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
-
 const extractToursFromResponse = (payload: any): any[] => {
   if (!payload) return [];
   if (Array.isArray(payload)) return payload;
@@ -224,7 +219,7 @@ const extractToursFromResponse = (payload: any): any[] => {
 const fetchTours = async () => {
   setIsLoading(true);
   try {
-    const res = await axios.get(PARTNER_TOUR_ENDPOINT, { headers: getTokenHeader() });
+    const res = await apiClient.get(PARTNER_TOUR_ENDPOINT);
     const raw = extractToursFromResponse(res.data);
     const normalized: Tour[] = raw.map(normalizeTourFromAPI);
     setTours(normalized);
@@ -269,13 +264,12 @@ useEffect(() => { fetchTours(); }, []);
       const url = isEdit && id ? `${PARTNER_TOUR_ENDPOINT}/${id}` : PARTNER_TOUR_ENDPOINT;
       const method = isEdit ? "put" : "post";
 
-      const res = await axios({
+      const res = await apiClient.request({
         method: method,
         url: url,
         data: payload,
         headers: {
           "Content-Type": "application/json",
-          ...getTokenHeader(),
         },
       });
 
@@ -302,10 +296,10 @@ useEffect(() => { fetchTours(); }, []);
   const submitTourForApproval = async (id: string) => {
     if (!window.confirm("Bạn có chắc chắn muốn gửi yêu cầu duyệt tour này không?")) return;
     try {
-      await axios.put(
+      await apiClient.put(
         `${PARTNER_TOUR_ENDPOINT}/${id}`,
         { status: 'pending' },
-        { headers: { 'Content-Type': 'application/json', ...getTokenHeader() } }
+        { headers: { 'Content-Type': 'application/json' } }
       );
 
       toast({
@@ -328,9 +322,7 @@ useEffect(() => { fetchTours(); }, []);
   const handleDeleteTour = async (id: string) => {
     if (window.confirm("Bạn có chắc chắn muốn xóa tour này không?")) {
         try {
-            await axios.delete(`${PARTNER_TOUR_ENDPOINT}/${id}`, {
-                headers: getTokenHeader(),
-            });
+            await apiClient.delete(`${PARTNER_TOUR_ENDPOINT}/${id}`);
             toast({ title: "Xóa thành công", description: "Tour đã bị xóa." });
             setTours((prev) => prev.filter((t) => t.id !== id));
         } catch (err: any) {
@@ -381,10 +373,8 @@ useEffect(() => { fetchTours(); }, []);
       setIsDetailOpen(true);
       setIsDetailLoading(true);
       try {
-          const res = await axios.get(`${PARTNER_TOUR_ENDPOINT}/${id}`, {
-              headers: getTokenHeader(),
-          });
-          
+          const res = await apiClient.get(`${PARTNER_TOUR_ENDPOINT}/${id}`);
+
           const raw = res.data.tour || res.data;
           const tourData: Tour = normalizeTourFromAPI(raw);
           setSelectedTour(tourData);

@@ -298,7 +298,7 @@ const AllActivities = () => {
         {/* === PHẦN TABS CHÍNH ĐÃ BỊ XÓA === */}
 
         <>
-          <h1 className="text-4xl font-bold text-foreground mb-8">Các hoạt động nổi bật</h1>
+          <h1 className="text-4xl font-bold text-foreground mb-8">Danh sách hoạt động</h1>
 
           <Tabs value={activeCategory} onValueChange={handleCategoryChange} className="mb-8">
             <TabsList className="bg-background border-b w-full justify-start rounded-none h-auto p-0 overflow-x-auto">
