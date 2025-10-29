@@ -16,7 +16,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCart } from "@/context/CartContext";
 import { useUser } from "@/context/UserContext";
-import { fetchTrendingTours, PublicTour } from "@/services/publicApi";
+import { fetchTrendingTours, type PublicTour, type CancellationPolicy } from "@/services/publicApi";
 import { addWishlistItem, type WishlistItem } from "@/services/wishlistApi";
 import { apiClient } from "@/lib/api-client";
 import { getTourStartingPrice } from "@/lib/tour-utils";
@@ -120,6 +120,34 @@ const mapTourToCard = (tour: PublicTour): TourCardProps => {
     features,
     isPopular: true,
   };
+};
+
+const formatTourTypeLabel = (type?: string | null) => {
+  if (!type) return null;
+  const normalized = type.toString().trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized === "domestic") return "Loại tour: Nội địa";
+  if (normalized === "international") return "Loại tour: Quốc tế";
+  return `Loại tour: ${type}`;
+};
+
+const summarizeDocumentRequirements = (requiresPassport?: boolean | null, requiresVisa?: boolean | null) => {
+  const needsPassport = requiresPassport === true;
+  const needsVisa = requiresVisa === true;
+  if (!needsPassport && !needsVisa) {
+    return "Giấy tờ: Không yêu cầu hộ chiếu/visa";
+  }
+  const pieces: string[] = [];
+  if (needsPassport) pieces.push("hộ chiếu");
+  if (needsVisa) pieces.push("visa");
+  return `Giấy tờ bắt buộc: ${pieces.join(" & ")}`;
+};
+
+const summarizeCancellationPolicies = (policies?: CancellationPolicy[] | null) => {
+  if (!Array.isArray(policies) || policies.length === 0) {
+    return "Chính sách hủy: Theo điều khoản chung";
+  }
+  return `Chính sách hủy: ${policies.length} mục`;
 };
 
 // ====================================================================================
@@ -439,11 +467,22 @@ const CartPage = () => {
                 ) : (
                   <div className="space-y-4">
                     {items.map((item) => {
+                      const typeLabel = formatTourTypeLabel(item.tourType);
+                      const childLimitLabel =
+                        typeof item.childAgeLimit === "number" && Number.isFinite(item.childAgeLimit)
+                          ? `Giới hạn trẻ em: ≤ ${item.childAgeLimit} tuổi`
+                          : null;
+                      const documentLabel = summarizeDocumentRequirements(item.requiresPassport, item.requiresVisa);
+                      const cancellationLabel = summarizeCancellationPolicies(item.cancellationPolicies);
                       const features = [
+                        typeLabel,
                         item.packageName ? `Gói: ${item.packageName}` : null,
                         item.scheduleTitle ? `Khởi hành: ${item.scheduleTitle}` : null,
                         `Người lớn: ${item.adultCount}`,
                         item.childCount > 0 ? `Trẻ em: ${item.childCount}` : null,
+                        childLimitLabel,
+                        documentLabel,
+                        cancellationLabel,
                       ].filter((value): value is string => Boolean(value));
                       const normalizedTourId = String(item.tourId);
                       const isWishlisted = wishlistTourIds.has(normalizedTourId);

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +22,7 @@ export interface CollectionTourCardProps {
   topLeftOverlay?: ReactNode;
   topRightOverlay?: ReactNode;
   footerContent?: ReactNode;
+  onNavigate?: (event: MouseEvent<HTMLAnchorElement>) => void;
 }
 
 const CollectionTourCard = ({
@@ -41,13 +42,18 @@ const CollectionTourCard = ({
   topLeftOverlay,
   topRightOverlay,
   footerContent,
+  onNavigate,
 }: CollectionTourCardProps) => {
   return (
     <Card className={cn("overflow-hidden", className)}>
       <div className="flex flex-col gap-4 p-4 sm:flex-row sm:p-5">
         <div className="relative h-48 w-full overflow-hidden rounded-xl sm:h-auto sm:w-48 lg:w-56">
           {href ? (
-            <Link to={href} className="group block h-full w-full overflow-hidden">
+            <Link
+              to={href}
+              className="group block h-full w-full overflow-hidden"
+              onClick={onNavigate}
+            >
               <img
                 src={image}
                 alt={title}

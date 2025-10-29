@@ -3,6 +3,7 @@ import TravelHeader from "@/components/TravelHeader";
 import HeroSection from "@/components/HeroSection";
 import FeaturedDeals from "@/components/FeaturedDeals";
 import PopularActivities from "@/components/PopularActivities";
+import PersonalizedRecommendations from "@/components/recommendations/PersonalizedRecommendations";
 import FeaturesSection from "@/components/FeaturesSection";
 import TopDestinations from "@/components/TopDestinations";
 import AppDownload from "@/components/AppDownload";
@@ -28,6 +29,7 @@ const Index = () => {
       <HeroSection />
       <FeaturedDeals promotions={homeData?.promotions} />
       <PopularActivities tours={homeData?.trending} />
+      <PersonalizedRecommendations fallbackTours={homeData?.trending ?? []} />
       <FeaturesSection />
       <TopDestinations categories={homeData?.categories} />
       <AppDownload />

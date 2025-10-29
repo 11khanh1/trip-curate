@@ -17,6 +17,7 @@ import {
   type CartApiItem,
   type CartApiResponse,
 } from "@/services/cartApi";
+import type { CancellationPolicy, TourType } from "@/services/publicApi";
 import { useUser } from "./UserContext";
 
 export interface CartItem {
@@ -24,6 +25,11 @@ export interface CartItem {
   apiId?: string | null;
   tourId: string;
   tourTitle: string;
+  tourType?: TourType | null;
+  childAgeLimit?: number | null;
+  requiresPassport?: boolean | null;
+  requiresVisa?: boolean | null;
+  cancellationPolicies?: CancellationPolicy[] | null;
   packageId: string;
   packageName?: string | null;
   scheduleId?: string | null;
@@ -154,6 +160,26 @@ const toIsoString = (value: unknown): string => {
   return date.toISOString();
 };
 
+const parseBoolean = (value: unknown): boolean | undefined => {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) return undefined;
+    if (["1", "true", "yes", "y"].includes(normalized)) return true;
+    if (["0", "false", "no", "n"].includes(normalized)) return false;
+  }
+  return undefined;
+};
+
+const parsePolicies = (value: unknown): CancellationPolicy[] | undefined => {
+  if (!Array.isArray(value)) return undefined;
+  return value.filter((entry): entry is CancellationPolicy => {
+    if (!entry || typeof entry !== "object") return false;
+    return true;
+  });
+};
+
 const mapCartApiItemToCartItem = (item: CartApiItem): CartItem => {
   const tourData = isRecord(item.tour)
     ? item.tour
@@ -253,6 +279,24 @@ const mapCartApiItemToCartItem = (item: CartApiItem): CartItem => {
     tourTitle:
       firstString(item.tour_title, item.tourTitle, tourData?.title, tourData?.name) ??
       "Tour chưa đặt tên",
+    tourType: (tourData?.type as TourType | undefined) ?? null,
+    childAgeLimit: firstNumber(
+      tourData?.child_age_limit,
+      (tourData as Record<string, unknown>)?.childAgeLimit,
+    ) ?? null,
+    requiresPassport: parseBoolean(
+      (tourData as Record<string, unknown>)?.requires_passport ??
+        (tourData as Record<string, unknown>)?.requiresPassport,
+    ) ?? null,
+    requiresVisa: parseBoolean(
+      (tourData as Record<string, unknown>)?.requires_visa ??
+        (tourData as Record<string, unknown>)?.requiresVisa,
+    ) ?? null,
+    cancellationPolicies:
+      parsePolicies(
+        (tourData as Record<string, unknown>)?.cancellation_policies ??
+          (tourData as Record<string, unknown>)?.cancellationPolicies,
+      ) ?? null,
     packageId,
     packageName: firstString(item.package_name, item.packageName, packageData?.name),
     scheduleId: scheduleId ?? undefined,

@@ -32,7 +32,6 @@ import { fetchTourDetail, type PublicTour, type PublicTourPackage, type PublicTo
 import { deduceSepayQrImage, deriveQrFromPaymentUrl } from "@/lib/sepay";
 import {
   isPastDate,
-  isValidCitizenId,
   isValidVietnamPhone,
   normalizeCitizenId,
   normalizeVietnamPhone,
@@ -46,50 +45,6 @@ const extractOrderCode = (url: string): string | null => {
     return null;
   }
 };
-
-
-const passengerSchema = z
-  .object({
-    type: z.enum(["adult", "child"]),
-    full_name: z.string().min(1, "Yêu cầu họ tên"),
-    date_of_birth: z.string().optional(),
-    document_number: z.string().optional(),
-  })
-  .superRefine((data, ctx) => {
-    if (data.date_of_birth && !isPastDate(data.date_of_birth)) {
-      ctx.addIssue({
-        path: ["date_of_birth"],
-        code: z.ZodIssueCode.custom,
-        message: "Ngày sinh phải trước ngày hiện tại.",
-      });
-    }
-    if (data.document_number && !isValidCitizenId(data.document_number)) {
-      ctx.addIssue({
-        path: ["document_number"],
-        code: z.ZodIssueCode.custom,
-        message: "CMND/CCCD phải gồm 9 hoặc 12 chữ số.",
-      });
-    }
-  });
-
-const bookingSchema = z.object({
-  package_id: z.string().min(1, "Yêu cầu chọn gói dịch vụ"),
-  schedule_id: z.string().min(1, "Yêu cầu chọn lịch khởi hành"),
-  adults: z.number().int().min(1, "Cần ít nhất 1 người lớn"),
-  children: z.number().int().min(0),
-  contact_name: z.string().min(1, "Yêu cầu họ tên người liên hệ"),
-  contact_email: z.string().email("Email không hợp lệ"),
-  contact_phone: z
-    .string()
-    .min(6, "Số điện thoại chưa hợp lệ")
-    .refine(isValidVietnamPhone, "Số điện thoại không hợp lệ"),
-  notes: z.string().optional(),
-  payment_method: z.enum(["offline", "sepay"]),
-  passengers: z.array(passengerSchema).min(1, "Cần tối thiểu 1 hành khách"),
-});
-
-type BookingFormValues = z.infer<typeof bookingSchema>;
-
 const ensurePositive = (value: number, fallback: number) => (Number.isFinite(value) && value >= 0 ? value : fallback);
 
 interface SepayPanelState {
@@ -120,6 +75,109 @@ const formatCurrency = (value?: number | null, currency = "VND") => {
     return `${value.toLocaleString("vi-VN")} ${currency}`;
   }
 };
+
+const coerceBoolean = (value: unknown): boolean | undefined => {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) return undefined;
+    if (["1", "true", "yes", "y"].includes(normalized)) return true;
+    if (["0", "false", "no", "n"].includes(normalized)) return false;
+  }
+  return undefined;
+};
+
+const coerceNumber = (value: unknown): number | undefined => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
+};
+
+const resolveTourTypeLabel = (type: unknown) => {
+  if (typeof type !== "string") return null;
+  const normalized = type.trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized === "domestic") return "Tour nội địa";
+  if (normalized === "international") return "Tour quốc tế";
+  return type.trim();
+};
+
+const isValidIdentityDocument = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  if (/^\d+$/.test(trimmed)) {
+    return trimmed.length === 9 || trimmed.length === 12;
+  }
+  const compact = trimmed.replace(/\s+/g, "");
+  return /^[A-Za-z0-9]{6,20}$/.test(compact);
+};
+
+const calculateAgeInYears = (date: Date) => {
+  const today = new Date();
+  let age = today.getFullYear() - date.getFullYear();
+  const monthDiff = today.getMonth() - date.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < date.getDate())) {
+    age -= 1;
+  }
+  return age;
+};
+
+const formatDocumentNumberForPayload = (value: string, requireDocument: boolean) => {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  if (requireDocument) return trimmed.toUpperCase();
+  const digits = normalizeCitizenId(trimmed);
+  return digits.length > 0 ? digits : trimmed;
+};
+
+const passengerSchema = z
+  .object({
+    type: z.enum(["adult", "child"]),
+    full_name: z.string().min(1, "Yêu cầu họ tên"),
+    date_of_birth: z.string().optional(),
+    document_number: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.date_of_birth && !isPastDate(data.date_of_birth)) {
+      ctx.addIssue({
+        path: ["date_of_birth"],
+        code: z.ZodIssueCode.custom,
+        message: "Ngày sinh phải trước ngày hiện tại.",
+      });
+    }
+    if (data.document_number) {
+      const normalized = data.document_number.trim();
+      if (!isValidIdentityDocument(normalized)) {
+        ctx.addIssue({
+          path: ["document_number"],
+          code: z.ZodIssueCode.custom,
+          message: "Giấy tờ cần 6–20 ký tự chữ hoặc số.",
+        });
+      }
+    }
+  });
+
+const bookingSchema = z.object({
+  package_id: z.string().min(1, "Yêu cầu chọn gói dịch vụ"),
+  schedule_id: z.string().min(1, "Yêu cầu chọn lịch khởi hành"),
+  adults: z.number().int().min(1, "Cần ít nhất 1 người lớn"),
+  children: z.number().int().min(0),
+  contact_name: z.string().min(1, "Yêu cầu họ tên người liên hệ"),
+  contact_email: z.string().email("Email không hợp lệ"),
+  contact_phone: z
+    .string()
+    .min(6, "Số điện thoại chưa hợp lệ")
+    .refine(isValidVietnamPhone, "Số điện thoại không hợp lệ"),
+  notes: z.string().optional(),
+  payment_method: z.enum(["offline", "sepay"]),
+  passengers: z.array(passengerSchema).min(1, "Cần tối thiểu 1 hành khách"),
+});
+
+type BookingFormValues = z.infer<typeof bookingSchema>;
 
 const BookingCheckout = () => {
   const navigate = useNavigate();
@@ -167,6 +225,25 @@ const BookingCheckout = () => {
 
   const packages = useMemo(() => tour?.packages ?? [], [tour?.packages]);
   const schedules = useMemo(() => tour?.schedules ?? [], [tour?.schedules]);
+  const tourRecord = tour as Record<string, unknown> | null | undefined;
+  const requiresPassport =
+    coerceBoolean(tourRecord?.["requires_passport"]) === true ||
+    coerceBoolean(tourRecord?.["requiresPassport"]) === true;
+  const requiresVisa =
+    coerceBoolean(tourRecord?.["requires_visa"]) === true ||
+    coerceBoolean(tourRecord?.["requiresVisa"]) === true;
+  const requiresDocument = requiresPassport || requiresVisa;
+  const rawChildAgeLimit =
+    tourRecord?.["child_age_limit"] ?? tourRecord?.["childAgeLimit"] ?? tour?.child_age_limit;
+  const childAgeLimit = coerceNumber(rawChildAgeLimit) ?? null;
+  const tourTypeLabel = resolveTourTypeLabel(
+    tourRecord?.["type"] ?? (tour?.type as unknown) ?? tourRecord?.["tour_type"],
+  );
+  const documentRequirementLabel = requiresDocument
+    ? `Cần cung cấp ${requiresPassport && requiresVisa ? "Hộ chiếu và Visa" : requiresPassport ? "Hộ chiếu" : "Visa"} cho mỗi hành khách.`
+    : "Giấy tờ tùy thân giúp làm thủ tục nhanh hơn nhưng không bắt buộc.";
+  const childAgeRequirementLabel =
+    childAgeLimit !== null ? `Áp dụng cho trẻ em ≤ ${childAgeLimit} tuổi.` : "Giới hạn tuổi trẻ em tùy theo gói dịch vụ.";
 
   // Effect to set default package
   useEffect(() => {
@@ -476,12 +553,58 @@ const BookingCheckout = () => {
       return;
     }
 
+    form.clearErrors("passengers");
+    let hasPassengerError = false;
+
+    values.passengers.forEach((passenger, index) => {
+      const docNumber = passenger.document_number?.trim() ?? "";
+      if (requiresDocument && docNumber.length === 0) {
+        form.setError(`passengers.${index}.document_number`, {
+          type: "manual",
+          message: "Vui lòng nhập giấy tờ bắt buộc.",
+        });
+        hasPassengerError = true;
+      }
+
+      if (passenger.type === "child") {
+        const dob = passenger.date_of_birth?.trim() ?? "";
+        if (dob.length === 0) {
+          form.setError(`passengers.${index}.date_of_birth`, {
+            type: "manual",
+            message: "Vui lòng nhập ngày sinh cho trẻ em.",
+          });
+          hasPassengerError = true;
+        } else {
+          const dobDate = new Date(`${dob}T00:00:00`);
+          if (!Number.isNaN(dobDate.getTime()) && childAgeLimit !== null) {
+            const age = calculateAgeInYears(dobDate);
+            if (age > childAgeLimit) {
+              form.setError(`passengers.${index}.date_of_birth`, {
+                type: "manual",
+                message: `Trẻ em phải không quá ${childAgeLimit} tuổi.`,
+              });
+              hasPassengerError = true;
+            }
+          }
+        }
+      }
+    });
+
+    if (hasPassengerError) {
+      toast({
+        title: "Thiếu thông tin hành khách",
+        description: "Vui lòng bổ sung đầy đủ ngày sinh và giấy tờ theo yêu cầu trước khi tiếp tục.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const payloadPassengers = values.passengers.map((passenger) => ({
       type: passenger.type,
       full_name: passenger.full_name.trim(),
       date_of_birth: passenger.date_of_birth?.trim() || undefined,
       document_number: passenger.document_number
-        ? normalizeCitizenId(passenger.document_number.trim())
+        ? formatDocumentNumberForPayload(passenger.document_number, requiresDocument)
         : undefined,
     }));
 
@@ -899,7 +1022,16 @@ const BookingCheckout = () => {
                           Tăng số lượng người lớn hoặc trẻ em để thêm hành khách.
                         </p>
                       ) : (
-                        form.getValues("passengers").map((passenger, index) => (
+                        <>
+                          <Alert variant="secondary">
+                            <AlertTitle>Yêu cầu khi tham gia</AlertTitle>
+                            <AlertDescription className="space-y-1">
+                              {tourTypeLabel ? <p>Loại tour: {tourTypeLabel}</p> : null}
+                              <p>{documentRequirementLabel}</p>
+                              <p>{childAgeRequirementLabel}</p>
+                            </AlertDescription>
+                          </Alert>
+                          {form.getValues("passengers").map((passenger, index) => (
                           <div key={`passenger-${index}`} className="rounded-lg border p-4">
                             <p className="mb-3 text-sm font-semibold text-foreground">
                               Hành khách {index + 1} · {passenger.type === "child" ? "Trẻ em" : "Người lớn"}
@@ -923,7 +1055,9 @@ const BookingCheckout = () => {
                                 name={`passengers.${index}.date_of_birth`}
                                 render={({ field }) => (
                                   <FormItem>
-                                    <FormLabel>Ngày sinh (tùy chọn)</FormLabel>
+                                    <FormLabel>
+                                      {passenger.type === "child" ? "Ngày sinh (bắt buộc)" : "Ngày sinh"}
+                                    </FormLabel>
                                     <FormControl>
                                       <Input type="date" {...field} />
                                     </FormControl>
@@ -936,17 +1070,28 @@ const BookingCheckout = () => {
                                 name={`passengers.${index}.document_number`}
                                 render={({ field }) => (
                                   <FormItem>
-                                    <FormLabel>Giấy tờ tùy thân (tùy chọn)</FormLabel>
+                                    <FormLabel>
+                                      {requiresDocument ? "Giấy tờ hộ chiếu/visa (bắt buộc)" : "Giấy tờ tùy thân (tùy chọn)"}
+                                    </FormLabel>
                                     <FormControl>
-                                      <Input placeholder="CMND/Hộ chiếu" {...field} />
+                                      <Input
+                                        placeholder={requiresDocument ? "Số hộ chiếu/visa" : "CMND/Hộ chiếu"}
+                                        {...field}
+                                      />
                                     </FormControl>
+                                    <p className="text-xs text-muted-foreground">
+                                      {requiresDocument
+                                        ? "Nhập chính xác dãy chữ số ghi trên giấy tờ sẽ xuất trình."
+                                        : "Nếu có, nhập CMND/CCCD hoặc hộ chiếu để hỗ trợ đối soát."}
+                                    </p>
                                     <FormMessage />
                                   </FormItem>
                                 )}
                               />
                             </div>
                           </div>
-                        ))
+                          ))}
+                        </>
                       )}
                     </CardContent>
                   </Card>
@@ -987,6 +1132,15 @@ const BookingCheckout = () => {
                             {selectedPackage?.name ?? "Chưa chọn"}
                           </span>
                         </div>
+                      </div>
+                      <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+                        {tourTypeLabel ? (
+                          <p className="text-foreground">
+                            Loại tour: <span className="font-medium">{tourTypeLabel}</span>
+                          </p>
+                        ) : null}
+                        <p>{documentRequirementLabel}</p>
+                        <p>{childAgeRequirementLabel}</p>
                       </div>
                       <Separator />
                       <div className="flex items-center justify-between text-base font-semibold text-foreground">

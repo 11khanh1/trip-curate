@@ -42,6 +42,7 @@ export interface BookingPayment {
   id?: string | number;
   amount?: number;
   currency?: string | null;
+  refund_amount?: number | null;
   method?: string | null;
   provider?: string | null;
   status?: "success" | "pending" | "failed" | string;
@@ -175,6 +176,12 @@ export async function createBooking(payload: CreateBookingPayload): Promise<Crea
 
 export interface CancelBookingResponse {
   message: string;
+  refund?: {
+    rate?: number | null;
+    amount?: number | null;
+    policy_days_before?: number | null;
+    [key: string]: unknown;
+  } | null;
 }
 
 export async function cancelBooking(id: string | number) {

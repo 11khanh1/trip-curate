@@ -1,13 +1,16 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { isAxiosError } from "axios";
 import {
   Calendar,
   CheckCircle,
   Clock,
   CreditCard,
   FileText,
+  Info,
   MapPin,
   Phone,
+  Shield,
   Ticket,
   User,
   Users,
@@ -110,6 +113,71 @@ const formatDateTime = (value?: string | null) => {
   });
 };
 
+const resolveTourTypeLabel = (type?: string | null) => {
+  if (!type) return null;
+  const normalized = type.toString().trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized === "domestic") return "Tour nội địa";
+  if (normalized === "international") return "Tour quốc tế";
+  return type.toString();
+};
+
+const coerceBoolean = (value: unknown): boolean | undefined => {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) return undefined;
+    if (["1", "true", "yes", "y"].includes(normalized)) return true;
+    if (["0", "false", "no", "n"].includes(normalized)) return false;
+  }
+  return undefined;
+};
+
+const coerceNumber = (value: unknown): number | undefined => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
+};
+
+const summarizeDocumentRequirements = (requiresPassport?: boolean | null, requiresVisa?: boolean | null) => {
+  const needsPassport = coerceBoolean(requiresPassport) === true;
+  const needsVisa = coerceBoolean(requiresVisa) === true;
+  if (!needsPassport && !needsVisa) return "Không yêu cầu hộ chiếu hoặc visa";
+  const pieces: string[] = [];
+  if (needsPassport) pieces.push("Hộ chiếu");
+  if (needsVisa) pieces.push("Visa");
+  return `Bắt buộc: ${pieces.join(" & ")}`;
+};
+
+const formatChildAgeLimit = (limit?: number | null) => {
+  if (typeof limit === "number" && Number.isFinite(limit)) {
+    if (limit <= 0) return "Không áp dụng";
+    return `Trẻ em ≤ ${limit} tuổi`;
+  }
+  return "Theo từng gói dịch vụ";
+};
+
+const formatCancellationSummary = (policies?: Array<Record<string, unknown>> | null) => {
+  if (!Array.isArray(policies) || policies.length === 0) return "Theo điều khoản của nhà cung cấp";
+  return `${policies.length} chính sách hủy áp dụng`;
+};
+
+const formatCancellationWindow = (days?: number | null) => {
+  if (typeof days !== "number" || !Number.isFinite(days)) return "Linh hoạt";
+  if (days <= 0) return "Trong ngày khởi hành";
+  return `Trước ${days} ngày`;
+};
+
+const formatRefundRateLabel = (rate?: number | null) => {
+  if (typeof rate !== "number" || !Number.isFinite(rate)) return "Theo quy định";
+  const normalized = rate > 1 ? rate : rate * 100;
+  return `${Math.round(normalized)}%`;
+};
+
 const BookingDetailSkeleton = () => (
   <div className="space-y-4">
     <Skeleton className="h-10 w-2/3" />
@@ -159,19 +227,47 @@ const BookingDetailPage = () => {
 
   const cancelMutation = useMutation({
     mutationFn: () => cancelBooking(String(id)),
-    onSuccess: () => {
+    onSuccess: (response) => {
+      const refund = response?.refund ?? null;
+      const baseTitle = response?.message ?? "Hủy booking thành công";
+      const refundDetails: string[] = [];
+      if (refund) {
+        if (typeof refund.amount === "number" && Number.isFinite(refund.amount)) {
+          refundDetails.push(`Hoàn ${formatCurrency(refund.amount, booking?.currency ?? "VND")}`);
+        }
+        if (typeof refund.rate === "number") {
+          refundDetails.push(`Tỷ lệ ${formatRefundRateLabel(refund.rate)}`);
+        }
+        if (refund.policy_days_before !== undefined && refund.policy_days_before !== null) {
+          refundDetails.push(`Áp dụng ${formatCancellationWindow(refund.policy_days_before)}`);
+        }
+      }
+
+      const description =
+        refundDetails.length > 0
+          ? refundDetails.join(" · ")
+          : "Chúng tôi đã gửi email xác nhận hủy cho bạn.";
+
       toast({
-        title: "Hủy booking thành công",
-        description: "Chúng tôi đã gửi email xác nhận hủy cho bạn.",
+        title: baseTitle,
+        description,
       });
       queryClient.invalidateQueries({ queryKey: ["booking-detail", id] });
       queryClient.invalidateQueries({ queryKey: ["bookings"] });
     },
     onError: (mutationError: unknown) => {
-      const message =
-        mutationError instanceof Error
-          ? mutationError.message
-          : "Không thể hủy booking. Vui lòng thử lại.";
+      let message = "Không thể hủy booking. Vui lòng thử lại.";
+      if (isAxiosError(mutationError)) {
+        const responseMessage =
+          (mutationError.response?.data as { message?: string } | undefined)?.message;
+        if (responseMessage) {
+          message = responseMessage;
+        } else if (mutationError.response?.status === 422) {
+          message = "Booking không thể hủy theo chính sách hiện tại.";
+        }
+      } else if (mutationError instanceof Error && mutationError.message) {
+        message = mutationError.message;
+      }
       toast({
         title: "Hủy booking thất bại",
         description: message,
@@ -291,6 +387,33 @@ const BookingDetailPage = () => {
       (booking as { company_name?: string | null } | undefined)?.company_name ?? undefined,
     ) ?? null;
 
+  const tourTypeRaw = coalesceString(
+    (booking?.tour as { type?: string } | undefined)?.type ?? undefined,
+    booking?.tour?.type ?? undefined,
+  );
+  const tourTypeLabel =
+    resolveTourTypeLabel(tourTypeRaw) ??
+    coalesceString(
+      booking?.tour?.categories && booking.tour.categories.length > 0
+        ? (booking.tour.categories[0]?.name as string | undefined)
+        : undefined,
+    ) ??
+    "Đang cập nhật";
+  const childAgeLimitValue =
+    coerceNumber(booking?.tour?.child_age_limit) ??
+    coerceNumber((booking?.tour as Record<string, unknown> | undefined)?.childAgeLimit);
+  const documentRequirementLabel = summarizeDocumentRequirements(
+    booking?.tour?.requires_passport ?? (booking?.tour as Record<string, unknown> | undefined)?.requiresPassport,
+    booking?.tour?.requires_visa ?? (booking?.tour as Record<string, unknown> | undefined)?.requiresVisa,
+  );
+  const childAgeRequirementLabel = formatChildAgeLimit(childAgeLimitValue ?? null);
+  const cancellationPoliciesArray = Array.isArray(booking?.tour?.cancellation_policies)
+    ? (booking?.tour?.cancellation_policies as Array<Record<string, unknown>>)
+    : Array.isArray((booking?.tour as Record<string, unknown> | undefined)?.cancellationPolicies)
+    ? ((booking?.tour as Record<string, unknown> | undefined)?.cancellationPolicies as Array<Record<string, unknown>>)
+    : [];
+  const cancellationSummaryLabel = formatCancellationSummary(cancellationPoliciesArray);
+
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <TravelHeader />
@@ -394,6 +517,37 @@ const BookingDetailPage = () => {
                     </div>
                   </div>
                 </div>
+                <Separator />
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="flex items-start gap-3">
+                    <Shield className="mt-1 h-4 w-4 text-primary" />
+                    <div>
+                      <p className="font-medium text-foreground">Loại tour</p>
+                      <p>{tourTypeLabel}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <Calendar className="mt-1 h-4 w-4 text-primary" />
+                    <div>
+                      <p className="font-medium text-foreground">Độ tuổi trẻ em</p>
+                      <p>{childAgeRequirementLabel}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 md:col-span-2">
+                    <FileText className="mt-1 h-4 w-4 text-primary" />
+                    <div>
+                      <p className="font-medium text-foreground">Giấy tờ yêu cầu</p>
+                      <p>{documentRequirementLabel}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 md:col-span-2">
+                    <Info className="mt-1 h-4 w-4 text-primary" />
+                    <div>
+                      <p className="font-medium text-foreground">Chính sách hủy</p>
+                      <p>{cancellationSummaryLabel}</p>
+                    </div>
+                  </div>
+                </div>
               </CardContent>
               <CardFooter className="flex flex-wrap gap-2">
                 <Button variant="outline" onClick={() => navigate("/bookings")}>
@@ -416,6 +570,51 @@ const BookingDetailPage = () => {
                 )}
               </CardFooter>
             </Card>
+
+            {cancellationPoliciesArray.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Shield className="h-5 w-5 text-primary" />
+                    Chi tiết chính sách hủy
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm text-muted-foreground">
+                  <p>
+                    Hoàn tiền phụ thuộc vào thời điểm hủy trước ngày khởi hành. Vui lòng xem bảng dưới đây
+                    để biết mức hoàn cụ thể.
+                  </p>
+                  <div className="overflow-x-auto rounded-lg border border-slate-200">
+                    <table className="w-full min-w-[420px] border-collapse text-left">
+                      <thead className="bg-slate-50 text-slate-600">
+                        <tr>
+                          <th className="px-4 py-2 font-medium">Thời gian hủy</th>
+                          <th className="px-4 py-2 font-medium">Tỷ lệ hoàn</th>
+                          <th className="px-4 py-2 font-medium">Ghi chú</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {cancellationPoliciesArray.map((policy, index) => {
+                          const daysBefore = coerceNumber(policy?.["days_before"]);
+                          const refundRate = coerceNumber(policy?.["refund_rate"]);
+                          const description = coalesceString(
+                            policy?.["description"] as string | undefined,
+                            policy?.["note"] as string | undefined,
+                          );
+                          return (
+                            <tr key={`${daysBefore ?? "policy"}-${index}`} className="bg-white">
+                              <td className="px-4 py-2">{formatCancellationWindow(daysBefore)}</td>
+                              <td className="px-4 py-2">{formatRefundRateLabel(refundRate)}</td>
+                              <td className="px-4 py-2 text-foreground">{description ?? "Không có mô tả"}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             <div className="grid gap-6 lg:grid-cols-2">
               <Card>
@@ -523,10 +722,17 @@ const BookingDetailPage = () => {
                       <TableBody>
                         {booking.payments.map((payment: BookingPayment, index) => (
                           <TableRow key={payment.id ?? index}>
-                            <TableCell className="font-medium text-foreground">
-                              {payment.order_code ?? payment.transaction_id ?? "—"}
-                            </TableCell>
-                            <TableCell>{formatCurrency(payment.amount, payment.currency ?? "VND")}</TableCell>
+                        <TableCell className="font-medium text-foreground">
+                          {payment.order_code ?? payment.transaction_id ?? "—"}
+                        </TableCell>
+                        <TableCell>
+                          {formatCurrency(payment.amount, payment.currency ?? "VND")}
+                          {typeof payment.refund_amount === "number" && Number.isFinite(payment.refund_amount) && payment.refund_amount > 0 ? (
+                            <div className="text-xs text-emerald-600">
+                              Hoàn: {formatCurrency(payment.refund_amount, payment.currency ?? "VND")}
+                            </div>
+                          ) : null}
+                        </TableCell>
                             <TableCell>
                               <Badge variant={statusVariant(payment.status)}>{statusLabel(payment.status)}</Badge>
                             </TableCell>

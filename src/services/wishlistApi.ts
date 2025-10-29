@@ -1,4 +1,5 @@
 import { apiClient, extractData } from "@/lib/api-client";
+import type { CancellationPolicy, TourType } from "@/services/publicApi";
 
 export interface WishlistTourPackage {
   id: string;
@@ -21,9 +22,15 @@ export interface WishlistTourSchedule {
 export interface WishlistTour {
   id: string;
   title: string;
+  type?: TourType | null;
   destination: string | null;
   duration: number | null;
   base_price: number | null;
+  season_price?: number | null;
+  child_age_limit?: number | null;
+  requires_passport?: boolean | null;
+  requires_visa?: boolean | null;
+  cancellation_policies?: CancellationPolicy[] | null;
   media?: Array<string | Record<string, unknown>>;
   policy?: string | null;
   itinerary?: Array<string | Record<string, unknown>> | null;

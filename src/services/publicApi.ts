@@ -33,6 +33,15 @@ export interface PublicTourSchedule {
   [key: string]: unknown;
 }
 
+export type TourType = "domestic" | "international" | string;
+
+export interface CancellationPolicy {
+  days_before?: number | null;
+  refund_rate?: number | null;
+  description?: string | null;
+  [key: string]: unknown;
+}
+
 export interface PublicTourPartner {
   id?: string | number;
   company_name?: string;
@@ -72,6 +81,7 @@ export interface PublicTour {
   uuid?: string;
   title?: string;
   name?: string;
+  type?: TourType | null;
   destination?: string;
   description?: string | null;
   policy?: string | null;
@@ -88,6 +98,10 @@ export interface PublicTour {
   average_rating?: number | null;
   rating_average?: number | null;
   rating_count?: number | null;
+  child_age_limit?: number | null;
+  requires_passport?: boolean | null;
+  requires_visa?: boolean | null;
+  cancellation_policies?: CancellationPolicy[] | null;
   tags?: string[] | null;
   partner?: PublicTourPartner | null;
   categories?: PublicTourCategory[];

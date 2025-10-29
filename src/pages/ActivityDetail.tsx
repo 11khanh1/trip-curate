@@ -52,10 +52,18 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { fetchTourDetail, fetchTrendingTours, type PublicTour, type PublicTourSchedule } from "@/services/publicApi";
+import {
+  fetchTourDetail,
+  fetchTrendingTours,
+  type CancellationPolicy,
+  type PublicTour,
+  type PublicTourSchedule,
+  type TourType,
+} from "@/services/publicApi";
 import { useToast } from "@/hooks/use-toast";
 import { useCart } from "@/context/CartContext";
 import { useUser } from "@/context/UserContext";
+import { useAnalytics } from "@/hooks/useAnalytics";
 import { getTourStartingPrice } from "@/lib/tour-utils";
 import { addWishlistItem, removeWishlistItem, type WishlistItem } from "@/services/wishlistApi";
 import {
@@ -72,6 +80,7 @@ import {
   type BookingListResponse,
   type BookingReviewSummary,
 } from "@/services/bookingApi";
+import SimilarTourRecommendations from "@/components/recommendations/SimilarTourRecommendations";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 
@@ -118,6 +127,7 @@ interface ActivityDetailView {
   region?: string;
   category?: string;
   tourType?: string;
+  tourClassification?: TourType | null;
   pickupType?: string;
   rating?: number | null;
   reviewCount?: number | null;
@@ -155,6 +165,10 @@ interface ActivityDetailView {
   }>;
   itinerary?: Array<string | { title?: string; description?: string; time?: string }>;
   policySummary: string[];
+  childAgeLimit?: number | null;
+  requiresPassport?: boolean | null;
+  requiresVisa?: boolean | null;
+  cancellationPolicies?: CancellationPolicy[] | null;
   partner?: {
     companyName?: string;
     contactName?: string;
@@ -192,6 +206,57 @@ const parseIntOrNull = (value: unknown): number | null => {
     return Number.isNaN(parsed) ? null : parsed;
   }
   return null;
+};
+
+const parseBooleanOrNull = (value: unknown): boolean | null => {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) return null;
+    if (["1", "true", "yes", "y"].includes(normalized)) return true;
+    if (["0", "false", "no", "n"].includes(normalized)) return false;
+  }
+  return null;
+};
+
+const resolveTourTypeLabel = (type?: TourType | string | null) => {
+  if (!type) return null;
+  const normalized = type.toString().trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized === "domestic") return "Tour nội địa";
+  if (normalized === "international") return "Tour quốc tế";
+  return type.toString();
+};
+
+const formatDocumentRequirement = (requiresPassport?: boolean | null, requiresVisa?: boolean | null) => {
+  const needsPassport = requiresPassport === true;
+  const needsVisa = requiresVisa === true;
+  if (!needsPassport && !needsVisa) return "Không yêu cầu hộ chiếu hoặc visa";
+  const pieces: string[] = [];
+  if (needsPassport) pieces.push("Hộ chiếu");
+  if (needsVisa) pieces.push("Visa");
+  return `Bắt buộc: ${pieces.join(" & ")}`;
+};
+
+const formatChildAgeLimit = (limit?: number | null) => {
+  if (typeof limit === "number" && Number.isFinite(limit)) {
+    if (limit <= 0) return "Không áp dụng";
+    return `Trẻ em ≤ ${limit} tuổi`;
+  }
+  return "Theo từng gói dịch vụ";
+};
+
+const formatRefundRate = (rate?: number | null) => {
+  if (typeof rate !== "number" || !Number.isFinite(rate)) return "Theo quy định";
+  const normalized = rate > 1 ? rate : rate * 100;
+  return `${Math.round(normalized)}%`;
+};
+
+const formatCancellationWindow = (days?: number | null) => {
+  if (typeof days !== "number" || !Number.isFinite(days)) return "Linh hoạt";
+  if (days <= 0) return "Trong ngày khởi hành";
+  return `Trước ${days} ngày`;
 };
 
 const extractPagination = (meta?: Record<string, unknown>) => {
@@ -269,6 +334,27 @@ const normalizeTourDetail = (
   relatedTours: PublicTour[] = [],
 ): ActivityDetailView | null => {
   if (!tour) return null;
+  const rawTourType =
+    typeof tour.type === "string" && tour.type.trim().length > 0 ? tour.type.trim() : null;
+  const childAgeLimit = parseIntOrNull(
+    tour.child_age_limit ??
+      (tour as Record<string, unknown>)?.childAgeLimit ??
+      (tour as Record<string, unknown>)?.child_age_limit,
+  );
+  const requiresPassport =
+    parseBooleanOrNull((tour as Record<string, unknown>)?.requires_passport) ??
+    parseBooleanOrNull((tour as Record<string, unknown>)?.requiresPassport);
+  const requiresVisa =
+    parseBooleanOrNull((tour as Record<string, unknown>)?.requires_visa) ??
+    parseBooleanOrNull((tour as Record<string, unknown>)?.requiresVisa);
+  const rawCancellationPolicies = Array.isArray(tour.cancellation_policies)
+    ? (tour.cancellation_policies as unknown[])
+    : Array.isArray((tour as Record<string, unknown>)?.cancellationPolicies)
+    ? ((tour as Record<string, unknown>)?.cancellationPolicies as unknown[])
+    : [];
+  const cancellationPolicies = rawCancellationPolicies.filter(
+    (entry): entry is CancellationPolicy => Boolean(entry) && typeof entry === "object",
+  );
   const id = String(tour.id ?? tour.uuid ?? "");
   const rawImages = [
     tour.thumbnail_url,
@@ -429,7 +515,8 @@ const seasonPriceValue = parseFloatOrNull(tour.season_price);
     locationName: tour.destination ?? undefined,
     region: tour.destination ?? undefined,
     category: tour.categories?.[0]?.name,
-    tourType: tour.categories?.[0]?.name,
+    tourType: resolveTourTypeLabel(rawTourType) ?? tour.categories?.[0]?.name,
+    tourClassification: rawTourType,
     pickupType: undefined,
     rating: tour.rating_average ?? tour.average_rating ?? null,
     reviewCount: tour.rating_count ?? tour.reviews_count ?? null,
@@ -457,6 +544,10 @@ const seasonPriceValue = parseFloatOrNull(tour.season_price);
     reviews: [],
     itinerary: tour.itinerary,
     policySummary,
+    childAgeLimit,
+    requiresPassport,
+    requiresVisa,
+    cancellationPolicies: cancellationPolicies.length > 0 ? cancellationPolicies : null,
     partner: partnerInfo,
   };
 };
@@ -505,11 +596,13 @@ const ActivityDetail = () => {
   const { addItem } = useCart();
   const { toast } = useToast();
   const { currentUser } = useUser();
+  const { trackEvent } = useAnalytics();
   const queryClient = useQueryClient();
   const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
   const [selectedBookingId, setSelectedBookingId] = useState("");
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState("");
+  const hasLoggedViewRef = useRef(false);
 
   const [editingCartItemId, setEditingCartItemId] = useState<string | null>(null);
   const [isWishlisted, setIsWishlisted] = useState(false);
@@ -716,6 +809,44 @@ const activity = useMemo(
   () => normalizeTourDetail(tourDetail, trendingTours ?? []),
   [tourDetail, trendingTours],
 );
+
+useEffect(() => {
+  if (!tourDetail) return;
+  if (hasLoggedViewRef.current) return;
+  const entityId = tourDetail.uuid ?? tourDetail.id ?? activity?.id;
+  if (!entityId) return;
+  trackEvent({
+    event_name: "tour_view",
+    entity_type: "tour",
+    entity_id: String(entityId),
+    metadata: {
+      source: "activity_detail",
+    },
+  });
+  hasLoggedViewRef.current = true;
+}, [activity?.id, tourDetail, trackEvent]);
+
+  const tourTypeDisplay = useMemo(
+    () => resolveTourTypeLabel(activity?.tourClassification ?? activity?.tourType ?? null),
+    [activity?.tourClassification, activity?.tourType],
+  );
+
+  const documentRequirementLabel = useMemo(
+    () => formatDocumentRequirement(activity?.requiresPassport, activity?.requiresVisa),
+    [activity?.requiresPassport, activity?.requiresVisa],
+  );
+
+  const childAgeLimitLabel = useMemo(
+    () => formatChildAgeLimit(activity?.childAgeLimit),
+    [activity?.childAgeLimit],
+  );
+
+  const cancellationSummaryLabel = useMemo(() => {
+    if (activity?.cancellationPolicies && activity.cancellationPolicies.length > 0) {
+      return `${activity.cancellationPolicies.length} chính sách hủy áp dụng`;
+    }
+    return "Theo điều kiện từng gói dịch vụ";
+  }, [activity?.cancellationPolicies]);
 
   useEffect(() => {
     if (!activity?.id || !currentUser) {
@@ -1568,6 +1699,78 @@ const activity = useMemo(
                     </div>
                   )}
                 </div>
+                <div className="mt-6 grid gap-4">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle>Yêu cầu khi tham gia</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid gap-4 text-sm text-muted-foreground sm:grid-cols-2">
+                      <div className="flex flex-col gap-1">
+                        <span>Loại tour</span>
+                        <span className="font-medium text-foreground">
+                          {tourTypeDisplay ?? "Đang cập nhật"}
+                        </span>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <span>Độ tuổi trẻ em</span>
+                        <span className="font-medium text-foreground">
+                          {childAgeLimitLabel}
+                        </span>
+                      </div>
+                      <div className="flex flex-col gap-1 sm:col-span-2">
+                        <span>Giấy tờ cần chuẩn bị</span>
+                        <span className="font-medium text-foreground">
+                          {documentRequirementLabel}
+                        </span>
+                      </div>
+                      <div className="flex flex-col gap-1 sm:col-span-2">
+                        <span>Chính sách hủy</span>
+                        <span className="font-medium text-foreground">
+                          {cancellationSummaryLabel}
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  {activity.cancellationPolicies && activity.cancellationPolicies.length > 0 ? (
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle>Chi tiết chính sách hủy</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3 text-sm">
+                        <p className="text-muted-foreground">
+                          Hoàn tiền dựa trên thời gian hủy trước ngày khởi hành. Vui lòng tham khảo bảng
+                          dưới đây để biết mức hoàn cụ thể.
+                        </p>
+                        <div className="overflow-x-auto rounded-lg border border-slate-200">
+                          <table className="w-full min-w-[420px] border-collapse text-left">
+                            <thead className="bg-slate-50 text-slate-600">
+                              <tr>
+                                <th className="px-4 py-2 font-medium">Thời gian hủy</th>
+                                <th className="px-4 py-2 font-medium">Tỷ lệ hoàn</th>
+                                <th className="px-4 py-2 font-medium">Ghi chú</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y">
+                              {activity.cancellationPolicies.map((policy, index) => (
+                                <tr key={`${policy.days_before ?? "policy"}-${index}`} className="bg-white">
+                                  <td className="px-4 py-2">
+                                    {formatCancellationWindow(parseIntOrNull(policy.days_before ?? undefined))}
+                                  </td>
+                                  <td className="px-4 py-2">
+                                    {formatRefundRate(parseFloatOrNull(policy.refund_rate ?? undefined))}
+                                  </td>
+                                  <td className="px-4 py-2 text-slate-600">
+                                    {policy.description ? policy.description : "Không có mô tả"}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ) : null}
+                </div>
               </TabsContent>
 
               <TabsContent value="packages" className="space-y-6">
@@ -1951,6 +2154,12 @@ const activity = useMemo(
                 </div>
               </TabsContent>
             </Tabs>
+
+            <SimilarTourRecommendations
+              tourId={tourDetail?.id ?? tourDetail?.uuid ?? activity?.id ?? null}
+              baseTourTitle={activity?.title}
+              limit={6}
+            />
 
             {hasLocation && (
               <div className="space-y-4">

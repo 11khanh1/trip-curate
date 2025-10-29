@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Calendar, ChevronRight, Clock, MapPin, Ticket, Users, Phone } from "lucide-react";
+import { isAxiosError } from "axios";
 
 import TravelHeader from "@/components/TravelHeader";
 import Footer from "@/components/Footer";
@@ -82,6 +83,69 @@ const formatCurrency = (value?: number | null, currency = "VND") => {
   }
 };
 
+const coerceBoolean = (value: unknown): boolean | undefined => {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) return undefined;
+    if (["1", "true", "yes", "y"].includes(normalized)) return true;
+    if (["0", "false", "no", "n"].includes(normalized)) return false;
+  }
+  return undefined;
+};
+
+const coerceNumber = (value: unknown): number | undefined => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
+};
+
+const resolveTourTypeLabel = (type?: string | null) => {
+  if (!type) return null;
+  const normalized = type.toString().trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized === "domestic") return "Tour nội địa";
+  if (normalized === "international") return "Tour quốc tế";
+  return type.toString();
+};
+
+const summarizeDocumentRequirementShort = (requiresPassport?: unknown, requiresVisa?: unknown) => {
+  const needsPassport = coerceBoolean(requiresPassport) === true;
+  const needsVisa = coerceBoolean(requiresVisa) === true;
+  if (!needsPassport && !needsVisa) return "Không cần hộ chiếu/visa";
+  const pieces: string[] = [];
+  if (needsPassport) pieces.push("Hộ chiếu");
+  if (needsVisa) pieces.push("Visa");
+  return `Bắt buộc: ${pieces.join(" & ")}`;
+};
+
+const formatChildAgeRequirement = (limit?: unknown) => {
+  const value = coerceNumber(limit);
+  if (typeof value === "number") {
+    if (value <= 0) return "Giới hạn trẻ em: Không áp dụng";
+    return `Giới hạn trẻ em: ≤ ${value} tuổi`;
+  }
+  return null;
+};
+
+const formatCancellationWindowLabel = (days?: unknown) => {
+  const value = coerceNumber(days);
+  if (typeof value !== "number") return "Theo chính sách";
+  if (value <= 0) return "Trong ngày khởi hành";
+  return `Trước ${value} ngày`;
+};
+
+const formatRefundRateLabel = (rate?: unknown) => {
+  const value = coerceNumber(rate);
+  if (typeof value !== "number") return "Theo quy định";
+  const normalized = value > 1 ? value : value * 100;
+  return `${Math.round(normalized)}%`;
+};
+
 const formatDate = (value?: string | null) => {
   if (!value) return "Đang cập nhật";
   const date = new Date(value);
@@ -144,17 +208,45 @@ const BookingsList = () => {
   const cancelMutation = useMutation({
     mutationFn: (bookingId: string) => cancelBooking(bookingId),
     onSuccess: (response) => {
+      const refund = response?.refund ?? null;
+      const details: string[] = [];
+      if (refund) {
+        if (typeof refund.amount === "number" && Number.isFinite(refund.amount)) {
+          details.push(`Hoàn ${formatCurrency(refund.amount, "VND")}`);
+        }
+        if (refund.rate !== undefined && refund.rate !== null) {
+          details.push(`Tỷ lệ ${formatRefundRateLabel(refund.rate)}`);
+        }
+        if (refund.policy_days_before !== undefined && refund.policy_days_before !== null) {
+          details.push(formatCancellationWindowLabel(refund.policy_days_before));
+        }
+      }
+      const descriptionParts = [
+        response?.message ?? "Đơn của bạn đã được hủy thành công.",
+        details.length > 0 ? details.join(" · ") : null,
+      ].filter(Boolean);
       toast({
         title: "Đã hủy booking",
-        description: response?.message ?? "Đơn của bạn đã được hủy thành công.",
+        description: descriptionParts.join(" "),
       });
       queryClient.invalidateQueries({ queryKey: ["bookings"] });
     },
     onError: (error: unknown) => {
+      let description = "Vui lòng thử lại hoặc liên hệ bộ phận hỗ trợ.";
+      if (isAxiosError(error)) {
+        const responseMessage =
+          (error.response?.data as { message?: string } | undefined)?.message;
+        if (responseMessage) {
+          description = responseMessage;
+        } else if (error.response?.status === 422) {
+          description = "Booking không thể hủy theo chính sách hiện tại.";
+        }
+      } else if (error instanceof Error && error.message) {
+        description = error.message;
+      }
       toast({
         title: "Không thể hủy booking",
-        description:
-          error instanceof Error ? error.message : "Vui lòng thử lại hoặc liên hệ bộ phận hỗ trợ.",
+        description,
         variant: "destructive",
       });
     },
@@ -290,6 +382,38 @@ const BookingsList = () => {
                         <span>{booking.tour.destination}</span>
                       </div>
                     )}
+                    {(() => {
+                      const tourTypeLabel = resolveTourTypeLabel(
+                        (booking.tour as { type?: string } | undefined)?.type ?? booking.tour?.type ?? null,
+                      );
+                      const childAgeLabel = formatChildAgeRequirement(
+                        booking.tour?.child_age_limit ??
+                          (booking.tour as Record<string, unknown> | undefined)?.childAgeLimit,
+                      );
+                      const documentLabel = summarizeDocumentRequirementShort(
+                        booking.tour?.requires_passport ??
+                          (booking.tour as Record<string, unknown> | undefined)?.requiresPassport,
+                        booking.tour?.requires_visa ??
+                          (booking.tour as Record<string, unknown> | undefined)?.requiresVisa,
+                      );
+                      return (
+                        <div className="flex flex-wrap gap-2">
+                          {tourTypeLabel ? (
+                            <Badge variant="secondary" className="text-xs">
+                              {tourTypeLabel}
+                            </Badge>
+                          ) : null}
+                          <Badge variant="outline" className="text-xs">
+                            {documentLabel}
+                          </Badge>
+                          {childAgeLabel ? (
+                            <Badge variant="outline" className="text-xs">
+                              {childAgeLabel}
+                            </Badge>
+                          ) : null}
+                        </div>
+                      );
+                    })()}
                     <div className="flex flex-wrap items-center gap-4">
                       {guestSummary && (
                         <span className="inline-flex items-center gap-2">

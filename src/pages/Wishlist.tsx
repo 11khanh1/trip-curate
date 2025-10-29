@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { formatCurrency, getTourStartingPrice } from "@/lib/tour-utils";
+import type { CancellationPolicy, TourType } from "@/services/publicApi";
 import { Users } from "lucide-react";
 
 const resolveImageFromTour = (tour: WishlistTour) => {
@@ -88,6 +89,30 @@ const normalizeRating = (tour: WishlistTour) => {
   return null;
 };
 
+const resolveTourTypeLabel = (type?: TourType | string | null) => {
+  if (!type) return null;
+  const normalized = type.toString().trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized === "domestic") return "Loại tour: Nội địa";
+  if (normalized === "international") return "Loại tour: Quốc tế";
+  return `Loại tour: ${type}`;
+};
+
+const resolveDocumentRequirementLabel = (requiresPassport?: boolean | null, requiresVisa?: boolean | null) => {
+  const needsPassport = requiresPassport === true;
+  const needsVisa = requiresVisa === true;
+  if (!needsPassport && !needsVisa) return "Giấy tờ: Không yêu cầu hộ chiếu/visa";
+  const pieces: string[] = [];
+  if (needsPassport) pieces.push("hộ chiếu");
+  if (needsVisa) pieces.push("visa");
+  return `Giấy tờ bắt buộc: ${pieces.join(" & ")}`;
+};
+
+const resolveCancellationSummary = (policies?: CancellationPolicy[] | null) => {
+  if (!Array.isArray(policies) || policies.length === 0) return "Chính sách hủy: Theo điều khoản chung";
+  return `Chính sách hủy: ${policies.length} mục`;
+};
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -127,6 +152,22 @@ const readRecordNumber = (
   if (typeof value === "string") {
     const parsed = Number(value);
     if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
+};
+
+const readRecordBoolean = (
+  record: Record<string, unknown> | undefined,
+  key: string,
+): boolean | undefined => {
+  const value = record?.[key];
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) return undefined;
+    if (["1", "true", "yes", "y"].includes(normalized)) return true;
+    if (["0", "false", "no", "n"].includes(normalized)) return false;
   }
   return undefined;
 };
@@ -303,10 +344,37 @@ const WishlistPage = () => {
         isRecord(firstSchedule) ? readRecordString(firstSchedule as Record<string, unknown>, "start_date") : undefined;
       const scheduleStartLabel = formatScheduleDate(firstScheduleStart ?? undefined);
 
+      const rawTourType = safeString(tourRecord?.["type"]);
+      const childAgeLimit =
+        readRecordNumber(tourRecord, "child_age_limit") ?? readRecordNumber(tourRecord, "childAgeLimit") ?? null;
+      const requiresPassport =
+        readRecordBoolean(tourRecord, "requires_passport") ??
+        readRecordBoolean(tourRecord, "requiresPassport") ??
+        null;
+      const requiresVisa =
+        readRecordBoolean(tourRecord, "requires_visa") ??
+        readRecordBoolean(tourRecord, "requiresVisa") ??
+        null;
+      const cancellationPoliciesRaw = extractArray(tourRecord, "cancellation_policies");
+      const cancellationPolicies = cancellationPoliciesRaw.filter(
+        (entry): entry is CancellationPolicy => Boolean(entry) && typeof entry === "object",
+      );
+
+      const tourTypeLabel = resolveTourTypeLabel(rawTourType);
+      const childLimitLabel =
+        typeof childAgeLimit === "number" && Number.isFinite(childAgeLimit)
+          ? `Giới hạn trẻ em: ≤ ${childAgeLimit} tuổi`
+          : null;
+      const documentLabel = resolveDocumentRequirementLabel(requiresPassport, requiresVisa);
+      const cancellationLabel = resolveCancellationSummary(cancellationPolicies);
+
       const features = [
+        tourTypeLabel,
         scheduleStartLabel ? `Khởi hành ${scheduleStartLabel}` : null,
         partnerName ? `Đối tác: ${partnerName}` : null,
-        "Miễn phí huỷ trong 24h",
+        childLimitLabel,
+        documentLabel,
+        cancellationLabel,
       ].filter((value): value is string => Boolean(value));
 
       const bookingCount =
@@ -373,6 +441,11 @@ const WishlistPage = () => {
         features,
         partnerName,
         isPopular,
+        tourType: rawTourType ?? null,
+        childAgeLimit,
+        requiresPassport,
+        requiresVisa,
+        cancellationPolicies: cancellationPolicies.length > 0 ? cancellationPolicies : null,
         raw: item,
       };
     });
@@ -504,6 +577,13 @@ const WishlistPage = () => {
                     const locationLine = [item.partnerName, item.destination]
                       .filter((value): value is string => Boolean(value))
                       .join(" • ");
+                    const tourTypeLine = resolveTourTypeLabel(item.tourType);
+                    const childLimitLine =
+                      typeof item.childAgeLimit === "number" && Number.isFinite(item.childAgeLimit)
+                        ? `Giới hạn trẻ em: ≤ ${item.childAgeLimit} tuổi`
+                        : null;
+                    const documentRequirementLine = resolveDocumentRequirementLabel(item.requiresPassport, item.requiresVisa);
+                    const cancellationLine = resolveCancellationSummary(item.cancellationPolicies ?? null);
                     return (
                       <Card
                         key={item.itemId}
@@ -578,6 +658,12 @@ const WishlistPage = () => {
                               ))}
                             </div>
                           ) : null}
+                          <div className="space-y-1 rounded-lg border border-slate-100 bg-slate-50 px-3 py-3 text-sm text-slate-700">
+                            {tourTypeLine ? <p>{tourTypeLine}</p> : null}
+                            {childLimitLine ? <p>{childLimitLine}</p> : null}
+                            <p>{documentRequirementLine}</p>
+                            <p>{cancellationLine}</p>
+                          </div>
                           <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
                             <span className="flex items-center gap-1 text-amber-500">
                               <Star className="h-4 w-4" />
