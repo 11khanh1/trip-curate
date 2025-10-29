@@ -17,6 +17,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useUser } from "@/context/UserContext";
 import { useToast } from "@/hooks/use-toast";
+import CollectionTourCard from "@/components/CollectionTourCard";
+import PersonalizedRecommendations from "@/components/recommendations/PersonalizedRecommendations";
 import {
   ArrowRight,
   Calendar,
@@ -32,7 +34,7 @@ import {
 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { formatCurrency, getTourStartingPrice } from "@/lib/tour-utils";
-import type { CancellationPolicy, TourType } from "@/services/publicApi";
+import { fetchTrendingTours, type PublicTour, type CancellationPolicy, type TourType } from "@/services/publicApi";
 import { Users } from "lucide-react";
 
 const resolveImageFromTour = (tour: WishlistTour) => {
@@ -57,11 +59,15 @@ const resolveImageFromTour = (tour: WishlistTour) => {
   return "https://images.unsplash.com/photo-1529101091764-c3526daf38fe?w=900&h=600&fit=crop";
 };
 
-const formatDuration = (duration: number | null | undefined) => {
+const formatDuration = (duration: number | string | null | undefined) => {
   if (typeof duration === "number" && Number.isFinite(duration)) {
     if (duration <= 0) return "Trong ngày";
     if (duration === 1) return "1 ngày";
     return `${duration} ngày`;
+  }
+  if (typeof duration === "string") {
+    const trimmed = duration.trim();
+    if (trimmed.length > 0) return trimmed;
   }
   return "Linh hoạt";
 };
@@ -893,9 +899,122 @@ const WishlistPage = () => {
           </>
         ) : null}
       </main>
+      <WishlistRecommendations />
       <Footer />
     </div>
   );
 };
 
 export default WishlistPage;
+
+const WishlistRecommendations = () => {
+  const { currentUser } = useUser();
+  const { data: trendingTours, isLoading } = useQuery<PublicTour[]>({
+    queryKey: ["wishlist-recommendations", { limit: 6 }],
+    queryFn: () => fetchTrendingTours({ limit: 6, days: 60 }),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const resolveTourImage = (tour: PublicTour) => {
+    const candidates: Array<unknown> = [
+      tour.thumbnail_url,
+      Array.isArray(tour.media) ? tour.media[0] : undefined,
+      Array.isArray(tour.gallery) ? tour.gallery[0] : undefined,
+    ];
+    for (const candidate of candidates) {
+      if (typeof candidate === "string" && candidate.trim()) {
+        return candidate.trim();
+      }
+    }
+    return "https://images.unsplash.com/photo-1529101091764-c3526daf38fe?w=900&h=600&fit=crop";
+  };
+
+  if (currentUser) {
+    return (
+      <PersonalizedRecommendations
+        className="mt-16"
+        limit={6}
+        fallbackTours={trendingTours ?? []}
+      />
+    );
+  }
+
+  const tours = trendingTours ?? [];
+  if (isLoading) {
+    return (
+      <section className="mt-16">
+        <div className="mb-6 flex items-center justify-between">
+          <h2 className="text-2xl font-bold text-foreground">Gợi ý nổi bật</h2>
+          <Link to="/activities">
+            <Button variant="ghost" className="text-primary hover:text-primary/80">
+              Xem tất cả
+              <ArrowRight className="ml-1 h-4 w-4" />
+            </Button>
+          </Link>
+        </div>
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <Skeleton key={index} className="h-52 rounded-2xl" />
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  if (tours.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="mt-16">
+      <div className="mb-6 flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-foreground">Gợi ý nổi bật</h2>
+        <Link to="/activities">
+          <Button variant="ghost" className="text-primary hover:text-primary/80">
+            Xem tất cả
+            <ArrowRight className="ml-1 h-4 w-4" />
+          </Button>
+        </Link>
+      </div>
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {tours.slice(0, 6).map((tour) => {
+          const id = tour.id ?? tour.uuid ?? Math.random().toString(36).slice(2, 8);
+          const price = getTourStartingPrice(tour);
+          const priceLabel = formatCurrency(price);
+          const originalLabel =
+            typeof tour.season_price === "number" &&
+            Number.isFinite(tour.season_price) &&
+            tour.season_price > price
+              ? formatCurrency(tour.season_price)
+              : undefined;
+          const features: string[] = [];
+          if (tour.requires_passport) features.push("Yêu cầu hộ chiếu");
+          if (tour.requires_visa) features.push("Yêu cầu visa");
+          return (
+            <CollectionTourCard
+              key={`wishlist-fallback-${id}`}
+              className="border border-slate-200/70 shadow-sm"
+              href={`/activity/${tour.id ?? tour.uuid}`}
+              image={resolveTourImage(tour)}
+              title={tour.title ?? tour.name ?? "Tour đang cập nhật"}
+              category={tour.type === "international" ? "Tour quốc tế" : "Tour nội địa"}
+              location={tour.destination ?? tour.partner?.company_name ?? "Đang cập nhật"}
+              duration={formatDuration(tour.duration ?? null)}
+              rating={
+                typeof tour.rating_average === "number"
+                  ? tour.rating_average
+                  : typeof tour.average_rating === "number"
+                  ? tour.average_rating
+                  : null
+              }
+              ratingCount={tour.rating_count ?? tour.reviews_count ?? null}
+              priceLabel={priceLabel}
+              originalPriceLabel={originalLabel}
+              features={features}
+            />
+          );
+        })}
+      </div>
+    </section>
+  );
+};

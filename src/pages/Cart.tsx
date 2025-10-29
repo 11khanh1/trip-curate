@@ -8,6 +8,7 @@ import Footer from "@/components/Footer";
 // FIXED: Removed the incorrect import of TourCardProps
 import TourCard from "@/components/TourCard";
 import CollectionTourCard from "@/components/CollectionTourCard";
+import PersonalizedRecommendations from "@/components/recommendations/PersonalizedRecommendations";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -700,40 +701,50 @@ const CartPage = () => {
 
 // Component con để fetch và hiển thị các tour trending
 const RecommendedTours = () => {
-    const { data: tours, isLoading } = useQuery<PublicTour[]>({
-        queryKey: ["public-tours-trending", { limit: 4 }],
-        queryFn: () => fetchTrendingTours({ limit: 4, days: 60 }),
-        staleTime: 5 * 60 * 1000,
-    });
+  const { currentUser } = useUser();
+  const { data: tours, isLoading } = useQuery<PublicTour[]>({
+    queryKey: ["public-tours-trending", { limit: 6 }],
+    queryFn: () => fetchTrendingTours({ limit: 6, days: 60 }),
+    staleTime: 5 * 60 * 1000,
+  });
 
-    const activities = useMemo(() => (tours ?? []).map(mapTourToCard), [tours]);
+  const activities = useMemo(() => (tours ?? []).map(mapTourToCard), [tours]);
+  const displayedActivities = activities.slice(0, 4);
 
+  if (currentUser) {
     return (
-        <section className="mt-16">
-            <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-foreground">Thường Được Đặt Với</h2>
-                <Link to="/activities">
-                    <Button variant="ghost" className="text-primary hover:text-primary/80">
-                        Xem tất cả
-                        <ArrowRight className="h-4 w-4 ml-1" />
-                    </Button>
-                </Link>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {isLoading ? (
-                    Array.from({ length: 4 }).map((_, index) => (
-                        <Skeleton key={index} className="h-[440px] rounded-xl" />
-                    ))
-                ) : (
-                    activities.map((activity) => (
-                        <div key={activity.id} className="h-full">
-                            <TourCard {...activity} />
-                        </div>
-                    ))
-                )}
-            </div>
-        </section>
+      <PersonalizedRecommendations
+        className="mt-16"
+        limit={6}
+        fallbackTours={tours ?? []}
+      />
     );
+  }
+
+  return (
+    <section className="mt-16">
+      <div className="mb-6 flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-foreground">Gợi ý nổi bật</h2>
+        <Link to="/activities">
+          <Button variant="ghost" className="text-primary hover:text-primary/80">
+            Xem tất cả
+            <ArrowRight className="ml-1 h-4 w-4" />
+          </Button>
+        </Link>
+      </div>
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+        {isLoading
+          ? Array.from({ length: 4 }).map((_, index) => (
+              <Skeleton key={index} className="h-[440px] rounded-xl" />
+            ))
+          : displayedActivities.map((activity) => (
+              <div key={activity.id} className="h-full">
+                <TourCard {...activity} />
+              </div>
+            ))}
+      </div>
+    </section>
+  );
 };
 
 export default CartPage;
