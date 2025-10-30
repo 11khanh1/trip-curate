@@ -91,7 +91,7 @@ const mapRecommendationToCard = (item: RecommendationItem) => {
   };
 };
 
-const PersonalizedRecommendations = ({ limit = 6, fallbackTours = [], className }: PersonalizedRecommendationsProps) => {
+const PersonalizedRecommendations = ({ limit = 10, fallbackTours = [], className }: PersonalizedRecommendationsProps) => {
   const { currentUser } = useUser();
   const { trackEvent } = useAnalytics();
 
@@ -126,14 +126,14 @@ const PersonalizedRecommendations = ({ limit = 6, fallbackTours = [], className 
 
   const handleCardClick = (tourId: string, reasons: string[]) => {
     trackEvent({
-      event_name: "recommendation_clicked",
+      event_name: "tour_view",
       entity_type: "tour",
       entity_id: tourId,
       metadata: {
         source: "personalized_home",
         reasons,
       },
-    });
+    }, { immediate: true });
   };
 
   const showFallback = !isLoading && cards.length === 0;

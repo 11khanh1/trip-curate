@@ -64,12 +64,15 @@ import { useToast } from "@/hooks/use-toast";
 import { useCart } from "@/context/CartContext";
 import { useUser } from "@/context/UserContext";
 import { useAnalytics } from "@/hooks/useAnalytics";
+import { useRecommendationRealtimeRefresh } from "@/hooks/useRecommendationRealtimeRefresh";
 import { getTourStartingPrice } from "@/lib/tour-utils";
 import { addWishlistItem, removeWishlistItem, type WishlistItem } from "@/services/wishlistApi";
 import {
   createReview,
   deleteReview,
   fetchTourReviews,
+  type CreateReviewPayload,
+  type ReviewResponse,
   type TourReview,
   type TourReviewListResponse,
   updateReview,
@@ -597,6 +600,7 @@ const ActivityDetail = () => {
   const { toast } = useToast();
   const { currentUser } = useUser();
   const { trackEvent } = useAnalytics();
+  const scheduleRecommendationRefresh = useRecommendationRealtimeRefresh();
   const queryClient = useQueryClient();
   const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
   const [selectedBookingId, setSelectedBookingId] = useState("");
@@ -669,15 +673,34 @@ const ActivityDetail = () => {
     queryClient.invalidateQueries({ queryKey: ["user-bookings", "completed", currentUser?.id] });
   }, [queryClient, id, currentUser?.id]);
 
-  const createReviewMutation = useMutation({
+  const createReviewMutation = useMutation<ReviewResponse, unknown, CreateReviewPayload>({
     mutationFn: createReview,
-    onSuccess: (response) => {
+    onSuccess: (response, variables) => {
       toast({
         title: "Đánh giá đã được ghi nhận",
         description: response?.message ?? "Cảm ơn bạn đã chia sẻ trải nghiệm.",
       });
       invalidateReviewData();
       closeReviewDialog();
+      if (resolvedTourEntityId) {
+        trackEvent(
+          {
+            event_name: "review_submit",
+            entity_type: "tour",
+            entity_id: resolvedTourEntityId,
+            metadata: {
+              source: "activity_detail",
+              booking_id: variables?.booking_id,
+              rating: variables?.rating,
+            },
+            context: {
+              has_comment: Boolean(variables?.comment && variables.comment.trim().length > 0),
+            },
+          },
+          { immediate: true },
+        );
+        scheduleRecommendationRefresh();
+      }
     },
     onError: (error: unknown) => {
       toast({
@@ -741,6 +764,22 @@ const ActivityDetail = () => {
         title: "Đã thêm vào yêu thích",
         description: "Bạn có thể xem lại tour này trong mục Wishlist.",
       });
+      const entityId = resolvedTourEntityId ?? (item.tour_id ? String(item.tour_id) : null);
+      if (entityId) {
+        trackEvent(
+          {
+            event_name: "wishlist_add",
+            entity_type: "tour",
+            entity_id: entityId,
+            metadata: {
+              source: "activity_detail",
+              wishlist_item_id: item.id,
+            },
+          },
+          { immediate: true },
+        );
+        scheduleRecommendationRefresh();
+      }
     },
     onError: (error: unknown) => {
       toast({
@@ -810,21 +849,31 @@ const activity = useMemo(
   [tourDetail, trendingTours],
 );
 
+const resolvedTourEntityId = useMemo(() => {
+  const candidates: Array<unknown> = [tourDetail?.uuid, tourDetail?.id, activity?.id, id];
+  const candidate = candidates.find(
+    (value) => typeof value === "string" || typeof value === "number",
+  );
+  return candidate !== undefined && candidate !== null ? String(candidate) : null;
+}, [activity?.id, id, tourDetail?.id, tourDetail?.uuid]);
+
 useEffect(() => {
   if (!tourDetail) return;
   if (hasLoggedViewRef.current) return;
-  const entityId = tourDetail.uuid ?? tourDetail.id ?? activity?.id;
-  if (!entityId) return;
-  trackEvent({
-    event_name: "tour_view",
-    entity_type: "tour",
-    entity_id: String(entityId),
-    metadata: {
-      source: "activity_detail",
+  if (!resolvedTourEntityId) return;
+  trackEvent(
+    {
+      event_name: "tour_view",
+      entity_type: "tour",
+      entity_id: resolvedTourEntityId,
+      metadata: {
+        source: "activity_detail",
+      },
     },
-  });
+    { immediate: true },
+  );
   hasLoggedViewRef.current = true;
-}, [activity?.id, tourDetail, trackEvent]);
+}, [resolvedTourEntityId, tourDetail, trackEvent]);
 
   const tourTypeDisplay = useMemo(
     () => resolveTourTypeLabel(activity?.tourClassification ?? activity?.tourType ?? null),
@@ -1325,6 +1374,25 @@ useEffect(() => {
           ? "Chúng tôi đã cập nhật gói dịch vụ trong giỏ hàng của bạn."
           : "Bạn có thể xem lại các hoạt động trong giỏ hàng để đặt sau.",
       });
+
+      if (resolvedTourEntityId) {
+        trackEvent(
+          {
+            event_name: "cart_add",
+            entity_type: "tour",
+            entity_id: resolvedTourEntityId,
+            metadata: {
+              source: isEditingCartItem ? "cart_detail" : "activity_detail",
+              package_id: selectedPackage.packageId ?? selectedPackage.id,
+              schedule_id: selectedScheduleId ?? undefined,
+              adults: safeAdultCount,
+              children: safeChildCount,
+            },
+          },
+          { immediate: true },
+        );
+        scheduleRecommendationRefresh();
+      }
 
       if (isEditingCartItem) {
         navigate("/cart");

@@ -32,6 +32,7 @@ const AnalyticsContext = createContext<AnalyticsContextValue | undefined>(undefi
 const MAX_BATCH_SIZE = 50;
 const AUTO_FLUSH_INTERVAL = 5_000;
 const QUEUE_THRESHOLD = 20;
+const SESSION_STORAGE_KEY = "tripcurate_session_id";
 
 const createSessionId = () => {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -40,9 +41,30 @@ const createSessionId = () => {
   return `session-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 };
 
+const getOrCreateSessionId = () => {
+  if (typeof window === "undefined") {
+    return createSessionId();
+  }
+  try {
+    const existing = window.sessionStorage.getItem(SESSION_STORAGE_KEY);
+    if (existing && existing.trim().length > 0) {
+      return existing.trim();
+    }
+  } catch {
+    // ignore storage errors
+  }
+  const next = createSessionId();
+  try {
+    window.sessionStorage.setItem(SESSION_STORAGE_KEY, next);
+  } catch {
+    // ignore storage errors
+  }
+  return next;
+};
+
 export const AnalyticsProvider = ({ children }: { children: ReactNode }) => {
   const deviceId = useMemo(() => getOrCreateDeviceId(), []);
-  const [sessionId] = useState(createSessionId);
+  const [sessionId] = useState(getOrCreateSessionId);
   const queueRef = useRef<AnalyticsEventPayload[]>([]);
   const isFlushingRef = useRef(false);
 
@@ -51,11 +73,17 @@ export const AnalyticsProvider = ({ children }: { children: ReactNode }) => {
     if (queueRef.current.length === 0) return;
 
     isFlushingRef.current = true;
-    const batch = queueRef.current.splice(0, MAX_BATCH_SIZE);
+    let currentBatch: AnalyticsEventPayload[] = [];
     try {
-      await postAnalyticsEvents(batch);
+      while (queueRef.current.length > 0) {
+        currentBatch = queueRef.current.splice(0, MAX_BATCH_SIZE);
+        await postAnalyticsEvents(currentBatch);
+        currentBatch = [];
+      }
     } catch (error) {
-      queueRef.current = [...batch, ...queueRef.current];
+      if (currentBatch.length > 0) {
+        queueRef.current = [...currentBatch, ...queueRef.current];
+      }
       console.error("Không thể gửi analytics events:", error);
     } finally {
       isFlushingRef.current = false;

@@ -92,13 +92,15 @@ const SimilarTourRecommendations = ({ tourId, baseTourTitle, limit = 8 }: Simila
       .filter((value): value is NonNullable<ReturnType<typeof mapItemToCard>> => Boolean(value));
   }, [data?.data]);
 
-  if (!tourId || isError || (!isLoading && cards.length === 0)) {
+  if (!tourId || isError) {
     return null;
   }
 
+  const showEmptyState = !isLoading && cards.length === 0;
+
   const handleCardClick = (recommendedTourId: string, reasons: string[]) => {
     trackEvent({
-      event_name: "recommendation_clicked",
+      event_name: "tour_view",
       entity_type: "tour",
       entity_id: recommendedTourId,
       metadata: {
@@ -106,7 +108,7 @@ const SimilarTourRecommendations = ({ tourId, baseTourTitle, limit = 8 }: Simila
         base_tour_id: tourId,
         reasons,
       },
-    });
+    }, { immediate: true });
   };
 
   return (
@@ -122,6 +124,10 @@ const SimilarTourRecommendations = ({ tourId, baseTourTitle, limit = 8 }: Simila
           {Array.from({ length: Math.min(limit, 4) }).map((_, index) => (
             <div key={`similar-skeleton-${index}`} className="h-44 animate-pulse rounded-2xl bg-slate-200/60" />
           ))}
+        </div>
+      ) : showEmptyState ? (
+        <div className="rounded-2xl border border-dashed border-primary/40 bg-white p-6 text-sm text-muted-foreground">
+          <p>Chúng tôi đang thu thập thêm dữ liệu để gợi ý tour tương tự cho bạn.</p>
         </div>
       ) : (
         <div className="grid gap-6 lg:grid-cols-2">

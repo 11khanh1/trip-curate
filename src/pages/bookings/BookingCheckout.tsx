@@ -22,6 +22,8 @@ import { Info, Loader2 } from "lucide-react";
 import { isAxiosError } from "axios";
 import { useToast } from "@/hooks/use-toast";
 import { useCart } from "@/context/CartContext";
+import { useAnalytics } from "@/hooks/useAnalytics";
+import { useRecommendationRealtimeRefresh } from "@/hooks/useRecommendationRealtimeRefresh";
 import {
   createBooking,
   fetchBookingPaymentStatus,
@@ -183,6 +185,8 @@ const BookingCheckout = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { removeItem } = useCart();
+  const { trackEvent } = useAnalytics();
+  const scheduleRecommendationRefresh = useRecommendationRealtimeRefresh();
   const [searchParams] = useSearchParams();
   const [sepayPanel, setSepayPanel] = useState<SepayPanelState | null>(null);
   const [shouldPollSepayStatus, setShouldPollSepayStatus] = useState(false);
@@ -319,6 +323,14 @@ const BookingCheckout = () => {
     return "CÔNG TY CỔ PHẦN SALEMALL";
   }, [tour?.partner?.company_name]);
 
+  const resolvedTourEntityId = useMemo(() => {
+    const candidates: Array<unknown> = [tour?.uuid, tour?.id, tourId];
+    const candidate = candidates.find(
+      (value) => typeof value === "string" || typeof value === "number",
+    );
+    return candidate !== undefined && candidate !== null ? String(candidate) : null;
+  }, [tour?.id, tour?.uuid, tourId]);
+
   const displayCurrency = useMemo(() => {
     const raw = typeof tour?.currency === "string" ? tour.currency.trim() : "";
     return raw.length > 0 ? raw : "VND";
@@ -341,44 +353,78 @@ const BookingCheckout = () => {
             ? "Chúng tôi đã tạo yêu cầu thanh toán. Vui lòng quét mã để hoàn tất giao dịch."
             : "Chúng tôi đã gửi email xác nhận cho bạn.",
       });
+
+      const bookingEntity = response?.booking ?? null;
+      const bookingIdentifier =
+        bookingEntity?.id ??
+        bookingEntity?.uuid ??
+        (response as { booking_id?: string | number | null })?.booking_id ??
+        null;
+      const bookingCode = bookingEntity?.code ? String(bookingEntity.code) : undefined;
+
+      if (resolvedTourEntityId) {
+        trackEvent(
+          {
+            event_name: "booking_success",
+            entity_type: "tour",
+            entity_id: resolvedTourEntityId,
+            metadata: {
+              booking_id: bookingIdentifier ?? undefined,
+              booking_code: bookingCode,
+              payment_method: payload.payment_method,
+              total_amount:
+                typeof bookingEntity?.total_amount === "number"
+                  ? bookingEntity.total_amount
+                  : typeof bookingEntity?.total_price === "number"
+                  ? bookingEntity.total_price
+                  : totalPrice,
+            },
+            context: {
+              adults: payload.adults,
+              children: payload.children ?? 0,
+              package_id: payload.package_id,
+              schedule_id: payload.schedule_id,
+            },
+          },
+          { immediate: true },
+        );
+        scheduleRecommendationRefresh();
+      }
+
       if (cartItemId) {
         await removeItem(cartItemId);
       }
 
       if (payload.payment_method === "sepay") {
-        const bookingIdentifier =
-          response?.booking?.id ??
-          (response as { booking_id?: string | number | null })?.booking_id ??
-          null;
         const directPaymentUrl =
           response.payment_url ??
-          (response.booking?.payment_url && String(response.booking.payment_url).trim().length
-            ? String(response.booking.payment_url)
+          (bookingEntity?.payment_url && String(bookingEntity.payment_url).trim().length
+            ? String(bookingEntity.payment_url)
             : undefined);
         if (bookingIdentifier) {
           if (directPaymentUrl) {
             const derivedOrderCode =
               extractOrderCode(directPaymentUrl) ??
-              (response.booking?.code ? String(response.booking.code) : undefined) ??
+              bookingCode ??
               (response.payment_id ? String(response.payment_id) : undefined);
             const amountFromResponse =
-              typeof response.booking?.total_amount === "number"
-                ? response.booking.total_amount
-                : typeof response.booking?.total_price === "number"
-                ? response.booking.total_price
+              typeof bookingEntity?.total_amount === "number"
+                ? bookingEntity.total_amount
+                : typeof bookingEntity?.total_price === "number"
+                ? bookingEntity.total_price
                 : totalPrice;
             const currencyFromResponse =
-              (response.booking?.currency && String(response.booking.currency).trim()) || displayCurrency;
+              (bookingEntity?.currency && String(bookingEntity.currency).trim()) || displayCurrency;
             const qrImage =
               deduceSepayQrImage(response) ??
-              deduceSepayQrImage(response.booking) ??
+              deduceSepayQrImage(bookingEntity) ??
               deriveQrFromPaymentUrl(directPaymentUrl);
 
             setSepayPanel({
               bookingId: String(bookingIdentifier),
               paymentUrl: directPaymentUrl,
               orderCode: derivedOrderCode ?? undefined,
-              bookingCode: response.booking?.code ? String(response.booking.code) : undefined,
+              bookingCode,
               paymentId: response.payment_id ? String(response.payment_id) : undefined,
               amount: amountFromResponse,
               currency: currencyFromResponse,
@@ -391,24 +437,24 @@ const BookingCheckout = () => {
 
           const derivedOrderCode =
             extractOrderCode(response.payment_url ?? "") ??
-            (response.booking?.code ? String(response.booking.code) : undefined) ??
+            bookingCode ??
             (response.payment_id ? String(response.payment_id) : undefined);
           if (response.payment_url) {
             const amountFromResponse =
-              typeof response.booking?.total_amount === "number"
-                ? response.booking.total_amount
-                : typeof response.booking?.total_price === "number"
-                ? response.booking.total_price
+              typeof bookingEntity?.total_amount === "number"
+                ? bookingEntity.total_amount
+                : typeof bookingEntity?.total_price === "number"
+                ? bookingEntity.total_price
                 : totalPrice;
             const currencyFromResponse =
-              (response.booking?.currency && String(response.booking.currency).trim()) || displayCurrency;
+              (bookingEntity?.currency && String(bookingEntity.currency).trim()) || displayCurrency;
             const qrImage = deduceSepayQrImage(response) ?? deriveQrFromPaymentUrl(response.payment_url);
 
             setSepayPanel({
               bookingId: String(bookingIdentifier),
               paymentUrl: response.payment_url,
               orderCode: derivedOrderCode ?? undefined,
-              bookingCode: response.booking?.code ? String(response.booking.code) : undefined,
+              bookingCode,
               paymentId: response.payment_id ? String(response.payment_id) : undefined,
               amount: amountFromResponse,
               currency: currencyFromResponse,

@@ -1,0 +1,49 @@
+﻿Ràng buộc số điện thoại Việt Nam
+Các luồng liên quan: Đặt chỗ (BookingCheckout), Cập nhật hồ sơ khách hàng (AccountSettings), Quản trị đối tác (Admin/Partners)
+Nội dung: Số điện thoại sau khi loại bỏ ký tự khác chữ số phải có 10 số bắt đầu bằng 0 hoặc 11 số bắt đầu bằng 84; thông tin được chuẩn hóa qua normalizeVietnamPhone trước khi gửi lên server.
+Nguồn: src/lib/validators.ts, src/pages/bookings/BookingCheckout.tsx, src/pages/AccountSettings.tsx, src/pages/admin/Partners.tsx
+
+Ràng buộc email
+Các luồng liên quan: Đăng nhập OTP (LoginForm), Quên mật khẩu (ForgotForm), Đăng ký (RegisterForm), Liên hệ đặt chỗ (BookingCheckout)
+Nội dung: Email phải đúng định dạng theo regex /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/ (không khoảng trắng, bắt buộc ký tự @, có ít nhất một dấu chấm sau @ với tối thiểu 2 ký tự) hoặc qua z.string().email của Zod.
+Nguồn: src/components/auth/LoginForm.tsx, src/components/auth/ForgotForm.tsx, src/components/auth/RegisterForm.tsx, src/pages/bookings/BookingCheckout.tsx
+
+Ràng buộc mã OTP email
+Các luồng liên quan: Đăng nhập OTP (LoginForm)
+Nội dung: Trước khi gọi API xác minh, mã OTP phải có tối thiểu 4 ký tự.
+Nguồn: src/components/auth/LoginForm.tsx
+
+Ràng buộc mật khẩu khách hàng
+Các luồng liên quan: Quên mật khẩu (ForgotForm), Đăng ký (RegisterForm), Đổi mật khẩu trong hồ sơ (AccountSettings)
+Nội dung: Mật khẩu mới phải có tối thiểu 8 ký tự và trùng với trường xác nhận (password_confirmation).
+Nguồn: src/components/auth/ForgotForm.tsx, src/components/auth/RegisterForm.tsx, src/pages/AccountSettings.tsx
+
+Ràng buộc mật khẩu quản trị/đối tác
+Các luồng liên quan: Tạo tài khoản quản trị (admin/Admins), Tạo đối tác (admin/Partners)
+Nội dung: Mật khẩu yêu cầu tối thiểu 6 ký tự và phải khớp với trường xác nhận.
+Nguồn: src/pages/admin/Admins.tsx, src/pages/admin/Partners.tsx
+
+Ràng buộc biểu mẫu đặt tour
+Các luồng liên quan: Đặt chỗ (BookingCheckout)
+Nội dung: Gói dịch vụ (package_id) và lịch khởi hành (schedule_id) bắt buộc; số người lớn (adults) phải là số nguyên ≥ 1; số trẻ em (children) là số nguyên ≥ 0; người liên hệ phải cung cấp họ tên, email hợp lệ và số điện thoại đạt ràng buộc Việt Nam; danh sách hành khách (passengers) phải có ít nhất 1 người.
+Nguồn: src/pages/bookings/BookingCheckout.tsx
+
+Ràng buộc thông tin hành khách
+Các luồng liên quan: Đặt chỗ (BookingCheckout)
+Nội dung: Họ tên hành khách bắt buộc; ngày sinh (nếu nhập) phải trước ngày hiện tại; giấy tờ (nếu nhập) phải hợp lệ (nếu chỉ gồm chữ số thì dài 9 hoặc 12 số, ngược lại phải là chuỗi 6–20 ký tự chữ hoặc số không khoảng trắng).
+Nguồn: src/pages/bookings/BookingCheckout.tsx
+
+Ràng buộc cập nhật hồ sơ
+Các luồng liên quan: Cập nhật hồ sơ khách hàng (AccountSettings)
+Nội dung: Số điện thoại (nếu nhập) phải đạt ràng buộc Việt Nam; ngày sinh (nếu nhập) phải trước ngày hiện tại.
+Nguồn: src/pages/AccountSettings.tsx
+
+Ràng buộc cấu hình tour của đối tác
+Các luồng liên quan: Quản lý tour đối tác (partner/Activities)
+Nội dung: Tổng số chỗ (seats_total) tối thiểu là 1; số chỗ còn trống (seats_available) tối thiểu 0 và không được vượt quá tổng số chỗ.
+Nguồn: src/pages/partner/Activities.tsx
+
+Ràng buộc số lượng khách khi chọn gói
+Các luồng liên quan: Trang chi tiết hoạt động (ActivityDetail)
+Nội dung: Luôn phải có ít nhất 1 người lớn; tổng số khách tối đa 15; số trẻ em không vượt quá phần còn lại sau khi trừ người lớn trong giới hạn 15.
+Nguồn: src/pages/ActivityDetail.tsx
