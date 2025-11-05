@@ -85,6 +85,8 @@ type ActivityPackage = {
   endDate?: string | null;
   capacity?: number | null;
   slotsAvailable?: number | null;
+  seatsTotal?: number | null;
+  minParticipants?: number | null;
 };
 
 type RelatedActivity = {
@@ -198,6 +200,23 @@ const parseBooleanOrNull = (value: unknown): boolean | null => {
     if (!normalized) return null;
     if (["1", "true", "yes", "y"].includes(normalized)) return true;
     if (["0", "false", "no", "n"].includes(normalized)) return false;
+  }
+  return null;
+};
+
+const parseScheduleNumber = (...values: Array<unknown>): number | null => {
+  for (const value of values) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (!trimmed) continue;
+      const parsed = Number(trimmed);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
   }
   return null;
 };
@@ -509,8 +528,34 @@ const seasonPriceValue = parseFloatOrNull(tour.season_price);
           includes: [],
           startDate: schedule?.start_date ?? null,
           endDate: schedule?.end_date ?? null,
-          capacity: schedule?.capacity ?? null,
-          slotsAvailable: schedule?.slots_available ?? null,
+          capacity:
+            parseScheduleNumber(
+              schedule?.capacity,
+              (schedule as Record<string, unknown>)?.capacity,
+              schedule?.seats_total,
+              (schedule as Record<string, unknown>)?.seats_total,
+              (schedule as Record<string, unknown>)?.seatsTotal,
+            ) ?? null,
+          seatsTotal:
+            parseScheduleNumber(
+              schedule?.seats_total,
+              (schedule as Record<string, unknown>)?.seats_total,
+              (schedule as Record<string, unknown>)?.seatsTotal,
+              (schedule as Record<string, unknown>)?.capacity,
+            ) ?? null,
+          slotsAvailable:
+            parseScheduleNumber(
+              schedule?.slots_available,
+              (schedule as Record<string, unknown>)?.slots_available,
+              (schedule as Record<string, unknown>)?.slotsAvailable,
+              (schedule as Record<string, unknown>)?.seats_available,
+            ) ?? null,
+          minParticipants:
+            parseScheduleNumber(
+              schedule?.min_participants,
+              (schedule as Record<string, unknown>)?.min_participants,
+              (schedule as Record<string, unknown>)?.minParticipants,
+            ) ?? null,
         };
       });
     }
@@ -991,6 +1036,39 @@ useEffect(() => {
     [schedules, selectedScheduleId],
   );
 
+  const selectedScheduleMinParticipants = useMemo(() => {
+    if (!selectedSchedule) return null;
+    const value = parseScheduleNumber(
+      selectedSchedule?.min_participants,
+      (selectedSchedule as Record<string, unknown>)?.min_participants,
+      (selectedSchedule as Record<string, unknown>)?.minParticipants,
+    );
+    return typeof value === "number" ? Math.max(1, Math.trunc(value)) : null;
+  }, [selectedSchedule]);
+
+  const selectedScheduleSeatsTotal = useMemo(() => {
+    if (!selectedSchedule) return null;
+    const value = parseScheduleNumber(
+      selectedSchedule?.seats_total,
+      (selectedSchedule as Record<string, unknown>)?.seats_total,
+      (selectedSchedule as Record<string, unknown>)?.seatsTotal,
+      (selectedSchedule as Record<string, unknown>)?.capacity,
+    );
+    return typeof value === "number" ? Math.max(0, Math.trunc(value)) : null;
+  }, [selectedSchedule]);
+
+  const selectedScheduleSlotsAvailable = useMemo(() => {
+    if (!selectedSchedule) return null;
+    const value = parseScheduleNumber(
+      selectedSchedule?.slots_available,
+      (selectedSchedule as Record<string, unknown>)?.slots_available,
+      (selectedSchedule as Record<string, unknown>)?.slotsAvailable,
+      (selectedSchedule as Record<string, unknown>)?.seats_available,
+    );
+    return typeof value === "number" ? Math.max(0, Math.trunc(value)) : null;
+  }, [selectedSchedule]);
+  const seatsAvailability = selectedScheduleSlotsAvailable ?? null;
+  const seatsCapacity = selectedScheduleSeatsTotal ?? null;
   const isEditingCartItem = Boolean(editingCartItemId);
 
   useEffect(() => {
@@ -1213,6 +1291,12 @@ useEffect(() => {
     return safeAdultCount * adultUnitPrice + safeChildCount * childUnitPrice;
   }, [selectedPackage, safeAdultCount, safeChildCount, adultUnitPrice, childUnitPrice]);
 
+  const totalTravellers = safeAdultCount + safeChildCount;
+  const meetsMinimumParticipants =
+    selectedScheduleMinParticipants === null || totalTravellers >= selectedScheduleMinParticipants;
+  const exceedsAvailableSeats =
+    seatsAvailability !== null && Number.isFinite(seatsAvailability) && totalTravellers > seatsAvailability;
+
 
   const incrementAdults = () => setAdultCount((prev) => Math.min(MAX_TRAVELLERS, prev + 1));
   const decrementAdults = () => setAdultCount((prev) => Math.max(1, prev - 1));
@@ -1246,6 +1330,23 @@ useEffect(() => {
       return;
     }
 
+    if (selectedScheduleMinParticipants !== null && totalTravellers < selectedScheduleMinParticipants) {
+      toast({
+        title: "Chưa đủ số khách tối thiểu",
+        description: `Lịch khởi hành này yêu cầu tối thiểu ${selectedScheduleMinParticipants} khách.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    if (exceedsAvailableSeats && seatsAvailability !== null) {
+      toast({
+        title: "Vượt quá số chỗ còn lại",
+        description: `Lịch khởi hành này hiện chỉ còn ${seatsAvailability} chỗ trống.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     const scheduleTitle =
       selectedSchedule?.title ??
       (selectedSchedule?.start_date
@@ -1261,6 +1362,9 @@ useEffect(() => {
         scheduleId: selectedScheduleId ?? undefined,
         scheduleTitle,
         thumbnail: activity.images[0] ?? null,
+        minParticipants: selectedScheduleMinParticipants ?? undefined,
+        slotsAvailable: seatsAvailability ?? undefined,
+        seatsTotal: seatsCapacity ?? undefined,
         adultCount: safeAdultCount,
         childCount: safeChildCount,
         adultPrice: adultUnitPrice,
@@ -1311,6 +1415,22 @@ useEffect(() => {
 
   const handleBookNow = () => {
     if (!activity || !selectedPackage) return;
+    if (selectedScheduleMinParticipants !== null && totalTravellers < selectedScheduleMinParticipants) {
+      toast({
+        title: "Chưa đủ số khách tối thiểu",
+        description: `Lịch khởi hành này yêu cầu tối thiểu ${selectedScheduleMinParticipants} khách.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    if (exceedsAvailableSeats && seatsAvailability !== null) {
+      toast({
+        title: "Vượt quá số chỗ còn lại",
+        description: `Lịch khởi hành này hiện chỉ còn ${seatsAvailability} chỗ trống.`,
+        variant: "destructive",
+      });
+      return;
+    }
     const params = new URLSearchParams({
       tourId: activity.id,
       packageId: selectedPackage.packageId ?? selectedPackage.id,
@@ -1793,21 +1913,42 @@ useEffect(() => {
                                 <SelectContent>
                                   {schedules.map((schedule) => {
                                     if (!schedule?.id) return null;
-                                    const price = schedule.season_price ?? tourDetail?.base_price;
                                     const date = formatDate(schedule.start_date);
-                                    
-                                    const slots = schedule.slots_available;
-                                    const status = slots !== null && slots < 5 ? `(Chỉ còn ${slots} chỗ)` : '';
-
-                                    const label = [
+                                    const availabilityValue = parseScheduleNumber(
+                                      schedule?.slots_available,
+                                      (schedule as Record<string, unknown>)?.slots_available,
+                                      (schedule as Record<string, unknown>)?.slotsAvailable,
+                                      (schedule as Record<string, unknown>)?.seats_available,
+                                    );
+                                    const seatsValue = parseScheduleNumber(
+                                      schedule?.seats_total,
+                                      (schedule as Record<string, unknown>)?.seats_total,
+                                      (schedule as Record<string, unknown>)?.seatsTotal,
+                                      (schedule as Record<string, unknown>)?.capacity,
+                                    );
+                                    const minValue = parseScheduleNumber(
+                                      schedule?.min_participants,
+                                      (schedule as Record<string, unknown>)?.min_participants,
+                                      (schedule as Record<string, unknown>)?.minParticipants,
+                                    );
+                                    const tokens = [
                                       schedule.title,
                                       date ? `- ${date}` : null,
-                                      status,
-                                    ].filter(Boolean).join(" ");
-                                    
+                                      typeof availabilityValue === "number"
+                                        ? typeof seatsValue === "number"
+                                          ? `• Còn ${Math.max(0, Math.trunc(availabilityValue))}/${Math.max(
+                                              0,
+                                              Math.trunc(seatsValue),
+                                            )} chỗ`
+                                          : `• Còn ${Math.max(0, Math.trunc(availabilityValue))} chỗ`
+                                        : null,
+                                      typeof minValue === "number"
+                                        ? `• Tối thiểu ${Math.max(1, Math.trunc(minValue))} khách`
+                                        : null,
+                                    ].filter(Boolean);
                                     return (
                                       <SelectItem key={schedule.id} value={String(schedule.id)}>
-                                        {label}
+                                        {tokens.join(" ")}
                                       </SelectItem>
                                     );
                                   })}
@@ -1816,8 +1957,54 @@ useEffect(() => {
                             </div>
                           </>
                         )}
-                        {/* ==================================================================================== */}
-                        
+                        {selectedSchedule && (
+                          <div className="grid gap-2 py-3 sm:grid-cols-2">
+                            <div className="rounded-lg border border-dashed border-primary/30 bg-primary/5 p-3">
+                              <p className="text-xs font-medium uppercase tracking-wide text-primary/80">
+                                Số khách tối thiểu
+                              </p>
+                              <p className="text-sm font-semibold text-foreground">
+                                {selectedScheduleMinParticipants !== null
+                                  ? `${selectedScheduleMinParticipants} khách`
+                                  : "Đang cập nhật"}
+                              </p>
+                            </div>
+                            <div className="rounded-lg border border-dashed border-primary/30 bg-primary/5 p-3">
+                              <p className="text-xs font-medium uppercase tracking-wide text-primary/80">
+                                Số chỗ còn lại
+                              </p>
+                              <p className="text-sm font-semibold text-foreground">
+                                {seatsAvailability !== null
+                                  ? seatsCapacity !== null
+                                    ? `${Math.max(0, seatsAvailability)}/${Math.max(0, seatsCapacity)} chỗ`
+                                    : `${Math.max(0, seatsAvailability)} chỗ`
+                                  : seatsCapacity !== null
+                                  ? `Sức chứa ${Math.max(0, seatsCapacity)} chỗ`
+                                  : "Đang cập nhật"}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                        {!meetsMinimumParticipants && selectedScheduleMinParticipants !== null && (
+                          <Alert variant="destructive" className="border-dashed border-destructive/40 bg-destructive/5">
+                            <AlertTitle className="text-sm font-semibold">Chưa đủ số khách tối thiểu</AlertTitle>
+                            <AlertDescription className="text-sm">
+                              Lịch khởi hành này yêu cầu ít nhất {selectedScheduleMinParticipants} khách. Vui lòng tăng số
+                              lượng hành khách trước khi tiếp tục.
+                            </AlertDescription>
+                          </Alert>
+                        )}
+                        {exceedsAvailableSeats && seatsAvailability !== null && (
+                          <Alert className="border-dashed border-amber-300 bg-amber-50">
+                            <AlertTitle className="text-sm font-semibold text-amber-700">
+                              Vượt quá số chỗ còn lại
+                            </AlertTitle>
+                            <AlertDescription className="text-sm text-amber-800">
+                              Hiện chỉ còn {seatsAvailability} chỗ cho lịch khởi hành này. Vui lòng giảm số lượng hoặc
+                              chọn lịch khác.
+                            </AlertDescription>
+                          </Alert>
+                        )}
                         <Separator />
 
                         <div className="space-y-3">
@@ -1892,7 +2079,7 @@ useEffect(() => {
                               className="w-full border-orange-500 text-orange-500 hover:bg-orange-50"
                               size="lg"
                               onClick={handleAddToCart}
-                              disabled={!selectedPackage}
+                              disabled={!selectedPackage || !meetsMinimumParticipants || exceedsAvailableSeats}
                             >
                               {isEditingCartItem ? "Xác nhận" : "Thêm vào giỏ hàng"}
                             </Button>
@@ -1900,7 +2087,7 @@ useEffect(() => {
                               className="w-full bg-orange-500 hover:bg-orange-600"
                               size="lg"
                               onClick={handleBookNow}
-                              disabled={!selectedPackage}
+                              disabled={!selectedPackage || !meetsMinimumParticipants || exceedsAvailableSeats}
                             >
                               Đặt ngay
                             </Button>

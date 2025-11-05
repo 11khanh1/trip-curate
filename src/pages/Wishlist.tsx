@@ -349,6 +349,23 @@ const WishlistPage = () => {
       const firstScheduleStart =
         isRecord(firstSchedule) ? readRecordString(firstSchedule as Record<string, unknown>, "start_date") : undefined;
       const scheduleStartLabel = formatScheduleDate(firstScheduleStart ?? undefined);
+      const scheduleMinParticipants =
+        isRecord(firstSchedule)
+          ? readRecordNumber(firstSchedule as Record<string, unknown>, "min_participants") ??
+            readRecordNumber(firstSchedule as Record<string, unknown>, "minParticipants")
+          : undefined;
+      const scheduleSeatsAvailable =
+        isRecord(firstSchedule)
+          ? readRecordNumber(firstSchedule as Record<string, unknown>, "slots_available") ??
+            readRecordNumber(firstSchedule as Record<string, unknown>, "seats_available") ??
+            readRecordNumber(firstSchedule as Record<string, unknown>, "slotsAvailable")
+          : undefined;
+      const scheduleSeatsTotal =
+        isRecord(firstSchedule)
+          ? readRecordNumber(firstSchedule as Record<string, unknown>, "seats_total") ??
+            readRecordNumber(firstSchedule as Record<string, unknown>, "capacity") ??
+            readRecordNumber(firstSchedule as Record<string, unknown>, "seatsTotal")
+          : undefined;
 
       const rawTourType = safeString(tourRecord?.["type"]);
       const childAgeLimit =
@@ -377,6 +394,19 @@ const WishlistPage = () => {
       const features = [
         tourTypeLabel,
         scheduleStartLabel ? `Khởi hành ${scheduleStartLabel}` : null,
+        typeof scheduleMinParticipants === "number" && scheduleMinParticipants > 0
+          ? `Tối thiểu ${Math.max(1, Math.trunc(scheduleMinParticipants))} khách`
+          : null,
+        typeof scheduleSeatsAvailable === "number"
+          ? typeof scheduleSeatsTotal === "number"
+            ? `Còn ${Math.max(0, Math.trunc(scheduleSeatsAvailable))}/${Math.max(
+                0,
+                Math.trunc(scheduleSeatsTotal),
+              )} chỗ`
+            : `Còn ${Math.max(0, Math.trunc(scheduleSeatsAvailable))} chỗ`
+          : typeof scheduleSeatsTotal === "number"
+          ? `Sức chứa ${Math.max(0, Math.trunc(scheduleSeatsTotal))} chỗ`
+          : null,
         partnerName ? `Đối tác: ${partnerName}` : null,
         childLimitLabel,
         documentLabel,

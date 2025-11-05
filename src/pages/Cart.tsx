@@ -329,6 +329,29 @@ const CartPage = () => {
     [items, selectedIds],
   );
 
+  const selectedItemConstraints = useMemo(() => {
+    if (selectedItems.length !== 1) {
+      return { lacksMinimum: false, exceedsSeats: false, minParticipants: null as number | null, slotsAvailable: null as number | null };
+    }
+    const item = selectedItems[0];
+    const minParticipants =
+      typeof item.minParticipants === "number" && Number.isFinite(item.minParticipants)
+        ? Math.max(1, Math.trunc(item.minParticipants))
+        : null;
+    const slotsAvailable =
+      typeof item.slotsAvailable === "number" && Number.isFinite(item.slotsAvailable)
+        ? Math.max(0, Math.trunc(item.slotsAvailable))
+        : null;
+    const totalGuests = item.adultCount + item.childCount;
+    return {
+      lacksMinimum: minParticipants !== null && totalGuests < minParticipants,
+      exceedsSeats: slotsAvailable !== null && totalGuests > slotsAvailable,
+      minParticipants,
+      slotsAvailable,
+    };
+  }, [selectedItems]);
+  const selectedItemBlocked = selectedItemConstraints.lacksMinimum || selectedItemConstraints.exceedsSeats;
+
   const totalSelectedAmount = useMemo(
     () => selectedItems.reduce((total, item) => total + item.totalPrice, 0),
     [selectedItems],
@@ -402,6 +425,31 @@ const CartPage = () => {
       return;
     }
     const item = selectedItems[0];
+    const minParticipants =
+      typeof item.minParticipants === "number" && Number.isFinite(item.minParticipants)
+        ? Math.max(1, Math.trunc(item.minParticipants))
+        : null;
+    const slotsAvailable =
+      typeof item.slotsAvailable === "number" && Number.isFinite(item.slotsAvailable)
+        ? Math.max(0, Math.trunc(item.slotsAvailable))
+        : null;
+    const totalGuests = item.adultCount + item.childCount;
+    if (minParticipants !== null && totalGuests < minParticipants) {
+      toast({
+        title: "Chưa đủ số khách tối thiểu",
+        description: `Lịch khởi hành này yêu cầu tối thiểu ${minParticipants} khách.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    if (slotsAvailable !== null && totalGuests > slotsAvailable) {
+      toast({
+        title: "Vượt quá số chỗ còn lại",
+        description: `Lịch khởi hành này hiện chỉ còn ${slotsAvailable} chỗ trống.`,
+        variant: "destructive",
+      });
+      return;
+    }
     const params = new URLSearchParams({
       tourId: item.tourId,
       packageId: item.packageId,
@@ -497,12 +545,39 @@ const CartPage = () => {
                           : null;
                       const documentLabel = summarizeDocumentRequirements(item.requiresPassport, item.requiresVisa);
                       const cancellationLabel = summarizeCancellationPolicies(item.cancellationPolicies);
+                      const minParticipants =
+                        typeof item.minParticipants === "number" && Number.isFinite(item.minParticipants)
+                          ? Math.max(1, Math.trunc(item.minParticipants))
+                          : null;
+                      const slotsAvailable =
+                        typeof item.slotsAvailable === "number" && Number.isFinite(item.slotsAvailable)
+                          ? Math.max(0, Math.trunc(item.slotsAvailable))
+                          : null;
+                      const seatsTotal =
+                        typeof item.seatsTotal === "number" && Number.isFinite(item.seatsTotal)
+                          ? Math.max(0, Math.trunc(item.seatsTotal))
+                          : null;
+                      const totalGuests = item.adultCount + item.childCount;
+                      const lacksMinimum = minParticipants !== null && totalGuests < minParticipants;
+                      const exceedsSeatCapacity = slotsAvailable !== null && totalGuests > slotsAvailable;
+                      const minParticipantsLabel =
+                        minParticipants !== null ? `Tối thiểu ${minParticipants} khách` : null;
+                      const seatsLabel =
+                        slotsAvailable !== null
+                          ? seatsTotal !== null
+                            ? `Còn ${slotsAvailable}/${seatsTotal} chỗ`
+                            : `Còn ${slotsAvailable} chỗ`
+                          : seatsTotal !== null
+                          ? `Sức chứa ${seatsTotal} chỗ`
+                          : null;
                       const features = [
                         typeLabel,
                         item.packageName ? `Gói: ${item.packageName}` : null,
                         item.scheduleTitle ? `Khởi hành: ${item.scheduleTitle}` : null,
                         `Người lớn: ${item.adultCount}`,
                         item.childCount > 0 ? `Trẻ em: ${item.childCount}` : null,
+                        minParticipantsLabel,
+                        seatsLabel,
                         childLimitLabel,
                         documentLabel,
                         cancellationLabel,
@@ -617,6 +692,28 @@ const CartPage = () => {
                                   </div>
                                 </div>
                               </div>
+                              {(lacksMinimum || exceedsSeatCapacity) && (
+                                <div className="space-y-2">
+                                  {lacksMinimum && minParticipants !== null && (
+                                    <Alert variant="destructive" className="border-dashed border-destructive/40 bg-destructive/5">
+                                      <AlertTitle className="text-sm font-semibold">Chưa đủ số khách tối thiểu</AlertTitle>
+                                      <AlertDescription className="text-sm">
+                                        Lịch này yêu cầu tối thiểu {minParticipants} khách. Bạn đang chọn {totalGuests}.
+                                      </AlertDescription>
+                                    </Alert>
+                                  )}
+                                  {exceedsSeatCapacity && slotsAvailable !== null && (
+                                    <Alert className="border-dashed border-amber-300 bg-amber-50">
+                                      <AlertTitle className="text-sm font-semibold text-amber-700">
+                                        Vượt quá số chỗ còn lại
+                                      </AlertTitle>
+                                      <AlertDescription className="text-sm text-amber-800">
+                                        Lịch này chỉ còn {slotsAvailable} chỗ. Vui lòng điều chỉnh số lượng hoặc chọn lịch khác.
+                                      </AlertDescription>
+                                    </Alert>
+                                  )}
+                                </div>
+                              )}
                               <div className="flex flex-wrap gap-2">
                                 <Button
                                   variant={isWishlisted ? "secondary" : "outline"}
@@ -698,19 +795,29 @@ const CartPage = () => {
                  
               </CardContent>
               <CardFooter>
-                 <Button
-                    size="lg"
-                    className="w-full bg-orange-500 hover:bg-orange-600"
-                    disabled={selectedItems.length !== 1 || isSyncing}
-                    onClick={handleCheckout}
-                 >
-                    Thanh toán
+                <Button
+                  size="lg"
+                  className="w-full bg-orange-500 hover:bg-orange-600"
+                  disabled={selectedItems.length !== 1 || isSyncing || selectedItemBlocked}
+                  onClick={handleCheckout}
+                >
+                  Thanh toán
                 </Button>
               </CardFooter>
             </Card>
-             {selectedItems.length !== 1 && (
-                <p className="text-xs text-center text-muted-foreground">Vui lòng chọn 1 dịch vụ để tiến hành thanh toán.</p>
-            )}
+            {selectedItems.length !== 1 ? (
+              <p className="text-xs text-center text-muted-foreground">
+                Vui lòng chọn 1 dịch vụ để tiến hành thanh toán.
+              </p>
+            ) : selectedItemBlocked ? (
+              <p className="text-xs text-center text-destructive">
+                {selectedItemConstraints.lacksMinimum && selectedItemConstraints.minParticipants !== null
+                  ? `Lịch khởi hành yêu cầu tối thiểu ${selectedItemConstraints.minParticipants} khách.`
+                  : selectedItemConstraints.exceedsSeats && selectedItemConstraints.slotsAvailable !== null
+                  ? `Lịch khởi hành này chỉ còn ${selectedItemConstraints.slotsAvailable} chỗ trống.`
+                  : "Vui lòng điều chỉnh số lượng hành khách trước khi tiếp tục."}
+              </p>
+            ) : null}
           </div>
         </div>
 

@@ -78,6 +78,16 @@ const CartPopoverContent = () => {
                   <p className="font-semibold text-sm truncate group-hover:text-primary transition-colors">{item.tourTitle}</p>
                   <p className="text-xs text-muted-foreground">{item.packageName}</p>
                   {item.scheduleTitle && <p className="text-xs text-muted-foreground">{item.scheduleTitle}</p>}
+                  {typeof item.minParticipants === "number" && item.minParticipants > 0 && (
+                    <p className="text-xs text-muted-foreground">Tối thiểu {item.minParticipants} khách</p>
+                  )}
+                  {typeof item.slotsAvailable === "number" && (
+                    <p className="text-xs text-muted-foreground">
+                      {typeof item.seatsTotal === "number"
+                        ? `Còn ${item.slotsAvailable}/${item.seatsTotal} chỗ`
+                        : `Còn ${item.slotsAvailable} chỗ`}
+                    </p>
+                  )}
                   <p className="text-xs text-muted-foreground">
                     {item.adultCount} Người lớn
                     {item.childCount > 0 && `, ${item.childCount} Trẻ em`}

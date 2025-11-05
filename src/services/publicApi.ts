@@ -28,8 +28,10 @@ export interface PublicTourSchedule {
   start_date?: string | null;
   end_date?: string | null;
   season_price?: number | null;
+  seats_total?: number | null;
   capacity?: number | null;
   slots_available?: number | null;
+  min_participants?: number | null;
   [key: string]: unknown;
 }
 

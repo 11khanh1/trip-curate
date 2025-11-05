@@ -413,6 +413,61 @@ const BookingDetailPage = () => {
     ? ((booking?.tour as Record<string, unknown> | undefined)?.cancellationPolicies as Array<Record<string, unknown>>)
     : [];
   const cancellationSummaryLabel = formatCancellationSummary(cancellationPoliciesArray);
+  const scheduleRecord = booking.schedule as Record<string, unknown> | undefined;
+  const scheduleMinParticipantsValue = coerceNumber(
+    booking?.schedule?.min_participants ??
+      scheduleRecord?.["min_participants"] ??
+      scheduleRecord?.["minParticipants"],
+  );
+  const scheduleMinParticipants =
+    typeof scheduleMinParticipantsValue === "number" ? Math.max(1, Math.trunc(scheduleMinParticipantsValue)) : null;
+  const scheduleSlotsAvailableValue = coerceNumber(
+    booking?.schedule?.slots_available ??
+      scheduleRecord?.["slots_available"] ??
+      scheduleRecord?.["seats_available"] ??
+      scheduleRecord?.["slotsAvailable"],
+  );
+  const scheduleSlotsAvailable =
+    typeof scheduleSlotsAvailableValue === "number" ? Math.max(0, Math.trunc(scheduleSlotsAvailableValue)) : null;
+  const scheduleSeatsTotalValue = coerceNumber(
+    booking?.schedule?.seats_total ??
+      scheduleRecord?.["seats_total"] ??
+      scheduleRecord?.["seatsTotal"] ??
+      scheduleRecord?.["capacity"],
+  );
+  const scheduleSeatsTotal =
+    typeof scheduleSeatsTotalValue === "number" ? Math.max(0, Math.trunc(scheduleSeatsTotalValue)) : null;
+  const tourEntityId =
+    booking?.tour?.uuid != null
+      ? String(booking.tour.uuid)
+      : booking?.tour?.id != null
+      ? String(booking.tour.id)
+      : null;
+  const bookingRecord = booking as Record<string, unknown>;
+  const cancellationReasonText = coalesceString(
+    bookingRecord?.["cancel_reason"] as string | undefined,
+    bookingRecord?.["cancellation_reason"] as string | undefined,
+    bookingRecord?.["status_reason"] as string | undefined,
+    bookingRecord?.["status_note"] as string | undefined,
+    bookingRecord?.["cancel_reason_text"] as string | undefined,
+    bookingRecord?.["cancel_message"] as string | undefined,
+  );
+  const cancellationReasonCode = coalesceString(
+    bookingRecord?.["cancel_reason_code"] as string | undefined,
+    bookingRecord?.["cancellation_reason_code"] as string | undefined,
+    bookingRecord?.["status_reason_code"] as string | undefined,
+    bookingRecord?.["cancel_code"] as string | undefined,
+  );
+  const cancellationReasonNormalized = cancellationReasonText?.toLowerCase().trim() ?? "";
+  const cancellationCodeNormalized = cancellationReasonCode?.toLowerCase().trim() ?? "";
+  const cancelledDueToUnderbooked =
+    (cancellationCodeNormalized.includes("underbook") ||
+      cancellationCodeNormalized.includes("under_book") ||
+      cancellationCodeNormalized.includes("insufficient")) ||
+    cancellationReasonNormalized.includes("underbook") ||
+    cancellationReasonNormalized.includes("under-book") ||
+    cancellationReasonNormalized.includes("thiếu khách") ||
+    cancellationReasonNormalized.includes("không đủ khách");
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -487,6 +542,20 @@ const BookingDetailPage = () => {
                     <span className="inline-flex items-center gap-2">
                       <Clock className="h-4 w-4 text-primary" />
                       Kết thúc {formatDateTime(booking.schedule.end_date)}
+                    </span>
+                  )}
+                  {scheduleMinParticipants !== null && (
+                    <span className="inline-flex items-center gap-2">
+                      <Users className="h-4 w-4 text-primary" />
+                      Tối thiểu {scheduleMinParticipants} khách
+                    </span>
+                  )}
+                  {scheduleSlotsAvailable !== null && (
+                    <span className="inline-flex items-center gap-2">
+                      <Ticket className="h-4 w-4 text-primary" />
+                      {scheduleSeatsTotal !== null
+                        ? `Còn ${scheduleSlotsAvailable}/${scheduleSeatsTotal} chỗ`
+                        : `Còn ${scheduleSlotsAvailable} chỗ`}
                     </span>
                   )}
                 </div>
@@ -811,10 +880,39 @@ const BookingDetailPage = () => {
               <Alert variant="destructive">
                 <XCircle className="h-4 w-4" />
                 <AlertTitle>Booking đã được hủy</AlertTitle>
-                <AlertDescription>
-                  Hủy lúc {formatDateTime(booking.cancelled_at)}. Nếu cần hỗ trợ hoàn tiền, vui lòng liên hệ đội chăm
-                  sóc khách hàng.
+                <AlertDescription className="space-y-1">
+                  {cancelledDueToUnderbooked ? (
+                    <>
+                      <p>
+                        Lịch khởi hành này bị hủy lúc {formatDateTime(booking.cancelled_at)} do chưa đủ số lượng khách tối thiểu
+                        {scheduleMinParticipants !== null ? ` (${scheduleMinParticipants} khách).` : "."}
+                      </p>
+                      <p>
+                        Chúng tôi sẽ chủ động hỗ trợ hoàn tiền và gợi ý lịch thay thế phù hợp. Bạn cũng có thể chọn một lịch
+                        khác ngay bây giờ.
+                      </p>
+                    </>
+                  ) : (
+                    <p>
+                      Hủy lúc {formatDateTime(booking.cancelled_at)}. Nếu cần hỗ trợ hoàn tiền, vui lòng liên hệ đội chăm sóc
+                      khách hàng.
+                    </p>
+                  )}
                 </AlertDescription>
+                {cancelledDueToUnderbooked && tourEntityId && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => navigate(`/activity/${tourEntityId}?tab=packages`)}
+                    >
+                      Chọn lịch khác
+                    </Button>
+                    <Button size="sm" variant="secondary" onClick={() => navigate("/bookings")}>
+                      Quay lại danh sách booking
+                    </Button>
+                  </div>
+                )}
               </Alert>
             )}
           </div>

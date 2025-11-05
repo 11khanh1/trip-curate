@@ -14,6 +14,7 @@ import {
   Ticket,
   Trash2,
   Users,
+  Info,
 } from "lucide-react";
 import { isAxiosError } from "axios";
 
@@ -133,6 +134,44 @@ const coerceNumber = (value: unknown): number | undefined => {
     if (Number.isFinite(parsed)) return parsed;
   }
   return undefined;
+};
+
+const coerceString = (value: unknown): string | undefined => {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+  return undefined;
+};
+
+const resolveCancellationInfo = (booking: Booking) => {
+  const record = booking as Record<string, unknown>;
+  const reasonText =
+    coerceString(record?.["cancel_reason"]) ??
+    coerceString(record?.["cancellation_reason"]) ??
+    coerceString(record?.["status_reason"]) ??
+    coerceString(record?.["status_note"]) ??
+    coerceString(record?.["cancel_reason_text"]) ??
+    coerceString(record?.["cancel_message"]);
+  const reasonCode =
+    coerceString(record?.["cancel_reason_code"]) ??
+    coerceString(record?.["cancellation_reason_code"]) ??
+    coerceString(record?.["status_reason_code"]) ??
+    coerceString(record?.["cancel_code"]);
+  const normalizedText = reasonText?.toLowerCase() ?? "";
+  const normalizedCode = reasonCode?.toLowerCase() ?? "";
+  const underbooked =
+    (normalizedCode.includes("underbook") ||
+      normalizedCode.includes("under_book") ||
+      normalizedCode.includes("insufficient")) ||
+    normalizedText.includes("underbook") ||
+    normalizedText.includes("under-book") ||
+    normalizedText.includes("thiếu khách") ||
+    normalizedText.includes("không đủ khách");
+  return { reasonText: reasonText ?? null, reasonCode: reasonCode ?? null, underbooked };
 };
 
 const resolveTourTypeLabel = (type?: string | null) => {
@@ -582,6 +621,41 @@ const BookingsList = () => {
                 existingReview && typeof existingReview.comment === "string" ? existingReview.comment : null;
               const reviewRating =
                 existingReview && typeof existingReview.rating === "number" ? existingReview.rating : null;
+              const scheduleRecord = booking.schedule as Record<string, unknown> | undefined;
+              const scheduleMinParticipantsRaw = coerceNumber(
+                booking.schedule?.min_participants ??
+                  scheduleRecord?.["min_participants"] ??
+                  scheduleRecord?.["minParticipants"],
+              );
+              const scheduleMinParticipants =
+                typeof scheduleMinParticipantsRaw === "number"
+                  ? Math.max(1, Math.trunc(scheduleMinParticipantsRaw))
+                  : undefined;
+              const scheduleSeatsAvailableRaw = coerceNumber(
+                booking.schedule?.slots_available ??
+                  scheduleRecord?.["slots_available"] ??
+                  scheduleRecord?.["seats_available"] ??
+                  scheduleRecord?.["slotsAvailable"],
+              );
+              const scheduleSeatsAvailable =
+                typeof scheduleSeatsAvailableRaw === "number"
+                  ? Math.max(0, Math.trunc(scheduleSeatsAvailableRaw))
+                  : undefined;
+              const scheduleSeatsTotalRaw = coerceNumber(
+                booking.schedule?.seats_total ??
+                  scheduleRecord?.["seats_total"] ??
+                  scheduleRecord?.["seatsTotal"] ??
+                  scheduleRecord?.["capacity"],
+              );
+              const scheduleSeatsTotal =
+                typeof scheduleSeatsTotalRaw === "number" ? Math.max(0, Math.trunc(scheduleSeatsTotalRaw)) : undefined;
+              const cancellationInfo = resolveCancellationInfo(booking);
+              const bookingTourId =
+                booking.tour?.uuid != null
+                  ? String(booking.tour.uuid)
+                  : booking.tour?.id != null
+                  ? String(booking.tour.id)
+                  : null;
 
               return (
                 <Card key={booking.id}>
@@ -650,6 +724,25 @@ const BookingsList = () => {
                               {childAgeLabel}
                             </Badge>
                           ) : null}
+                          {typeof scheduleMinParticipants === "number" && scheduleMinParticipants > 0 ? (
+                            <Badge variant="outline" className="text-xs">
+                              Tối thiểu {Math.max(1, Math.trunc(scheduleMinParticipants))} khách
+                            </Badge>
+                          ) : null}
+                          {typeof scheduleSeatsAvailable === "number" ? (
+                            <Badge variant="outline" className="text-xs">
+                              {typeof scheduleSeatsTotal === "number"
+                                ? `Còn ${Math.max(0, Math.trunc(scheduleSeatsAvailable))}/${Math.max(
+                                    0,
+                                    Math.trunc(scheduleSeatsTotal),
+                                  )} chỗ`
+                                : `Còn ${Math.max(0, Math.trunc(scheduleSeatsAvailable))} chỗ`}
+                            </Badge>
+                          ) : typeof scheduleSeatsTotal === "number" ? (
+                            <Badge variant="outline" className="text-xs">
+                              Sức chứa {Math.max(0, Math.trunc(scheduleSeatsTotal))} chỗ
+                            </Badge>
+                          ) : null}
                         </div>
                       );
                     })()}
@@ -667,6 +760,24 @@ const BookingsList = () => {
                         </span>
                       )}
                     </div>
+                    {booking.status === "cancelled" && cancellationInfo.underbooked && (
+                      <div className="rounded-md border border-dashed border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+                        <p>
+                          Lịch khởi hành bị hủy do chưa đủ số khách tối thiểu
+                          {scheduleMinParticipants ? ` (${scheduleMinParticipants} khách).` : "."}
+                        </p>
+                        {cancellationInfo.reasonText && (
+                          <p className="mt-1 text-xs text-destructive/80">Chi tiết: {cancellationInfo.reasonText}</p>
+                        )}
+                        {bookingTourId && (
+                          <div className="mt-2">
+                            <Button variant="outline" size="sm" asChild>
+                              <Link to={`/activity/${bookingTourId}?tab=packages`}>Chọn lịch khác</Link>
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {hasReview ? (
                       <div className="rounded-md border border-amber-200 bg-amber-50/60 p-3 text-foreground">
                         <div className="flex flex-wrap items-center justify-between gap-2">

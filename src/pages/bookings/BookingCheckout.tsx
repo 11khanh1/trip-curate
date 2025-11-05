@@ -137,6 +137,21 @@ const formatDocumentNumberForPayload = (value: string, requireDocument: boolean)
   return digits.length > 0 ? digits : trimmed;
 };
 
+const parseScheduleNumber = (...values: Array<unknown>): number | null => {
+  for (const value of values) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+    if (typeof value === "string") {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+  }
+  return null;
+};
+
 const passengerSchema = z
   .object({
     type: z.enum(["adult", "child"]),
@@ -311,6 +326,38 @@ const BookingCheckout = () => {
     () => schedules.find((schedule) => String(schedule?.id) === scheduleId),
     [schedules, scheduleId],
   );
+
+  const selectedScheduleMinParticipants = useMemo(() => {
+    if (!selectedSchedule) return null;
+    const value = parseScheduleNumber(
+      selectedSchedule?.min_participants,
+      (selectedSchedule as Record<string, unknown>)?.min_participants,
+      (selectedSchedule as Record<string, unknown>)?.minParticipants,
+    );
+    return typeof value === "number" ? Math.max(1, Math.trunc(value)) : null;
+  }, [selectedSchedule]);
+
+  const selectedScheduleSlotsAvailable = useMemo(() => {
+    if (!selectedSchedule) return null;
+    const value = parseScheduleNumber(
+      selectedSchedule?.slots_available,
+      (selectedSchedule as Record<string, unknown>)?.slots_available,
+      (selectedSchedule as Record<string, unknown>)?.slotsAvailable,
+      (selectedSchedule as Record<string, unknown>)?.seats_available,
+    );
+    return typeof value === "number" ? Math.max(0, Math.trunc(value)) : null;
+  }, [selectedSchedule]);
+
+  const selectedScheduleSeatsTotal = useMemo(() => {
+    if (!selectedSchedule) return null;
+    const value = parseScheduleNumber(
+      selectedSchedule?.seats_total,
+      (selectedSchedule as Record<string, unknown>)?.seats_total,
+      (selectedSchedule as Record<string, unknown>)?.seatsTotal,
+      (selectedSchedule as Record<string, unknown>)?.capacity,
+    );
+    return typeof value === "number" ? Math.max(0, Math.trunc(value)) : null;
+  }, [selectedSchedule]);
 
   const tourTitle = useMemo(
     () => tour?.title ?? tour?.name ?? "Tour chưa cập nhật",
@@ -599,6 +646,24 @@ const BookingCheckout = () => {
       return;
     }
 
+    const totalGuests = values.adults + values.children;
+    if (selectedScheduleMinParticipants !== null && totalGuests < selectedScheduleMinParticipants) {
+      toast({
+        title: "Chưa đủ số khách tối thiểu",
+        description: `Lịch khởi hành này yêu cầu tối thiểu ${selectedScheduleMinParticipants} khách.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    if (selectedScheduleSlotsAvailable !== null && totalGuests > selectedScheduleSlotsAvailable) {
+      toast({
+        title: "Vượt quá số chỗ còn lại",
+        description: `Lịch khởi hành này hiện chỉ còn ${selectedScheduleSlotsAvailable} chỗ trống.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     form.clearErrors("passengers");
     let hasPassengerError = false;
 
@@ -796,6 +861,27 @@ const BookingCheckout = () => {
                         {adults} người lớn{children > 0 ? `, ${children} trẻ em` : ""}
                       </span>
                     </p>
+                    {selectedScheduleMinParticipants !== null && (
+                      <p>
+                        Yêu cầu tối thiểu:{" "}
+                        <span className="font-medium text-foreground">
+                          {selectedScheduleMinParticipants} khách
+                        </span>
+                      </p>
+                    )}
+                    {selectedScheduleSlotsAvailable !== null && (
+                      <p>
+                        Số chỗ còn lại:{" "}
+                        <span className="font-medium text-foreground">
+                          {selectedScheduleSeatsTotal !== null
+                            ? `${Math.max(0, selectedScheduleSlotsAvailable)}/${Math.max(
+                                0,
+                                selectedScheduleSeatsTotal,
+                              )} chỗ`
+                            : `${Math.max(0, selectedScheduleSlotsAvailable)} chỗ`}
+                        </span>
+                      </p>
+                    )}
                     {selectedPackage?.name && (
                       <p>
                         Gói dịch vụ: <span className="font-medium text-foreground">{selectedPackage.name}</span>
@@ -1168,7 +1254,7 @@ const BookingCheckout = () => {
                           <span>Người lớn:</span>
                           <span className="font-medium text-foreground">{adults}</span>
                         </div>
-                          <div className="flex justify-between">
+                        <div className="flex justify-between">
                           <span>Trẻ em:</span>
                           <span className="font-medium text-foreground">{children}</span>
                         </div>
@@ -1178,6 +1264,27 @@ const BookingCheckout = () => {
                             {selectedPackage?.name ?? "Chưa chọn"}
                           </span>
                         </div>
+                        {selectedScheduleMinParticipants !== null && (
+                          <div className="flex justify-between">
+                            <span>Tối thiểu:</span>
+                            <span className="font-medium text-foreground">
+                              {selectedScheduleMinParticipants} khách
+                            </span>
+                          </div>
+                        )}
+                        {selectedScheduleSlotsAvailable !== null && (
+                          <div className="flex justify-between">
+                            <span>Còn lại:</span>
+                            <span className="font-medium text-foreground">
+                              {selectedScheduleSeatsTotal !== null
+                                ? `${Math.max(0, selectedScheduleSlotsAvailable)}/${Math.max(
+                                    0,
+                                    selectedScheduleSeatsTotal,
+                                  )} chỗ`
+                                : `${Math.max(0, selectedScheduleSlotsAvailable)} chỗ`}
+                            </span>
+                          </div>
+                        )}
                       </div>
                       <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
                         {tourTypeLabel ? (

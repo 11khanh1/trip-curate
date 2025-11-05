@@ -67,6 +67,7 @@ interface Tour {
     seats_total: number;
     seats_available: number;
     season_price: number;
+    min_participants?: number | null;
   } | null;
   schedules?: Array<{
     id?: string;
@@ -75,6 +76,7 @@ interface Tour {
     seats_total?: number | null;
     seats_available?: number | null;
     season_price?: number | null;
+    min_participants?: number | null;
     created_at?: string | null;
     updated_at?: string | null;
   }>;
@@ -109,6 +111,7 @@ type FormSchedule = {
   seats_total: number;
   seats_available: number;
   season_price: number;
+  min_participants: number;
 };
 
 type FormPackage = {
@@ -175,6 +178,7 @@ const createInitialFormData = (): FormData => ({
       seats_total: 0,
       seats_available: 0,
       season_price: 0,
+      min_participants: 1,
     },
   ],
   packages: [
@@ -297,13 +301,14 @@ export default function PartnerActivities() {
       id: raw.id ? String(raw.id) : undefined,
       start_date: raw.start_date ? String(raw.start_date) : "",
       end_date: raw.end_date ? String(raw.end_date) : "",
-      seats_total: coerceNumber(raw.seats_total, 0) ?? 0,
-      seats_available: coerceNumber(raw.seats_available, 0) ?? 0,
-      season_price: coerceNumber(raw.season_price, 0) ?? 0,
-      created_at: raw.created_at ? String(raw.created_at) : undefined,
-      updated_at: raw.updated_at ? String(raw.updated_at) : undefined,
-    };
+    seats_total: coerceNumber(raw.seats_total, 0) ?? 0,
+    seats_available: coerceNumber(raw.seats_available, 0) ?? 0,
+    season_price: coerceNumber(raw.season_price, 0) ?? 0,
+    min_participants: coerceNumber(raw.min_participants, 1) ?? 1,
+    created_at: raw.created_at ? String(raw.created_at) : undefined,
+    updated_at: raw.updated_at ? String(raw.updated_at) : undefined,
   };
+};
 
   const normalizeTourFromAPI = (t: any): Tour => {
     const media = toStringArray(t.media);
@@ -554,6 +559,10 @@ useEffect(() => { fetchTours(); }, []);
               seats_total: Number(schedule?.seats_total ?? 0),
               seats_available: Number(schedule?.seats_available ?? 0),
               season_price: Number(schedule?.season_price ?? 0),
+              min_participants:
+                typeof schedule?.min_participants === "number" && Number.isFinite(schedule.min_participants)
+                  ? Math.max(1, Math.trunc(schedule.min_participants))
+                  : 1,
             }))
           : editingTour.schedule
           ? [
@@ -568,6 +577,11 @@ useEffect(() => { fetchTours(); }, []);
                 seats_total: Number(editingTour.schedule.seats_total ?? 0),
                 seats_available: Number(editingTour.schedule.seats_available ?? 0),
                 season_price: Number(editingTour.schedule.season_price ?? 0),
+                min_participants:
+                  typeof editingTour.schedule.min_participants === "number" &&
+                  Number.isFinite(editingTour.schedule.min_participants)
+                    ? Math.max(1, Math.trunc(editingTour.schedule.min_participants))
+                    : 1,
               },
             ]
           : defaults.schedules.map((schedule) => ({ ...schedule }));
@@ -756,6 +770,8 @@ const handleMoveItinerary = (index: number, delta: number) => {
           target.seats_available = numeric;
         } else if (field === "season_price") {
           target.season_price = numeric;
+        } else if (field === "min_participants") {
+          target.min_participants = Math.max(1, Math.trunc(numeric) || 1);
         }
       }
       next[index] = target;
@@ -774,6 +790,7 @@ const handleMoveItinerary = (index: number, delta: number) => {
           seats_total: 0,
           seats_available: 0,
           season_price: 0,
+          min_participants: 1,
         },
       ],
     }));
@@ -930,12 +947,17 @@ const handleMoveItinerary = (index: number, delta: number) => {
 
     if (
       formData.schedules.some(
-        (schedule) => !schedule.start_date || !schedule.end_date || schedule.seats_total <= 0,
+        (schedule) =>
+          !schedule.start_date ||
+          !schedule.end_date ||
+          schedule.seats_total <= 0 ||
+          (schedule.min_participants ?? 0) < 1,
       )
     ) {
       toast({
         title: "Lịch khởi hành chưa hợp lệ",
-        description: "Mỗi lịch cần có ngày bắt đầu/kết thúc và tổng số chỗ lớn hơn 0.",
+        description:
+          "Mỗi lịch cần có ngày bắt đầu/kết thúc, tổng số chỗ lớn hơn 0 và số khách tối thiểu tối thiểu là 1.",
         variant: "destructive",
       });
       return;
@@ -976,6 +998,7 @@ const handleMoveItinerary = (index: number, delta: number) => {
         Number(schedule.seats_total) || 0,
       ),
       season_price: Number(schedule.season_price) || 0,
+      min_participants: Math.max(1, Number(schedule.min_participants) || 1),
     }));
 
     const packagesPayload = formData.packages.map((pkg) => ({
@@ -1246,7 +1269,7 @@ const handleMoveItinerary = (index: number, delta: number) => {
                         </Button>
                       </div>
                     </CardHeader>
-                    <CardContent className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                    <CardContent className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
                       <div className="space-y-1">
                         <Label>Ngày bắt đầu</Label>
                         <Input
@@ -1301,6 +1324,21 @@ const handleMoveItinerary = (index: number, delta: number) => {
                             handleScheduleChange(index, "season_price", Number(event.target.value))
                           }
                         />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Số khách tối thiểu</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={schedule.min_participants}
+                          onChange={(event) =>
+                            handleScheduleChange(index, "min_participants", Number(event.target.value))
+                          }
+                          required
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Lịch sẽ được duy trì khi đạt từ {schedule.min_participants || 1} khách trở lên.
+                        </p>
                       </div>
                     </CardContent>
                   </Card>
@@ -1710,7 +1748,7 @@ const handleMoveItinerary = (index: number, delta: number) => {
                       {selectedTour.schedules.map((schedule, index) => (
                         <div
                           key={schedule?.id ?? index}
-                          className="grid grid-cols-2 gap-4 rounded-lg border border-dashed border-primary/30 p-3 md:grid-cols-3"
+                          className="grid grid-cols-2 gap-4 rounded-lg border border-dashed border-primary/30 p-3 md:grid-cols-3 lg:grid-cols-6"
                         >
                           <div>
                             <p className="text-sm font-semibold text-muted-foreground">Ngày đi</p>
@@ -1739,6 +1777,14 @@ const handleMoveItinerary = (index: number, delta: number) => {
                           <div>
                             <p className="text-sm font-semibold text-muted-foreground">Còn trống</p>
                             <p className="font-medium text-foreground">{schedule?.seats_available ?? "—"}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-muted-foreground">Số khách tối thiểu</p>
+                            <p className="font-medium text-foreground">
+                              {typeof schedule?.min_participants === "number"
+                                ? Math.max(1, schedule.min_participants)
+                                : "—"}
+                            </p>
                           </div>
                         </div>
                       ))}

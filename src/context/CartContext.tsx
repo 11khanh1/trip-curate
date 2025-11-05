@@ -35,6 +35,9 @@ export interface CartItem {
   scheduleId?: string | null;
   scheduleTitle?: string | null;
   thumbnail?: string | null;
+  minParticipants?: number | null;
+  slotsAvailable?: number | null;
+  seatsTotal?: number | null;
   adultCount: number;
   childCount: number;
   adultPrice: number;
@@ -51,6 +54,9 @@ export interface CartItemInput {
   scheduleId?: string | null;
   scheduleTitle?: string | null;
   thumbnail?: string | null;
+  minParticipants?: number | null;
+  slotsAvailable?: number | null;
+  seatsTotal?: number | null;
   adultCount: number;
   childCount: number;
   adultPrice: number;
@@ -272,6 +278,24 @@ const mapCartApiItemToCartItem = (item: CartApiItem): CartItem => {
     scheduleData?.uuid,
   );
 
+  const scheduleMinParticipantsValue = firstNumber(
+    scheduleData?.min_participants,
+    scheduleData?.minParticipants,
+    (scheduleData as Record<string, unknown> | undefined)?.minimum_participants,
+  );
+  const scheduleSlotsAvailableValue = firstNumber(
+    scheduleData?.slots_available,
+    scheduleData?.seats_available,
+    scheduleData?.slotsAvailable,
+    scheduleData?.seatsAvailable,
+  );
+  const scheduleSeatsTotalValue = firstNumber(
+    scheduleData?.seats_total,
+    scheduleData?.capacity,
+    scheduleData?.seatsTotal,
+    scheduleData?.capacity_total,
+  );
+
   return {
     id: apiId ?? `${tourId}-${packageId}-${Math.random().toString(36).slice(2, 10)}`,
     apiId: apiId ?? null,
@@ -307,6 +331,18 @@ const mapCartApiItemToCartItem = (item: CartApiItem): CartItem => {
       scheduleData?.name,
     ),
     thumbnail: thumbnail ?? undefined,
+    minParticipants:
+      typeof scheduleMinParticipantsValue === "number"
+        ? Math.max(1, Math.trunc(scheduleMinParticipantsValue))
+        : null,
+    slotsAvailable:
+      typeof scheduleSlotsAvailableValue === "number"
+        ? Math.max(0, Math.trunc(scheduleSlotsAvailableValue))
+        : null,
+    seatsTotal:
+      typeof scheduleSeatsTotalValue === "number"
+        ? Math.max(0, Math.trunc(scheduleSeatsTotalValue))
+        : null,
     adultCount,
     childCount,
     adultPrice,
@@ -442,12 +478,38 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         return Promise.reject(errorInstance);
       }
 
+      const normalizedAdults = Math.max(0, Math.round(input.adultCount));
+      const normalizedChildren = Math.max(0, Math.round(input.childCount));
+      const totalRequested = normalizedAdults + normalizedChildren;
+      const minParticipantsValue =
+        typeof input.minParticipants === "number" && Number.isFinite(input.minParticipants)
+          ? Math.max(1, Math.trunc(input.minParticipants))
+          : null;
+      if (minParticipantsValue !== null && totalRequested < minParticipantsValue) {
+        const errorInstance = new Error(
+          `Lịch khởi hành này yêu cầu tối thiểu ${minParticipantsValue} khách, vui lòng tăng số lượng.`,
+        );
+        setError(errorInstance);
+        return Promise.reject(errorInstance);
+      }
+      const slotsAvailableValue =
+        typeof input.slotsAvailable === "number" && Number.isFinite(input.slotsAvailable)
+          ? Math.max(0, Math.trunc(input.slotsAvailable))
+          : null;
+      if (slotsAvailableValue !== null && totalRequested > slotsAvailableValue) {
+        const errorInstance = new Error(
+          `Lịch khởi hành này hiện chỉ còn ${slotsAvailableValue} chỗ. Vui lòng điều chỉnh số lượng.`,
+        );
+        setError(errorInstance);
+        return Promise.reject(errorInstance);
+      }
+
       const payload = {
         tour_id: input.tourId,
         package_id: input.packageId,
         schedule_id: input.scheduleId ?? null,
-        adults: Math.max(0, Math.round(input.adultCount)),
-        children: Math.max(0, Math.round(input.childCount)),
+        adults: normalizedAdults,
+        children: normalizedChildren,
       };
 
       setIsSyncing(true);
@@ -465,7 +527,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         setIsSyncing(false);
       }
     },
-    [currentUser, applyResource, resolveApiItemId],
+    [currentUser, applyResource],
   );
 
   const updateItemQuantity = useCallback(
@@ -476,9 +538,40 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         return Promise.reject(errorInstance);
       }
 
+      const normalizedAdults = Math.max(0, Math.round(params.adults));
+      const normalizedChildren = Math.max(0, Math.round(params.children));
+      const totalRequested = normalizedAdults + normalizedChildren;
+      const targetItem =
+        itemsRef.current.find((item) => item.id === id) ??
+        itemsRef.current.find((item) => item.apiId === id);
+      if (targetItem) {
+        const minParticipantsValue =
+          typeof targetItem.minParticipants === "number" && Number.isFinite(targetItem.minParticipants)
+            ? Math.max(1, Math.trunc(targetItem.minParticipants))
+            : null;
+        if (minParticipantsValue !== null && totalRequested < minParticipantsValue) {
+          const errorInstance = new Error(
+            `Lịch khởi hành yêu cầu tối thiểu ${minParticipantsValue} khách, vui lòng tăng số lượng.`,
+          );
+          setError(errorInstance);
+          return Promise.reject(errorInstance);
+        }
+        const slotsAvailableValue =
+          typeof targetItem.slotsAvailable === "number" && Number.isFinite(targetItem.slotsAvailable)
+            ? Math.max(0, Math.trunc(targetItem.slotsAvailable))
+            : null;
+        if (slotsAvailableValue !== null && totalRequested > slotsAvailableValue) {
+          const errorInstance = new Error(
+            `Lịch khởi hành này chỉ còn ${slotsAvailableValue} chỗ. Vui lòng điều chỉnh số lượng.`,
+          );
+          setError(errorInstance);
+          return Promise.reject(errorInstance);
+        }
+      }
+
       const payload = {
-        adults: Math.max(0, Math.round(params.adults)),
-        children: Math.max(0, Math.round(params.children)),
+        adults: normalizedAdults,
+        children: normalizedChildren,
       };
 
       setIsSyncing(true);
