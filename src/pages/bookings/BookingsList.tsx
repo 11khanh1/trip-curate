@@ -1,17 +1,48 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Calendar, ChevronRight, Clock, MapPin, Ticket, Users, Phone } from "lucide-react";
+import {
+  Calendar,
+  ChevronRight,
+  Clock,
+  Loader2,
+  MapPin,
+  MessageSquare,
+  Pencil,
+  Phone,
+  Star,
+  Ticket,
+  Trash2,
+  Users,
+} from "lucide-react";
 import { isAxiosError } from "axios";
 
 import TravelHeader from "@/components/TravelHeader";
 import Footer from "@/components/Footer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 
 import { fetchBookings, cancelBooking, type Booking, type BookingListResponse } from "@/services/bookingApi";
+import {
+  createReview,
+  deleteReview,
+  updateReview,
+  type CreateReviewPayload,
+  type DeleteReviewResponse,
+  type ReviewResponse,
+  type UpdateReviewPayload,
+} from "@/services/reviewApi";
 import { useToast } from "@/hooks/use-toast";
 
 const STATUS_OPTIONS: Array<{ value: string; label: string }> = [
@@ -157,6 +188,65 @@ const formatDate = (value?: string | null) => {
   });
 };
 
+const STAR_VALUES = [1, 2, 3, 4, 5] as const;
+const REVIEW_COMMENT_MAX_LENGTH = 500;
+
+const clampRating = (value: number) => {
+  if (!Number.isFinite(value)) return 5;
+  return Math.min(5, Math.max(1, Math.round(value)));
+};
+
+const renderStaticStars = (rating?: number | null) => {
+  const numericRating = typeof rating === "number" && Number.isFinite(rating) ? rating : 0;
+  const normalized = numericRating > 0 ? Math.min(5, Math.max(1, Math.round(numericRating))) : 0;
+  return (
+    <div className="flex items-center gap-1 text-amber-500">
+      {STAR_VALUES.map((star) => (
+        <Star
+          key={star}
+          className={`h-4 w-4 transition-colors ${
+            star <= normalized ? "fill-amber-500 text-amber-500" : "text-muted-foreground"
+          }`}
+        />
+      ))}
+    </div>
+  );
+};
+
+const resolveApiErrorMessage = (error: unknown, fallback: string) => {
+  if (isAxiosError(error)) {
+    const payload = error.response?.data as { message?: unknown; error?: unknown } | undefined;
+    const messageCandidate = [payload?.message, payload?.error].find(
+      (value) => typeof value === "string" && value.trim().length > 0,
+    );
+    if (messageCandidate && typeof messageCandidate === "string") {
+      return messageCandidate;
+    }
+  } else if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message;
+  }
+  return fallback;
+};
+
+type ReviewMode = "create" | "edit";
+
+interface ReviewDialogState {
+  booking: Booking | null;
+  mode: ReviewMode;
+  rating: number;
+  comment: string;
+}
+
+interface UpdateReviewVariables {
+  reviewId: string | number;
+  payload: UpdateReviewPayload;
+}
+
+interface DeleteReviewVariables {
+  bookingId: string | number;
+  reviewId: string | number;
+}
+
 const BookingsSkeleton = () => (
   <div className="space-y-4">
     {Array.from({ length: 3 }).map((_, index) => (
@@ -204,6 +294,139 @@ const BookingsList = () => {
   const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [reviewDialog, setReviewDialog] = useState<ReviewDialogState>({
+    booking: null,
+    mode: "create",
+    rating: 5,
+    comment: "",
+  });
+
+  const resetReviewDialog = () =>
+    setReviewDialog({
+      booking: null,
+      mode: "create",
+      rating: 5,
+      comment: "",
+    });
+
+  const createReviewMutation = useMutation<ReviewResponse, unknown, CreateReviewPayload>({
+    mutationFn: createReview,
+    onSuccess: (response) => {
+      toast({
+        title: "Cảm ơn bạn đã đánh giá",
+        description: response?.message ?? "Đánh giá của bạn đã được ghi nhận.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["bookings"] });
+      resetReviewDialog();
+    },
+    onError: (error) => {
+      toast({
+        variant: "destructive",
+        title: "Không thể gửi đánh giá",
+        description: resolveApiErrorMessage(error, "Vui lòng thử lại sau."),
+      });
+    },
+  });
+
+  const updateReviewMutation = useMutation<ReviewResponse, unknown, UpdateReviewVariables>({
+    mutationFn: ({ reviewId, payload }) => updateReview(reviewId, payload),
+    onSuccess: (response) => {
+      toast({
+        title: "Đã cập nhật đánh giá",
+        description: response?.message ?? "Cảm ơn bạn đã cập nhật phản hồi.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["bookings"] });
+      resetReviewDialog();
+    },
+    onError: (error) => {
+      toast({
+        variant: "destructive",
+        title: "Không thể cập nhật đánh giá",
+        description: resolveApiErrorMessage(error, "Vui lòng thử lại sau."),
+      });
+    },
+  });
+
+  const deleteReviewMutation = useMutation<DeleteReviewResponse, unknown, DeleteReviewVariables>({
+    mutationFn: ({ reviewId }) => deleteReview(reviewId),
+    onSuccess: (response, variables) => {
+      toast({
+        title: "Đã xóa đánh giá",
+        description: response?.message ?? "Đánh giá đã được gỡ bỏ.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["bookings"] });
+      if (reviewDialog.booking && String(reviewDialog.booking.id) === String(variables.bookingId)) {
+        resetReviewDialog();
+      }
+    },
+    onError: (error) => {
+      toast({
+        variant: "destructive",
+        title: "Không thể xóa đánh giá",
+        description: resolveApiErrorMessage(error, "Vui lòng thử lại sau."),
+      });
+    },
+  });
+
+  const isReviewDialogOpen = reviewDialog.booking !== null;
+  const isSubmittingReview = createReviewMutation.isPending || updateReviewMutation.isPending;
+  const isDeletingReview = deleteReviewMutation.isPending;
+
+  const isDeletingReviewFor = (bookingId: string | number) => {
+    if (!isDeletingReview) return false;
+    if (!deleteReviewMutation.variables) return false;
+    return String(deleteReviewMutation.variables.bookingId) === String(bookingId);
+  };
+
+  const openReviewDialog = (booking: Booking, mode: ReviewMode) => {
+    setReviewDialog({
+      booking,
+      mode,
+      rating: mode === "edit" ? clampRating(booking.review?.rating ?? 5) : 5,
+      comment:
+        mode === "edit" && typeof booking.review?.comment === "string" ? booking.review.comment ?? "" : "",
+    });
+  };
+
+  const handleReviewSubmit = () => {
+    if (!reviewDialog.booking) return;
+    const sanitizedComment = reviewDialog.comment.trim();
+    if (reviewDialog.mode === "edit") {
+      const reviewId = reviewDialog.booking.review?.id;
+      if (!reviewId) {
+        toast({
+          variant: "destructive",
+          title: "Không tìm thấy đánh giá",
+          description: "Vui lòng tải lại danh sách rồi thử lại.",
+        });
+        return;
+      }
+      updateReviewMutation.mutate({
+        reviewId,
+        payload: {
+          rating: clampRating(reviewDialog.rating),
+          comment: sanitizedComment.length > 0 ? sanitizedComment : undefined,
+        },
+      });
+      return;
+    }
+
+    createReviewMutation.mutate({
+      booking_id: String(reviewDialog.booking.id),
+      rating: clampRating(reviewDialog.rating),
+      comment: sanitizedComment.length > 0 ? sanitizedComment : undefined,
+    });
+  };
+
+  const handleDeleteReview = (booking: Booking) => {
+    const reviewId = booking.review?.id;
+    if (!reviewId) return;
+    if (!window.confirm("Bạn có chắc chắn muốn xóa đánh giá này?")) return;
+    deleteReviewMutation.mutate({
+      bookingId: booking.id,
+      reviewId,
+    });
+  };
 
   const cancelMutation = useMutation({
     mutationFn: (bookingId: string) => cancelBooking(bookingId),
@@ -272,7 +495,7 @@ const BookingsList = () => {
         page,
         per_page: 10,
       }),
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
   });
 
   const bookings = data?.data ?? [];
@@ -287,6 +510,13 @@ const BookingsList = () => {
     if (!total) return "";
     return `${total} booking`;
   }, [total]);
+
+  const selectedBookingForReview = reviewDialog.booking;
+  const selectedTourName =
+    selectedBookingForReview?.tour?.title ??
+    selectedBookingForReview?.tour?.name ??
+    selectedBookingForReview?.package?.name ??
+    "Tour";
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -343,6 +573,15 @@ const BookingsList = () => {
               const canCancel =
                 booking.can_cancel ??
                 (booking.status === "pending" || booking.status === "confirmed");
+              const normalizedStatus =
+                typeof booking.status === "string" ? booking.status.toLowerCase() : "";
+              const reviewEligible = normalizedStatus === "confirmed" || normalizedStatus === "completed";
+              const existingReview = booking.review ?? null;
+              const hasReview = Boolean(existingReview && existingReview.id);
+              const reviewComment =
+                existingReview && typeof existingReview.comment === "string" ? existingReview.comment : null;
+              const reviewRating =
+                existingReview && typeof existingReview.rating === "number" ? existingReview.rating : null;
 
               return (
                 <Card key={booking.id}>
@@ -428,6 +667,53 @@ const BookingsList = () => {
                         </span>
                       )}
                     </div>
+                    {hasReview ? (
+                      <div className="rounded-md border border-amber-200 bg-amber-50/60 p-3 text-foreground">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            {renderStaticStars(reviewRating)}
+                            {reviewRating !== null ? (
+                              <span className="text-sm font-semibold text-amber-600">{reviewRating}/5</span>
+                            ) : null}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 gap-1 text-amber-600 hover:text-amber-700"
+                              onClick={() => openReviewDialog(booking, "edit")}
+                              disabled={isSubmittingReview}
+                            >
+                              <Pencil className="h-4 w-4" />
+                              Sửa
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 gap-1 text-destructive hover:text-destructive/80"
+                              onClick={() => handleDeleteReview(booking)}
+                              disabled={isDeletingReviewFor(booking.id)}
+                            >
+                              {isDeletingReviewFor(booking.id) ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                              Xóa
+                            </Button>
+                          </div>
+                        </div>
+                        {reviewComment && (
+                          <p className="mt-2 text-sm text-muted-foreground">{reviewComment}</p>
+                        )}
+                      </div>
+                    ) : reviewEligible ? (
+                      <div className="rounded-md border border-dashed border-primary/30 bg-primary/5 p-3 text-xs text-primary">
+                        Đơn đã được đối tác xác nhận, bạn có thể gửi đánh giá sau khi hoàn tất chuyến đi.
+                      </div>
+                    ) : null}
                   </CardContent>
                   <CardFooter className="flex flex-col gap-3 border-t pt-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
                     <div className="space-y-1">
@@ -457,6 +743,19 @@ const BookingsList = () => {
                       )}
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
+                      {reviewEligible && !hasReview && (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          className="gap-1"
+                          onClick={() => openReviewDialog(booking, "create")}
+                          disabled={isSubmittingReview}
+                        >
+                          <MessageSquare className="h-4 w-4" />
+                          Đánh giá tour
+                        </Button>
+                      )}
                       {canCancel && (
                         <Button
                           type="button"
@@ -497,6 +796,102 @@ const BookingsList = () => {
           </div>
         )}
       </main>
+      <Dialog open={isReviewDialogOpen} onOpenChange={(open) => (!open ? resetReviewDialog() : undefined)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader className="space-y-2 text-left">
+            <DialogTitle className="text-xl font-semibold text-foreground">
+              {reviewDialog.mode === "edit" ? "Chỉnh sửa đánh giá" : "Đánh giá tour"}
+              {selectedTourName ? (
+                <span className="ml-1 text-base font-medium text-muted-foreground">({selectedTourName})</span>
+              ) : null}
+            </DialogTitle>
+            <DialogDescription className="text-sm leading-relaxed text-muted-foreground">
+              Chia sẻ cảm nhận của bạn để giúp chúng tôi và các khách du lịch khác có thêm thông tin.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            <div className="rounded-2xl border border-primary/10 bg-gradient-to-br from-primary/5 via-background to-background p-4 shadow-sm">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-medium text-primary uppercase tracking-wide">Điểm chất lượng</p>
+                  <p className="text-sm text-muted-foreground">
+                    Nhấn để chọn số sao phản ánh đúng trải nghiệm của bạn.
+                  </p>
+                </div>
+                <div className="text-2xl font-semibold text-foreground">
+                  {clampRating(reviewDialog.rating).toFixed(1)}/5
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-1 rounded-full border border-amber-300/50 bg-amber-50 px-3 py-2">
+                  {STAR_VALUES.map((star) => {
+                    const active = star <= clampRating(reviewDialog.rating);
+                    return (
+                      <button
+                        key={star}
+                        type="button"
+                        aria-label={`Chọn ${star} sao`}
+                        className={`rounded-full p-1 transition focus:outline-none ${
+                          active ? "text-amber-500" : "text-muted-foreground hover:text-amber-400"
+                        }`}
+                        onClick={() =>
+                          setReviewDialog((prev) => ({
+                            ...prev,
+                            rating: star,
+                          }))
+                        }
+                      >
+                        <Star className={`h-7 w-7 ${active ? "fill-amber-500" : ""}`} />
+                      </button>
+                    );
+                  })}
+                </div>
+                <span className="text-sm font-medium text-muted-foreground">
+                  {clampRating(reviewDialog.rating)} sao
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-foreground">Nhận xét (không bắt buộc)</p>
+              <Textarea
+                rows={5}
+                placeholder="Bạn ấn tượng điều gì nhất? Dịch vụ có điểm nào cần cải thiện?"
+                value={reviewDialog.comment}
+                maxLength={REVIEW_COMMENT_MAX_LENGTH}
+                onChange={(event) =>
+                  setReviewDialog((prev) => ({
+                    ...prev,
+                    comment: event.target.value.slice(0, REVIEW_COMMENT_MAX_LENGTH),
+                  }))
+                }
+              />
+              <p className="text-right text-xs text-muted-foreground">
+                {reviewDialog.comment.length}/{REVIEW_COMMENT_MAX_LENGTH} ký tự
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              variant="outline"
+              onClick={() => resetReviewDialog()}
+              disabled={isSubmittingReview}
+              className="h-10 px-6"
+            >
+              Hủy
+            </Button>
+            <Button
+              onClick={handleReviewSubmit}
+              disabled={isSubmittingReview}
+              className="h-10 px-6 bg-[#ff5b00] text-white hover:bg-[#e24c00]"
+            >
+              {isSubmittingReview ? "Đang gửi..." : reviewDialog.mode === "edit" ? "Lưu thay đổi" : "Gửi đánh giá"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Footer />
     </div>
   );

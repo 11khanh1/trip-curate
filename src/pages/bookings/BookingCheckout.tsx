@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -64,6 +64,7 @@ interface SepayPanelState {
 const normalizeStatus = (status?: string | null) => (status ?? "").toString().trim().toLowerCase();
 const SUCCESS_STATUSES = new Set(["success", "paid", "completed"]);
 const PENDING_STATUSES = new Set(["pending", "processing", "waiting"]);
+
 
 const formatCurrency = (value?: number | null, currency = "VND") => {
   if (typeof value !== "number") return "Đang cập nhật";
@@ -183,6 +184,7 @@ type BookingFormValues = z.infer<typeof bookingSchema>;
 
 const BookingCheckout = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { toast } = useToast();
   const { removeItem } = useCart();
   const { trackEvent } = useAnalytics();
@@ -391,6 +393,20 @@ const BookingCheckout = () => {
         scheduleRecommendationRefresh();
       }
 
+      const invalidatePromises: Array<Promise<unknown>> = [
+        queryClient.invalidateQueries({ queryKey: ["public-tours"] }),
+        queryClient.invalidateQueries({ queryKey: ["public-tours-trending"] }),
+        queryClient.invalidateQueries({ queryKey: ["trending-tours"] }),
+        queryClient.invalidateQueries({ queryKey: ["user-bookings"] }),
+        queryClient.invalidateQueries({ queryKey: ["cart"] }),
+      ];
+      if (resolvedTourEntityId) {
+        invalidatePromises.push(
+          queryClient.invalidateQueries({ queryKey: ["tour-detail", resolvedTourEntityId] }),
+        );
+      }
+      void Promise.all(invalidatePromises);
+
       if (cartItemId) {
         await removeItem(cartItemId);
       }
@@ -415,24 +431,8 @@ const BookingCheckout = () => {
                 : totalPrice;
             const currencyFromResponse =
               (bookingEntity?.currency && String(bookingEntity.currency).trim()) || displayCurrency;
-            const qrImage =
-              deduceSepayQrImage(response) ??
-              deduceSepayQrImage(bookingEntity) ??
-              deriveQrFromPaymentUrl(directPaymentUrl);
+            
 
-            setSepayPanel({
-              bookingId: String(bookingIdentifier),
-              paymentUrl: directPaymentUrl,
-              orderCode: derivedOrderCode ?? undefined,
-              bookingCode,
-              paymentId: response.payment_id ? String(response.payment_id) : undefined,
-              amount: amountFromResponse,
-              currency: currencyFromResponse,
-              qrImage: qrImage ?? null,
-              providerName,
-            });
-            setShouldPollSepayStatus(true);
-            return;
           }
 
           const derivedOrderCode =
@@ -1069,7 +1069,7 @@ const BookingCheckout = () => {
                         </p>
                       ) : (
                         <>
-                          <Alert variant="secondary">
+                          <Alert>
                             <AlertTitle>Yêu cầu khi tham gia</AlertTitle>
                             <AlertDescription className="space-y-1">
                               {tourTypeLabel ? <p>Loại tour: {tourTypeLabel}</p> : null}

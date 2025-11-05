@@ -14,8 +14,9 @@ interface TourCardProps {
   title: string;
   location: string;
   image: string;
-  rating: number;
-  reviewCount: number;
+  rating?: number | null;
+  reviewCount?: number | null;
+  bookingsCount?: number | null;
   price: number;
   originalPrice?: number;
   discount?: number;
@@ -35,6 +36,7 @@ const TourCard = ({
   price,
   originalPrice,
   discount,
+  bookingsCount,
   duration,
   category,
   isPopular,
@@ -191,6 +193,35 @@ const TourCard = ({
     Number.isFinite(originalPrice) &&
     hasPrice &&
     originalPrice > price;
+
+  const resolvedRating =
+    typeof rating === "number" && Number.isFinite(rating) ? Math.round(rating * 10) / 10 : null;
+  const ratingLabel = resolvedRating !== null ? resolvedRating.toFixed(1) : "Mới";
+  const resolvedReviewCount =
+    typeof reviewCount === "number" && Number.isFinite(reviewCount) && reviewCount > 0
+      ? reviewCount
+      : null;
+  const reviewLabel = resolvedReviewCount !== null ? resolvedReviewCount.toLocaleString("vi-VN") : null;
+
+  const normalizedBookingCount =
+    typeof bookingsCount === "number" && Number.isFinite(bookingsCount) && bookingsCount > 0
+      ? bookingsCount
+      : null;
+  const formatBookingCount = () => {
+    if (normalizedBookingCount === null) {
+      return "Sắp ra mắt";
+    }
+    if (normalizedBookingCount >= 1_000_000) {
+      const million = normalizedBookingCount / 1_000_000;
+      return `${million.toFixed(million >= 10 ? 0 : 1).replace(/\.0$/, "")}M+ Đã đặt`;
+    }
+    if (normalizedBookingCount >= 1_000) {
+      const thousand = normalizedBookingCount / 1_000;
+      return `${thousand.toFixed(thousand >= 10 ? 0 : 1).replace(/\.0$/, "")}K+ Đã đặt`;
+    }
+    return `${normalizedBookingCount.toLocaleString("vi-VN")} lượt đặt`;
+  };
+
   return (
     <Link to={`/activity/${id}`}>
       <Card className="overflow-hidden hover:shadow-hover transition-all duration-300 group cursor-pointer h-full min-h-[440px] flex flex-col">
@@ -256,13 +287,15 @@ const TourCard = ({
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-1">
             <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-            <span className="font-medium text-sm">{rating}</span>
-            <span className="text-sm text-muted-foreground">({reviewCount.toLocaleString()})</span>
+            <span className="font-medium text-sm">{ratingLabel}</span>
+            {reviewLabel && (
+              <span className="text-sm text-muted-foreground">({reviewLabel})</span>
+            )}
           </div>
           
           <div className="flex items-center space-x-2">
             <Users className="h-4 w-4 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">{(Math.random() * 100 + 10).toFixed(0)}K+ Đã đặt</span>
+            <span className="text-xs text-muted-foreground">{formatBookingCount()}</span>
           </div>
         </div>
         

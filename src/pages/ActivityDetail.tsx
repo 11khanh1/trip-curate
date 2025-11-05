@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef, useCallback, FormEvent } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { useParams, Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import TravelHeader from "@/components/TravelHeader";
@@ -44,14 +44,7 @@ import {
 import TourCard from "@/components/TourCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   fetchTourDetail,
   fetchTrendingTours,
@@ -68,24 +61,11 @@ import { useRecommendationRealtimeRefresh } from "@/hooks/useRecommendationRealt
 import { getTourStartingPrice } from "@/lib/tour-utils";
 import { addWishlistItem, removeWishlistItem, type WishlistItem } from "@/services/wishlistApi";
 import {
-  createReview,
-  deleteReview,
   fetchTourReviews,
-  type CreateReviewPayload,
-  type ReviewResponse,
   type TourReview,
   type TourReviewListResponse,
-  updateReview,
 } from "@/services/reviewApi";
-import {
-  fetchBookings,
-  type Booking,
-  type BookingListResponse,
-  type BookingReviewSummary,
-} from "@/services/bookingApi";
 import SimilarTourRecommendations from "@/components/recommendations/SimilarTourRecommendations";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 
 
 // ====================================================================================
@@ -114,6 +94,7 @@ type RelatedActivity = {
   image: string;
   rating: number;
   reviewCount: number;
+  bookingsCount?: number | null;
   price: number;
   originalPrice?: number;
   discount?: number;
@@ -180,8 +161,6 @@ interface ActivityDetailView {
   };
 }
 
-type EditableReview = Pick<TourReview, "id" | "rating" | "comment">;
-
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1529651737248-dad5eeb48697?auto=format&fit=crop&w=1600&q=80";
 
 const formatDate = (value?: string | null) => {
@@ -232,6 +211,43 @@ const resolveTourTypeLabel = (type?: TourType | string | null) => {
   return type.toString();
 };
 
+const toIdString = (value: unknown): string | null => {
+  if (typeof value === "string" && value.trim().length > 0) return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return null;
+};
+
+const collectReviewTourIds = (review: TourReview): string[] => {
+  const identifiers = new Set<string>();
+  const pushId = (value: unknown) => {
+    const id = toIdString(value);
+    if (id) identifiers.add(id);
+  };
+
+  if (review.booking) {
+    pushId(review.booking.tour_id);
+    const bookingRecord = review.booking as Record<string, unknown>;
+    pushId(bookingRecord?.["tourId"]);
+    pushId(bookingRecord?.["tour_uuid"]);
+    const bookingTour = bookingRecord?.["tour"] as Record<string, unknown> | undefined;
+    pushId(bookingTour?.["id"]);
+    pushId(bookingTour?.["uuid"]);
+  }
+
+  if (review.tour_schedule) {
+    pushId(review.tour_schedule.tour_id);
+    const scheduleRecord = review.tour_schedule as Record<string, unknown>;
+    pushId(scheduleRecord?.["tour_uuid"]);
+  }
+
+  const reviewRecord = review as Record<string, unknown>;
+  pushId(reviewRecord?.["tour_id"]);
+  pushId(reviewRecord?.["tourId"]);
+  pushId(reviewRecord?.["tour_uuid"]);
+
+  return Array.from(identifiers);
+};
+
 const formatDocumentRequirement = (requiresPassport?: boolean | null, requiresVisa?: boolean | null) => {
   const needsPassport = requiresPassport === true;
   const needsVisa = requiresVisa === true;
@@ -274,6 +290,51 @@ const extractPagination = (meta?: Record<string, unknown>) => {
   };
 };
 
+const extractReviewsFromPage = (page: unknown): TourReview[] => {
+  if (!page || typeof page !== "object") return [];
+  const record = page as Record<string, unknown>;
+  const reviewsField = record.reviews;
+  if (Array.isArray(reviewsField)) {
+    return reviewsField as TourReview[];
+  }
+  if (reviewsField && typeof reviewsField === "object") {
+    const data = (reviewsField as Record<string, unknown>).data;
+    if (Array.isArray(data)) {
+      return data as TourReview[];
+    }
+  }
+  const candidates = [
+    record.data,
+    record.items,
+    record.results,
+    record.list,
+    record.entries,
+  ];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      return candidate as TourReview[];
+    }
+  }
+  return [];
+};
+
+const extractRatingMetaFromPage = (page: unknown): { average?: number | null; count?: number | null } | null => {
+  if (!page || typeof page !== "object") return null;
+  const record = page as Record<string, unknown>;
+  const ratingField = record.rating;
+  if (ratingField && typeof ratingField === "object") {
+    return ratingField as { average?: number | null; count?: number | null };
+  }
+  const reviewsField = record.reviews;
+  if (reviewsField && typeof reviewsField === "object") {
+    const nestedRating = (reviewsField as Record<string, unknown>).rating;
+    if (nestedRating && typeof nestedRating === "object") {
+      return nestedRating as { average?: number | null; count?: number | null };
+    }
+  }
+  return null;
+};
+
 const resolveErrorMessage = (error: unknown) => {
   if (error instanceof Error) return error.message;
   if (error && typeof error === "object") {
@@ -312,13 +373,26 @@ const toRelatedActivity = (tour: PublicTour): RelatedActivity => {
       ? Math.round(((originalPriceRaw - price) / originalPriceRaw) * 100)
       : undefined;
 
+  const ratingValue =
+    parseFloatOrNull(tour.rating_average ?? undefined) ??
+    parseFloatOrNull(tour.average_rating ?? undefined) ??
+    parseFloatOrNull((tour as Record<string, unknown>)?.rating ?? undefined);
+  const reviewCountValue =
+    parseIntOrNull(tour.rating_count ?? undefined) ??
+    parseIntOrNull(tour.reviews_count ?? undefined) ??
+    parseIntOrNull((tour as Record<string, unknown>)?.reviewsCount ?? undefined);
+  const bookingsCountValue =
+    parseIntOrNull(tour.bookings_count ?? undefined) ??
+    parseIntOrNull((tour as Record<string, unknown>)?.bookingsCount ?? undefined);
+
   return {
     id: String(tour.id ?? tour.uuid ?? generateFallbackId()),
     title: tour.title ?? tour.name ?? "Tour nổi bật",
     location: tour.destination ?? "Đang cập nhật",
     image: images[0] ?? FALLBACK_IMAGE,
-    rating: tour.rating_average ?? tour.average_rating ?? 4.5,
-    reviewCount: tour.rating_count ?? tour.reviews_count ?? 0,
+    rating: ratingValue,
+    reviewCount: reviewCountValue,
+    bookingsCount: bookingsCountValue,
     price,
     originalPrice: originalPriceRaw,
     discount,
@@ -602,10 +676,6 @@ const ActivityDetail = () => {
   const { trackEvent } = useAnalytics();
   const scheduleRecommendationRefresh = useRecommendationRealtimeRefresh();
   const queryClient = useQueryClient();
-  const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
-  const [selectedBookingId, setSelectedBookingId] = useState("");
-  const [reviewRating, setReviewRating] = useState(5);
-  const [reviewComment, setReviewComment] = useState("");
   const hasLoggedViewRef = useRef(false);
 
   const [editingCartItemId, setEditingCartItemId] = useState<string | null>(null);
@@ -654,100 +724,6 @@ const ActivityDetail = () => {
     }
   }, [childrenParam]);
 
-  const [editingReview, setEditingReview] = useState<EditableReview | null>(null);
-
-  const resetReviewForm = useCallback(() => {
-    setSelectedBookingId("");
-    setReviewRating(5);
-    setReviewComment("");
-    setEditingReview(null);
-  }, []);
-
-  const closeReviewDialog = useCallback(() => {
-    setIsReviewDialogOpen(false);
-    resetReviewForm();
-  }, [resetReviewForm]);
-
-  const invalidateReviewData = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ["tour-reviews", id] });
-    queryClient.invalidateQueries({ queryKey: ["user-bookings", "completed", currentUser?.id] });
-  }, [queryClient, id, currentUser?.id]);
-
-  const createReviewMutation = useMutation<ReviewResponse, unknown, CreateReviewPayload>({
-    mutationFn: createReview,
-    onSuccess: (response, variables) => {
-      toast({
-        title: "Đánh giá đã được ghi nhận",
-        description: response?.message ?? "Cảm ơn bạn đã chia sẻ trải nghiệm.",
-      });
-      invalidateReviewData();
-      closeReviewDialog();
-      if (resolvedTourEntityId) {
-        trackEvent(
-          {
-            event_name: "review_submit",
-            entity_type: "tour",
-            entity_id: resolvedTourEntityId,
-            metadata: {
-              source: "activity_detail",
-              booking_id: variables?.booking_id,
-              rating: variables?.rating,
-            },
-            context: {
-              has_comment: Boolean(variables?.comment && variables.comment.trim().length > 0),
-            },
-          },
-          { immediate: true },
-        );
-        scheduleRecommendationRefresh();
-      }
-    },
-    onError: (error: unknown) => {
-      toast({
-        title: "Không thể gửi đánh giá",
-        description: resolveErrorMessage(error),
-        variant: "destructive",
-      });
-    },
-  });
-
-  const updateReviewMutation = useMutation({
-    mutationFn: (input: { reviewId: string | number; payload: { rating?: number; comment?: string } }) =>
-      updateReview(input.reviewId, input.payload),
-    onSuccess: (response) => {
-      toast({
-        title: "Đánh giá đã được cập nhật",
-        description: response?.message ?? "Chúng tôi đã ghi nhận thay đổi của bạn.",
-      });
-      invalidateReviewData();
-      closeReviewDialog();
-    },
-    onError: (error: unknown) => {
-      toast({
-        title: "Không thể cập nhật đánh giá",
-        description: resolveErrorMessage(error),
-        variant: "destructive",
-      });
-    },
-  });
-
-  const deleteReviewMutation = useMutation({
-    mutationFn: (reviewId: string | number) => deleteReview(reviewId),
-    onSuccess: (response) => {
-      toast({
-        title: "Đã xóa đánh giá",
-        description: response?.message ?? "Đánh giá của bạn đã được gỡ bỏ.",
-      });
-      invalidateReviewData();
-    },
-    onError: (error: unknown) => {
-      toast({
-        title: "Không thể xóa đánh giá",
-        description: resolveErrorMessage(error),
-        variant: "destructive",
-      });
-    },
-  });
 
   const addWishlistMutation = useMutation<WishlistItem, unknown, string>({
     mutationFn: (tourId: string) => addWishlistItem(tourId),
@@ -837,13 +813,6 @@ const ActivityDetail = () => {
     return Array.from(ids);
   }, [id, tourDetail?.id, tourDetail?.uuid]);
 
-  const { data: completedBookingsData } = useQuery<BookingListResponse>({
-    queryKey: ["user-bookings", "completed", currentUser?.id],
-    queryFn: () => fetchBookings({ status: "completed", per_page: 50 }),
-    enabled: Boolean(currentUser),
-    staleTime: 60 * 1000,
-  });
-
 const activity = useMemo(
   () => normalizeTourDetail(tourDetail, trendingTours ?? []),
   [tourDetail, trendingTours],
@@ -917,33 +886,6 @@ useEffect(() => {
   }, [activity?.id, currentUser, queryClient, wishlistQueryKey]);
   const schedules = tourDetail?.schedules ?? [];
 
-  const bookingsForTour = useMemo(() => {
-    if (!completedBookingsData?.data || acceptableTourIds.length === 0) return [];
-    return completedBookingsData.data.filter((booking) => {
-      const identifiers: Array<string | number | null | undefined> = [
-        booking.tour?.id,
-        booking.tour?.uuid,
-        (booking as Record<string, unknown>)?.tour_id as string | number | undefined,
-      ];
-      return identifiers.some(
-        (value) => value !== undefined && value !== null && acceptableTourIds.includes(String(value)),
-      );
-    });
-  }, [completedBookingsData?.data, acceptableTourIds]);
-
-  const reviewableBookings = useMemo(
-    () => bookingsForTour.filter((booking) => !booking.review),
-    [bookingsForTour],
-  );
-
-  const existingReviewEntry = useMemo(
-    () => bookingsForTour.find((booking) => Boolean(booking.review)),
-    [bookingsForTour],
-  );
-
-  const existingReview: BookingReviewSummary | null = existingReviewEntry?.review ?? null;
-  const existingReviewBookingId = existingReviewEntry ? String(existingReviewEntry.id) : null;
-
   const {
     data: reviewsData,
     isLoading: isReviewsLoading,
@@ -970,15 +912,25 @@ useEffect(() => {
     staleTime: 30 * 1000,
   });
 
-  const allReviews = useMemo(
-    () => reviewsData?.pages?.flatMap((page) => page.reviews?.data ?? []) ?? [],
-    [reviewsData?.pages],
-  );
+  const allReviews = useMemo(() => {
+    if (!reviewsData?.pages) return [];
+    return reviewsData.pages.flatMap((page) => extractReviewsFromPage(page));
+  }, [reviewsData?.pages]);
+
+  const tourReviews = useMemo(() => {
+    if (acceptableTourIds.length === 0) return allReviews;
+    const acceptableSet = new Set(acceptableTourIds);
+    return allReviews.filter((review) => {
+      const identifiers = collectReviewTourIds(review);
+      if (identifiers.length === 0) return true;
+      return identifiers.some((identifier) => acceptableSet.has(identifier));
+    });
+  }, [acceptableTourIds, allReviews]);
 
   const ratingSummary = useMemo(() => {
     if (!reviewsData?.pages || reviewsData.pages.length === 0) return null;
-    const pageWithRating = reviewsData.pages.find((page) => page?.rating);
-    return pageWithRating?.rating ?? reviewsData.pages[0]?.rating ?? null;
+    const pageWithRating = reviewsData.pages.find((page) => extractRatingMetaFromPage(page));
+    return extractRatingMetaFromPage(pageWithRating ?? reviewsData.pages[0]) ?? null;
   }, [reviewsData?.pages]);
 
   const ratingAverage =
@@ -989,95 +941,49 @@ useEffect(() => {
     parseIntOrNull(ratingSummary?.count ?? undefined) ??
     (typeof activity?.reviewCount === "number" ? activity.reviewCount : null);
 
-  const isMutationPending = (mutation: { isPending?: boolean; isLoading?: boolean }) =>
-    Boolean(mutation.isPending ?? mutation.isLoading ?? false);
-
-  const isSubmittingReview = isMutationPending(createReviewMutation) || isMutationPending(updateReviewMutation);
-  const isDeletingReview = isMutationPending(deleteReviewMutation);
-
-  const openCreateReview = useCallback(() => {
-    if (!currentUser) {
-      toast({
-        title: "Đăng nhập để đánh giá",
-        description: "Vui lòng đăng nhập để chia sẻ trải nghiệm của bạn.",
-        variant: "destructive",
-      });
-      return;
+  const derivedReviewStats = useMemo(() => {
+    if (tourReviews.length === 0) {
+      return { average: null as number | null, count: 0 };
     }
-    if (reviewableBookings.length === 0) {
-      toast({
-        title: "Chưa có booking phù hợp",
-        description: "Bạn chỉ có thể đánh giá sau khi hoàn thành tour và chưa gửi đánh giá trước đó.",
-      });
-      return;
+    const numericRatings = tourReviews
+      .map((review) => parseFloatOrNull(review.rating ?? undefined))
+      .filter((value): value is number => value !== null);
+    if (numericRatings.length === 0) {
+      return { average: null as number | null, count: 0 };
     }
-    const defaultBookingId = String(reviewableBookings[0]?.id ?? "");
-    setSelectedBookingId(defaultBookingId);
-    setReviewRating(5);
-    setReviewComment("");
-    setEditingReview(null);
-    setIsReviewDialogOpen(true);
-  }, [currentUser, reviewableBookings, toast]);
+    const sum = numericRatings.reduce((acc, value) => acc + value, 0);
+    return {
+      average: sum / numericRatings.length,
+      count: numericRatings.length,
+    };
+  }, [tourReviews]);
 
-  const openEditReview = useCallback(() => {
-    if (!existingReview?.id) {
-      toast({
-        title: "Không tìm thấy đánh giá",
-        description: "Không thể chỉnh sửa vì thiếu mã đánh giá hợp lệ.",
-        variant: "destructive",
-      });
-      return;
-    }
-    const parsedRating = parseFloatOrNull(existingReview.rating ?? undefined) ?? 5;
-    const normalizedRating = Math.min(5, Math.max(1, parsedRating));
-    setReviewRating(normalizedRating);
-    setReviewComment(existingReview.comment ?? "");
-    setEditingReview({
-      id: existingReview.id,
-      rating: existingReview.rating,
-      comment: existingReview.comment ?? "",
+  const ratingValue = derivedReviewStats.average ?? ratingAverage ?? null;
+  const reviewCount = derivedReviewStats.count > 0 ? derivedReviewStats.count : ratingCount ?? null;
+
+  const detailReviews = useMemo(() => {
+    if (!tourDetail?.reviews) return [];
+    return extractReviewsFromPage(tourDetail.reviews);
+  }, [tourDetail?.reviews]);
+
+  const combinedReviews = useMemo(() => {
+    const merged = [...tourReviews, ...detailReviews];
+    if (merged.length === 0) return [];
+    const seen = new Set<string>();
+    const result: TourReview[] = [];
+    merged.forEach((review) => {
+      if (!review) return;
+      const key =
+        review.id !== undefined && review.id !== null
+          ? String(review.id)
+          : `${review.user?.id ?? "anon"}-${review.created_at ?? review.updated_at ?? Math.random()}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      result.push(review);
     });
-    setSelectedBookingId(existingReviewBookingId ?? "");
-    setIsReviewDialogOpen(true);
-  }, [existingReview, existingReviewBookingId, toast]);
+    return result;
+  }, [tourReviews, detailReviews]);
 
-  const handleDeleteReview = useCallback(() => {
-    if (!existingReview) return;
-    if (isDeletingReview) return;
-    const confirmed = window.confirm("Bạn có chắc chắn muốn xóa đánh giá này?");
-    if (!confirmed) return;
-    deleteReviewMutation.mutate(existingReview.id);
-  }, [deleteReviewMutation, existingReview, isDeletingReview]);
-
-  const handleReviewSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const normalizedRating = Math.min(5, Math.max(1, reviewRating));
-    const sanitizedComment = reviewComment.trim();
-    if (editingReview) {
-      updateReviewMutation.mutate({
-        reviewId: editingReview.id,
-        payload: {
-          rating: normalizedRating,
-          comment: sanitizedComment.length > 0 ? sanitizedComment : undefined,
-        },
-      });
-      return;
-    }
-    if (!selectedBookingId) {
-      toast({
-        title: "Chọn booking để đánh giá",
-        description: "Vui lòng chọn booking đã hoàn thành để gửi đánh giá.",
-        variant: "destructive",
-      });
-      return;
-    }
-    createReviewMutation.mutate({
-      booking_id: selectedBookingId,
-      rating: normalizedRating,
-      comment: sanitizedComment.length > 0 ? sanitizedComment : undefined,
-    });
-  };
-  
   const selectedSchedule = useMemo(
     () =>
       schedules.find((schedule) => String(schedule?.id) === selectedScheduleId) ??
@@ -1302,13 +1208,6 @@ useEffect(() => {
     if (safeChildCount !== childCount) setChildCount(safeChildCount);
   }, [childCount, safeChildCount]);
 
-  useEffect(() => {
-    if (!isReviewDialogOpen || editingReview) return;
-    if (!selectedBookingId && reviewableBookings.length > 0) {
-      setSelectedBookingId(String(reviewableBookings[0].id));
-    }
-  }, [isReviewDialogOpen, editingReview, reviewableBookings, selectedBookingId]);
-
   const totalPrice = useMemo(() => {
     if (!selectedPackage) return null;
     return safeAdultCount * adultUnitPrice + safeChildCount * childUnitPrice;
@@ -1484,12 +1383,10 @@ useEffect(() => {
   const hasImportantNotes = activity.importantNotes.length > 0;
   const hasTerms = activity.termsAndConditions.length > 0;
   const hasFaqs = activity.faqs.length > 0;
-  const hasReviews = allReviews.length > 0;
+  const hasReviews = combinedReviews.length > 0;
   const hasLocation = Boolean(activity.location?.name || activity.location?.address);
   const locationCoords = activity.location?.coordinates;
   const hasRelated = activity.relatedActivities.length > 0;
-  const ratingValue = ratingAverage ?? null;
-  const reviewCount = ratingCount ?? null;
   const bookedCount = typeof activity.bookedCount === "number" ? activity.bookedCount : null;
   const durationLabel = activity.duration ? String(activity.duration) : null;
   const breadcrumbLocation = activity.locationName ?? "Chi tiết tour";
@@ -2105,42 +2002,15 @@ useEffect(() => {
                         </p>
                       </div>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      {existingReview ? (
-                        <>
-                          <Button variant="outline" size="sm" onClick={openEditReview} disabled={isSubmittingReview}>
-                            Chỉnh sửa đánh giá
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-red-500 hover:text-red-600"
-                            onClick={handleDeleteReview}
-                            disabled={isDeletingReview}
-                          >
-                            {isDeletingReview ? "Đang xoá..." : "Xoá đánh giá"}
-                          </Button>
-                        </>
-                      ) : (
-                        <Button
-                          size="sm"
-                          onClick={openCreateReview}
-                          disabled={!currentUser || reviewableBookings.length === 0 || isSubmittingReview}
-                        >
-                          Viết đánh giá
-                        </Button>
-                      )}
-                    </div>
                   </div>
 
-                  {currentUser && reviewableBookings.length === 0 && !existingReview && (
-                    <Alert>
-                      <AlertTitle>Bạn chưa có booking đủ điều kiện</AlertTitle>
-                      <AlertDescription>
-                        Chỉ những booking đã hoàn thành và chưa từng được đánh giá mới có thể gửi đánh giá cho tour.
-                      </AlertDescription>
-                    </Alert>
-                  )}
+                  <Alert className="border border-primary/20 bg-primary/5">
+                    <AlertTitle className="font-semibold text-foreground">Cách gửi đánh giá</AlertTitle>
+                    <AlertDescription className="text-sm text-muted-foreground">
+                      Sau khi hoàn thành tour, hãy vào mục <strong>Đơn của tôi</strong> để chia sẻ cảm nhận.
+                      Đánh giá chỉ áp dụng cho các booking đã hoàn tất và thuộc về bạn.
+                    </AlertDescription>
+                  </Alert>
 
                   {isReviewsLoading ? (
                     <div className="space-y-3">
@@ -2150,7 +2020,7 @@ useEffect(() => {
                     </div>
                   ) : hasReviews ? (
                     <div className="space-y-4">
-                      {allReviews.map((review) => {
+                      {combinedReviews.map((review) => {
                         const value = parseFloatOrNull(review.rating ?? undefined) ?? 0;
                         const displayDate = formatDate(review.created_at ?? review.updated_at ?? null);
                         const isOwner =
@@ -2186,7 +2056,7 @@ useEffect(() => {
                                   </span>
                                 </div>
                               </div>
-                              <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line">
+                              <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line ">
                                 {review.comment && review.comment.trim().length > 0
                                   ? review.comment
                                   : "Người dùng không để lại nội dung."}
@@ -2216,7 +2086,7 @@ useEffect(() => {
                     </div>
                   ) : (
                     <p className="text-sm text-muted-foreground">
-                      Chưa có đánh giá cho tour này. Hãy là người đầu tiên chia sẻ trải nghiệm của bạn!
+                      Chưa có đánh giá cho tour này. Sau khi hoàn thành tour, hãy truy cập mục <strong>Đơn của tôi</strong> để gửi cảm nhận đầu tiên.
                     </p>
                   )}
                 </div>
@@ -2545,103 +2415,6 @@ useEffect(() => {
           </div>
         )}
       </main>
-
-    <Dialog
-      open={isReviewDialogOpen}
-      onOpenChange={(open) => {
-        if (open) {
-          setIsReviewDialogOpen(true);
-        } else {
-          closeReviewDialog();
-        }
-      }}
-    >
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{editingReview ? "Cập nhật đánh giá" : "Viết đánh giá"}</DialogTitle>
-          <DialogDescription>
-            {editingReview
-              ? "Điều chỉnh đánh giá đã gửi để phản ánh đúng trải nghiệm của bạn."
-              : "Chia sẻ trải nghiệm thực tế của bạn để giúp những du khách khác lựa chọn tốt hơn."}
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleReviewSubmit} className="space-y-4">
-          {!editingReview && (
-            <div className="space-y-2">
-              <Label htmlFor="review-booking">Chọn booking</Label>
-              <Select value={selectedBookingId} onValueChange={(value) => setSelectedBookingId(value)}>
-                <SelectTrigger id="review-booking">
-                  <SelectValue placeholder="Chọn booking đã hoàn thành" />
-                </SelectTrigger>
-                <SelectContent>
-                  {reviewableBookings.map((booking) => {
-                    const scheduleLabel = formatDate(
-                      booking.schedule?.start_date ?? booking.booking_date ?? booking.created_at ?? null,
-                    );
-                    const packageName = booking.package?.name ?? "Gói tiêu chuẩn";
-                    return (
-                      <SelectItem key={booking.id} value={String(booking.id)}>
-                        {packageName}
-                        {scheduleLabel ? ` • ${scheduleLabel}` : ""}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <Label>Điểm đánh giá</Label>
-            <div className="flex items-center gap-2">
-              {Array.from({ length: 5 }).map((_, index) => {
-                const value = index + 1;
-                const active = value <= reviewRating;
-                return (
-                  <button
-                    key={value}
-                    type="button"
-                    className={`transition-colors focus:outline-none ${
-                      active ? "text-yellow-400" : "text-gray-300 hover:text-yellow-400"
-                    }`}
-                    onClick={() => setReviewRating(value)}
-                    aria-label={`Chọn ${value} sao`}
-                  >
-                    <Star className={`h-6 w-6 ${active ? "fill-yellow-400" : ""}`} />
-                  </button>
-                );
-              })}
-              <span className="text-sm text-muted-foreground">{reviewRating}/5</span>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="review-comment">Nội dung đánh giá</Label>
-            <Textarea
-              id="review-comment"
-              value={reviewComment}
-              onChange={(event) => setReviewComment(event.target.value)}
-              placeholder="Chia sẻ những điều bạn ấn tượng hoặc cần cải thiện để giúp cộng đồng du lịch tốt hơn."
-              rows={5}
-            />
-          </div>
-
-          <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button type="button" variant="outline" onClick={closeReviewDialog} disabled={isSubmittingReview}>
-              Huỷ
-            </Button>
-            <Button type="submit" disabled={isSubmittingReview || (!editingReview && reviewableBookings.length === 0)}>
-              {isSubmittingReview
-                ? "Đang gửi..."
-                : editingReview
-                ? "Cập nhật đánh giá"
-                : "Gửi đánh giá"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-
     <Dialog open={isGalleryOpen} onOpenChange={setIsGalleryOpen}>
       <DialogContent className="max-w-7xl w-full p-0 border-none bg-transparent shadow-none">
         <div className="flex h-[90vh] flex-col overflow-hidden rounded-lg  text-white">

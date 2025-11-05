@@ -34,6 +34,7 @@ const fallbackTours = [
     image: "https://images.unsplash.com/photo-1528127269322-539801943592?w=800&h=600&fit=crop",
     rating: 4.9,
     reviewCount: 3560,
+    bookingsCount: 46800,
     price: 990000,
     duration: "1 ngày",
     category: "Tour",
@@ -47,6 +48,7 @@ const fallbackTours = [
     image: "https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=800&h=600&fit=crop",
     rating: 4.8,
     reviewCount: 2410,
+    bookingsCount: 32500,
     price: 3250000,
     duration: "3 ngày",
     category: "Combo nghỉ dưỡng",
@@ -60,6 +62,7 @@ const fallbackTours = [
     image: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=800&h=600&fit=crop",
     rating: 4.9,
     reviewCount: 1820,
+    bookingsCount: 18200,
     price: 790000,
     duration: "2 ngày",
     category: "Trải nghiệm",
@@ -72,6 +75,7 @@ const fallbackTours = [
     image: "https://images.unsplash.com/photo-1501594907352-04cda38ebc29?w=800&h=600&fit=crop",
     rating: 4.7,
     reviewCount: 4320,
+    bookingsCount: 47800,
     price: 880000,
     duration: "Trong ngày",
     category: "Công viên giải trí",
@@ -92,6 +96,55 @@ const normalizeDuration = (duration?: number | string | null) => {
   }
   const trimmed = duration.toString().trim();
   return trimmed.length > 0 ? trimmed : "Linh hoạt";
+};
+
+const coerceNumber = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const resolveTourRating = (tour: PublicTour): number | null => {
+  const candidates = [
+    tour.average_rating,
+    tour.rating_average,
+    (tour as Record<string, unknown> | undefined)?.averageRating,
+    (tour as Record<string, unknown> | undefined)?.rating,
+  ];
+  for (const candidate of candidates) {
+    const parsed = coerceNumber(candidate);
+    if (parsed !== null && parsed > 0) {
+      return parsed;
+    }
+  }
+  return null;
+};
+
+const resolveReviewCount = (tour: PublicTour): number | null => {
+  const candidates = [
+    tour.rating_count,
+    tour.reviews_count,
+    (tour as Record<string, unknown> | undefined)?.reviewsCount,
+    (tour as Record<string, unknown> | undefined)?.review_count,
+  ];
+  for (const candidate of candidates) {
+    const parsed = coerceNumber(candidate);
+    if (parsed !== null && parsed >= 0) {
+      return parsed;
+    }
+  }
+  return null;
+};
+
+const resolveBookingCount = (tour: PublicTour): number | null => {
+  const parsed = coerceNumber(tour.bookings_count);
+  if (parsed !== null && parsed >= 0) return parsed;
+  const fromMeta = (tour as Record<string, unknown> | undefined)?.bookingsCount;
+  const parsedMeta = coerceNumber(fromMeta);
+  return parsedMeta !== null && parsedMeta >= 0 ? parsedMeta : null;
 };
 
 const mapTourToCard = (tour: PublicTour) => {
@@ -137,13 +190,18 @@ const mapTourToCard = (tour: PublicTour) => {
       ? crypto.randomUUID()
       : `tour-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
 
+  const rating = resolveTourRating(tour);
+  const reviewCount = resolveReviewCount(tour);
+  const bookingsCount = resolveBookingCount(tour);
+
   return {
     id: String(tour.id ?? tour.uuid ?? fallbackId),
     title,
     location,
     image,
-    rating: 4.8,
-    reviewCount: tour.bookings_count ?? 1500,
+    rating,
+    reviewCount,
+    bookingsCount,
     price,
     duration: normalizeDuration(tour.duration),
     category,

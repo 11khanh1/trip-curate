@@ -23,6 +23,7 @@ export interface CollectionTourCardProps {
   topRightOverlay?: ReactNode;
   footerContent?: ReactNode;
   onNavigate?: (event: MouseEvent<HTMLAnchorElement>) => void;
+  imageContainerClassName?: string;
 }
 
 const CollectionTourCard = ({
@@ -43,11 +44,17 @@ const CollectionTourCard = ({
   topRightOverlay,
   footerContent,
   onNavigate,
+  imageContainerClassName,
 }: CollectionTourCardProps) => {
+  const imageWrapperClasses = cn(
+    "relative h-48 w-full overflow-hidden rounded-xl sm:h-auto sm:w-48 lg:w-56",
+    imageContainerClassName,
+  );
+
   return (
     <Card className={cn("overflow-hidden", className)}>
       <div className="flex flex-col gap-4 p-4 sm:flex-row sm:p-5">
-        <div className="relative h-48 w-full overflow-hidden rounded-xl sm:h-auto sm:w-48 lg:w-56">
+        <div className={imageWrapperClasses}>
           {href ? (
             <Link
               to={href}

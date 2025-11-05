@@ -1,0 +1,11 @@
+1049:   // FIX: Khai báo biến currentImage trước khi sử dụng
+1050:   const currentImage = mediaList[selectedImageIndex];
+1051: 
+1052:   // ---------------------------- RENDER ----------------------------
+1053:   return (
+1054:     <div className="space-y-6">
+1055:       <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between md:gap-4">
+1056:         <div>
+1057:           <h1 className="text-2xl font-bold">Quản lý Tour</h1>
+1058:           <p className="text-sm text-muted-foreground">
+1059:             Tạo mới hoặc chỉnh sửa tour trước khi gửi duyệt.

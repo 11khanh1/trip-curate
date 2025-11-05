@@ -59,6 +59,7 @@ import SepayGateway from "./pages/payments/SepayGateway";
 import SepayReturn from "./pages/payments/SepayReturn";
 import CartPage from "./pages/Cart";
 import Wishlist from "./pages/Wishlist";
+import RecentToursPage from "./pages/recent/RecentToursPage";
 
 const App = () => (
   <TooltipProvider>
@@ -70,6 +71,7 @@ const App = () => (
         <Routes>
         <Route path="/" element={<Index />} />
         <Route path="/activities" element={<AllActivities />} />
+        <Route path="/recent" element={<RecentToursPage />} />
         <Route path="/activity/:id" element={<ActivityDetail />} />
         <Route path="/regions/vietnam" element={<Vietnam />} />
         <Route path="/regions/japan" element={<Japan />} />

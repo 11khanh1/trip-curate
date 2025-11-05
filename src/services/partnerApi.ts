@@ -1,10 +1,7 @@
 import { apiClient } from "@/lib/api-client";
-import type { Booking, BookingStatus } from "@/services/bookingApi";
+import type { Booking } from "@/services/bookingApi";
 
-export type PartnerBookingStatus = Extract<
-  BookingStatus,
-  "pending" | "confirmed" | "cancelled" | "completed"
->;
+export type PartnerBookingStatus = "pending" | "confirmed" | "cancelled" | "completed";
 
 export interface PartnerBooking extends Booking {
   status?: PartnerBookingStatus | BookingStatus;
@@ -78,6 +75,11 @@ export async function fetchPartnerBookings(
   }
   const res = await apiClient.get("/partner/bookings", { params: query });
   return normalizePartnerBookingList(res.data);
+}
+
+export async function fetchPartnerBookingDetail(id: string | number): Promise<PartnerBooking | null> {
+  const res = await apiClient.get(`/partner/bookings/${id}`);
+  return normalizePartnerBooking(res.data);
 }
 
 export interface UpdatePartnerBookingStatusPayload {

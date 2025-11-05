@@ -20,7 +20,21 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, MapPin, List, Image, Calendar, Loader2, Eye, Send, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  Plus,
+  Edit,
+  Trash2,
+  MapPin,
+  List,
+  Image,
+  Calendar,
+  Loader2,
+  Eye,
+  Send,
+  ChevronLeft,
+  ChevronRight,
+  Shield,
+} from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 
 const PARTNER_TOUR_ENDPOINT = "/partner/tours";
@@ -42,6 +56,10 @@ interface Tour {
   tags: string[];
   media: string[];
   itinerary: string[];
+  type?: string | null;
+  child_age_limit?: number | null;
+  requires_passport?: boolean;
+  requires_visa?: boolean;
   schedule?: {
     id?: string;
     start_date: string;
@@ -50,28 +68,139 @@ interface Tour {
     seats_available: number;
     season_price: number;
   } | null;
-  status: "pending" | "approved" | "rejected";
+  schedules?: Array<{
+    id?: string;
+    start_date?: string | null;
+    end_date?: string | null;
+    seats_total?: number | null;
+    seats_available?: number | null;
+    season_price?: number | null;
+    created_at?: string | null;
+    updated_at?: string | null;
+  }>;
+  packages?: Array<{
+    id?: string;
+    name?: string | null;
+    description?: string | null;
+    adult_price?: number | null;
+    child_price?: number | null;
+    is_active?: boolean | null;
+    created_at?: string | null;
+    updated_at?: string | null;
+  }>;
+  cancellation_policies?: Array<{
+    id?: string;
+    days_before?: number | null;
+    refund_rate?: number | null;
+    description?: string | null;
+  }>;
+  categories?: Array<{
+    id?: string;
+    name?: string | null;
+    slug?: string | null;
+  }>;
+  status: "pending" | "approved" | "rejected" | "draft";
 }
+
+type FormSchedule = {
+  id?: string;
+  start_date: string;
+  end_date: string;
+  seats_total: number;
+  seats_available: number;
+  season_price: number;
+};
+
+type FormPackage = {
+  id?: string;
+  name: string;
+  description: string;
+  adult_price: number;
+  child_price: number;
+  is_active: boolean;
+};
+
+type FormCancellationPolicy = {
+  id?: string;
+  days_before: number;
+  refund_rate: number;
+  description: string;
+};
+
+type FormCategory = {
+  id?: string;
+  name: string;
+  slug: string;
+};
 
 // IMPROVEMENT: Tách riêng FormData để quản lý state của form dễ dàng hơn
 type FormData = {
-    title: string;
-    description: string;
-    destination: string;
-    base_price: number;
-    policy: string;
-    tagsString: string;
-    imageUrlsString: string;
-    itineraryItems: ItineraryItem[];
-    start_date: string;
-    end_date: string;
-    seats_total: number;
-    seats_available: number;
-    season_price: number;
-}
+  title: string;
+  description: string;
+  destination: string;
+  base_price: number;
+  policy: string;
+  tagsString: string;
+  imageUrlsString: string;
+  itineraryItems: ItineraryItem[];
+  type: string;
+  child_age_limit: number | null;
+  requires_passport: boolean;
+  requires_visa: boolean;
+  status: string;
+  schedules: FormSchedule[];
+  packages: FormPackage[];
+  cancellationPolicies: FormCancellationPolicy[];
+  categories: FormCategory[];
+};
 
+const createInitialFormData = (): FormData => ({
+  title: "",
+  description: "",
+  destination: "",
+  base_price: 4500000,
+  policy: "",
+  tagsString: "",
+  imageUrlsString: "",
+  itineraryItems: [{ day: 1, title: "", detail: "" }],
+  type: "domestic",
+  child_age_limit: null,
+  requires_passport: false,
+  requires_visa: false,
+  status: "pending",
+  schedules: [
+    {
+      start_date: "",
+      end_date: "",
+      seats_total: 0,
+      seats_available: 0,
+      season_price: 0,
+    },
+  ],
+  packages: [
+    {
+      name: "Gói tiêu chuẩn",
+      description: "",
+      adult_price: 4500000,
+      child_price: 3000000,
+      is_active: true,
+    },
+  ],
+  cancellationPolicies: [
+    {
+      days_before: 7,
+      refund_rate: 50,
+      description: "Hoàn 50% phí nếu hủy trước 7 ngày.",
+    },
+  ],
+  categories: [
+    {
+      name: "",
+      slug: "",
+    },
+  ],
+});
 
-// ---------------------------- COMPONENT ----------------------------
 export default function PartnerActivities() {
   const [tours, setTours] = useState<Tour[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -79,33 +208,16 @@ export default function PartnerActivities() {
   const [editingTour, setEditingTour] = useState<Tour | null>(null);
   const [selectedTour, setSelectedTour] = useState<Tour | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isDetailLoading, setIsDetailLoading] = useState(false); 
+  const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
-  
+  const baseFormDefaults = useMemo(() => createInitialFormData(), []);
+  const [formData, setFormData] = useState<FormData>(() => createInitialFormData());
 
   // Giả lập hàm toast để code chạy được
   const toast = ({ title, description, variant }: any) => {
     console.log(`[TOAST - ${variant || "default"}]: ${title} - ${description}`);
     alert(`${title}: ${description}`);
   };
-
-  const initialFormData: FormData = {
-    title: "",
-    description: "",
-    destination: "",
-    base_price: 4500000,
-    policy: "",
-    tagsString: "",
-    imageUrlsString: "",
-    itineraryItems: [{ day: 1, title: "", detail: "" }],
-    start_date: "2025-12-20",
-    end_date: "2025-12-22",
-    seats_total: 30,
-    seats_available: 30,
-    season_price: 5000000,
-  };
-
-  const [formData, setFormData] = useState<FormData>(initialFormData);
 
   const mediaList = useMemo(() => {
     if (!selectedTour || !Array.isArray(selectedTour.media)) return [];
@@ -129,82 +241,141 @@ export default function PartnerActivities() {
   // ---------------------------- UTILS & API ----------------------------
 
   // Chuẩn hoá dữ liệu trả về từ API (tags text[], media/itinerary jsonb, schedule có thể null)
-  const parsePgArray = (val: any): string[] => {
-    if (Array.isArray(val)) return val as string[];
-    if (typeof val !== "string") return [];
-    const trimmed = val.trim();
-    if (!trimmed || trimmed === "{}") return [];
-    const inside = trimmed.replace(/^{|}$/g, "");
-    if (!inside) return [];
-    const items = inside.match(/"((?:[^"\\]|\\.)*)"|([^,]+)/g) || [];
-    return items
-      .map((raw) => {
-        let s = raw.trim();
-        if (s.startsWith('"') && s.endsWith('"')) {
-          s = s.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+  const toStringArray = (value: unknown): string[] => {
+    if (!value) return [];
+    if (Array.isArray(value)) {
+      return (value as unknown[])
+        .map((item) => {
+          if (typeof item === "string") return item.trim();
+          if (item && typeof item === "object" && typeof (item as Record<string, unknown>).url === "string") {
+            return ((item as Record<string, unknown>).url as string).trim();
+          }
+          return "";
+        })
+        .filter((s) => Boolean(s));
+    }
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (!trimmed) return [];
+      if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          return toStringArray(parsed);
+        } catch {
+          return trimmed.split(/\s*,\s*/).filter(Boolean);
         }
-        return s;
-      })
-      .filter(Boolean);
-  };
-
-  const parseMaybeJsonArray = (v: any): string[] => {
-    if (Array.isArray(v)) return v as string[];
-    if (typeof v === "string") {
-      try {
-        const parsed = JSON.parse(v);
-        return Array.isArray(parsed) ? parsed : [];
-      } catch {
-        // Nếu là chuỗi URLs phân tách bởi dấu phẩy, chuyển thành mảng
-        if (v.includes(",")) {
-          return v.split(",").map((s) => s.trim()).filter(Boolean);
-        }
-        return v ? [v] : [];
       }
+      return trimmed.split(/\s*,\s*/).filter(Boolean);
     }
     return [];
   };
 
-  const uniqueNonEmptyUrls = (arr: any): string[] => {
-    if (!Array.isArray(arr)) return [];
-    const set = new Set<string>();
-    for (const x of arr) {
-      if (typeof x !== "string") continue;
-      const s = x.trim();
-      if (!s) continue;
-      // Chỉ nhận http/https hoặc data URI
-      if (/^(https?:\/\/|data:)/i.test(s)) {
-        set.add(s);
-      }
+  const coerceNumber = (value: unknown, fallback: number | null = null): number | null => {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string") {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : fallback;
     }
-    return Array.from(set);
+    return fallback;
+  };
+
+  const coerceBoolean = (value: unknown, fallback = false): boolean => {
+    if (typeof value === "boolean") return value;
+    if (typeof value === "number") return value !== 0;
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+      if (!normalized) return fallback;
+      if (["1", "true", "yes", "y"].includes(normalized)) return true;
+      if (["0", "false", "no", "n"].includes(normalized)) return false;
+    }
+    return fallback;
   };
 
   const normalizeSchedule = (raw: any) => {
-    if (!raw) return null;
+    if (!raw || typeof raw !== "object") return null;
     return {
       id: raw.id ? String(raw.id) : undefined,
-      start_date: String(raw.start_date ?? ""),
-      end_date: String(raw.end_date ?? ""),
-      seats_total: Number(raw.seats_total ?? 0),
-      seats_available: Number(raw.seats_available ?? 0),
-      season_price: Number(raw.season_price ?? 0),
+      start_date: raw.start_date ? String(raw.start_date) : "",
+      end_date: raw.end_date ? String(raw.end_date) : "",
+      seats_total: coerceNumber(raw.seats_total, 0) ?? 0,
+      seats_available: coerceNumber(raw.seats_available, 0) ?? 0,
+      season_price: coerceNumber(raw.season_price, 0) ?? 0,
+      created_at: raw.created_at ? String(raw.created_at) : undefined,
+      updated_at: raw.updated_at ? String(raw.updated_at) : undefined,
     };
   };
 
-  const normalizeTourFromAPI = (t: any): Tour => ({
-    id: String(t.id),
-    title: t.title || "",
-    description: t.description || "",
-    destination: t.destination || "",
-    base_price: Number(t.base_price ?? 0),
-    policy: t.policy || "",
-    tags: parsePgArray(t.tags),
-    media: uniqueNonEmptyUrls(parseMaybeJsonArray(t.media)),
-    itinerary: parseMaybeJsonArray(t.itinerary),
-    schedule: normalizeSchedule(t.schedule),
-    status: (t.status as Tour["status"]) || "pending",
-  });
+  const normalizeTourFromAPI = (t: any): Tour => {
+    const media = toStringArray(t.media);
+    const itineraryRaw = Array.isArray(t.itinerary) ? t.itinerary : toStringArray(t.itinerary);
+    const schedulesArray = Array.isArray(t.schedules) ? t.schedules.map(normalizeSchedule).filter(Boolean) : [];
+    const fallbackSchedule = normalizeSchedule(t.schedule);
+    const primarySchedule = schedulesArray.length > 0 ? schedulesArray[0] : fallbackSchedule;
+
+    const itineraryStrings = Array.isArray(itineraryRaw)
+      ? itineraryRaw.map((item) => {
+          if (typeof item === "string") return item;
+          if (item && typeof item === "object") {
+            const record = item as Record<string, unknown>;
+            const day = coerceNumber(record.day) ?? null;
+            const title = typeof record.title === "string" ? record.title : typeof record.name === "string" ? record.name : "";
+            const detail =
+              typeof record.detail === "string"
+                ? record.detail
+                : typeof record.description === "string"
+                ? record.description
+                : "";
+            const prefix = day !== null ? `Ngày ${day}: ` : "";
+            return `${prefix}${title}${detail ? ` - ${detail}` : ""}`.trim();
+          }
+          return "";
+        })
+      : [];
+
+    return {
+      id: String(t.id ?? t.uuid ?? ""),
+      title: t.title || "",
+      description: t.description || "",
+      destination: t.destination || "",
+      base_price: Number(t.base_price ?? 0),
+      policy: t.policy || "",
+      tags: toStringArray(t.tags),
+      media,
+      itinerary: itineraryStrings.filter(Boolean),
+      schedule: primarySchedule,
+      schedules: schedulesArray.length > 0 ? (schedulesArray as NonNullable<typeof schedulesArray>) : fallbackSchedule ? [fallbackSchedule] : [],
+      packages: Array.isArray(t.packages) ? (t.packages as any[]).map((pkg) => ({
+        id: pkg?.id ? String(pkg.id) : undefined,
+        name: typeof pkg?.name === "string" ? pkg.name : null,
+        description: typeof pkg?.description === "string" ? pkg.description : null,
+        adult_price: coerceNumber(pkg?.adult_price, null),
+        child_price: coerceNumber(pkg?.child_price, null),
+        is_active: coerceBoolean(pkg?.is_active, true),
+        created_at: pkg?.created_at ? String(pkg.created_at) : null,
+        updated_at: pkg?.updated_at ? String(pkg.updated_at) : null,
+      })) : [],
+      cancellation_policies: Array.isArray(t.cancellation_policies)
+        ? (t.cancellation_policies as any[]).map((policy) => ({
+            id: policy?.id ? String(policy.id) : undefined,
+            days_before: coerceNumber(policy?.days_before, null),
+            refund_rate: coerceNumber(policy?.refund_rate, null),
+            description: typeof policy?.description === "string" ? policy.description : null,
+          }))
+        : [],
+      categories: Array.isArray(t.categories)
+        ? (t.categories as any[]).map((category) => ({
+            id: category?.id ? String(category.id) : undefined,
+            name: typeof category?.name === "string" ? category.name : null,
+            slug: typeof category?.slug === "string" ? category.slug : null,
+          }))
+        : [],
+      type: typeof t.type === "string" ? t.type : null,
+      child_age_limit: coerceNumber(t.child_age_limit, null),
+      requires_passport: coerceBoolean(t.requires_passport, false),
+      requires_visa: coerceBoolean(t.requires_visa, false),
+      status: (t.status as Tour["status"]) || "pending",
+    };
+  };
 
 const extractToursFromResponse = (payload: any): any[] => {
   if (!payload) return [];
@@ -237,26 +408,54 @@ const fetchTours = async () => {
 
 useEffect(() => { fetchTours(); }, []);
   
-  // IMPROVEMENT: Hàm này an toàn hơn, xử lý cả trường hợp input không phải mảng
-  const parseItineraryString = (itinerary: string[] | undefined | null): ItineraryItem[] => {
-    if (!Array.isArray(itinerary)) return [{ day: 1, title: 'N/A', detail: 'Hành trình không có sẵn.' }];
-    
-    return itinerary.map((line, index) => {
-        const parts = line.split(":");
-        const dayMatch = parts[0]?.match(/\d+/);
-        // Fallback về index + 1 nếu không tìm thấy số ngày
-        const day = dayMatch ? parseInt(dayMatch[0], 10) : index + 1;
-        
-        const content = parts.slice(1).join(':').trim(); 
-        const detailParts = content.split(" - ");
-        
+  const parseItineraryString = (itinerary: unknown): ItineraryItem[] => {
+    if (!Array.isArray(itinerary) || itinerary.length === 0) {
+      return [{ day: 1, title: "Hành trình đang cập nhật", detail: "Chưa có thông tin chi tiết." }];
+    }
+
+    return itinerary.map((entry, index) => {
+      if (entry && typeof entry === "object") {
+        const record = entry as Record<string, unknown>;
+        const day = coerceNumber(record.day, index + 1) ?? index + 1;
+        const title =
+          typeof record.title === "string"
+            ? record.title
+            : typeof record.name === "string"
+            ? record.name
+            : `Hoạt động ngày ${day}`;
+        const detail =
+          typeof record.detail === "string"
+            ? record.detail
+            : typeof record.description === "string"
+            ? record.description
+            : "Chưa có chi tiết.";
         return {
-            day: day,
-            title: detailParts[0]?.trim() || "Hoạt động trong ngày", 
-            detail: detailParts.slice(1).join(" - ")?.trim() || "Chưa có chi tiết.", 
+          day,
+          title: title || `Hoạt động ngày ${day}`,
+          detail,
         };
+      }
+
+      if (typeof entry === "string") {
+        const parts = entry.split(":");
+        const dayMatch = parts[0]?.match(/\d+/);
+        const day = dayMatch ? parseInt(dayMatch[0], 10) : index + 1;
+        const content = parts.slice(1).join(":").trim();
+        const detailParts = content.split(" - ");
+        return {
+          day,
+          title: detailParts[0]?.trim() || `Hoạt động ngày ${day}`,
+          detail: detailParts.slice(1).join(" - ").trim() || "Chưa có chi tiết.",
+        };
+      }
+
+      return {
+        day: index + 1,
+        title: `Hoạt động ngày ${index + 1}`,
+        detail: "Chưa có chi tiết.",
+      };
     });
-  }
+  };
 
   const postTour = async (payload: any, isEdit = false, id?: string) => {
     setIsSubmitting(true);
@@ -280,7 +479,7 @@ useEffect(() => { fetchTours(); }, []);
 
       await fetchTours();
       setEditingTour(null);
-      setFormData(initialFormData);
+      setFormData(createInitialFormData());
     } catch (err: any) {
       console.error(err);
       toast({
@@ -343,28 +542,100 @@ useEffect(() => { fetchTours(); }, []);
   }, []); 
 
   useEffect(() => {
+    const defaults = baseFormDefaults;
     if (editingTour) {
       const parsedItinerary = parseItineraryString(editingTour.itinerary);
+      const schedulesForForm: FormSchedule[] =
+        Array.isArray(editingTour.schedules) && editingTour.schedules.length > 0
+          ? editingTour.schedules.map((schedule) => ({
+              id: schedule?.id ? String(schedule.id) : undefined,
+              start_date: schedule?.start_date ? String(schedule.start_date).split("T")[0] : "",
+              end_date: schedule?.end_date ? String(schedule.end_date).split("T")[0] : "",
+              seats_total: Number(schedule?.seats_total ?? 0),
+              seats_available: Number(schedule?.seats_available ?? 0),
+              season_price: Number(schedule?.season_price ?? 0),
+            }))
+          : editingTour.schedule
+          ? [
+              {
+                id: editingTour.schedule.id ? String(editingTour.schedule.id) : undefined,
+                start_date: editingTour.schedule.start_date
+                  ? String(editingTour.schedule.start_date).split("T")[0]
+                  : "",
+                end_date: editingTour.schedule.end_date
+                  ? String(editingTour.schedule.end_date).split("T")[0]
+                  : "",
+                seats_total: Number(editingTour.schedule.seats_total ?? 0),
+                seats_available: Number(editingTour.schedule.seats_available ?? 0),
+                season_price: Number(editingTour.schedule.season_price ?? 0),
+              },
+            ]
+          : defaults.schedules.map((schedule) => ({ ...schedule }));
+
+      const packagesForForm: FormPackage[] =
+        Array.isArray(editingTour.packages) && editingTour.packages.length > 0
+          ? editingTour.packages.map((pkg) => ({
+              id: pkg?.id ? String(pkg.id) : undefined,
+              name: typeof pkg?.name === "string" ? pkg.name : "Gói dịch vụ",
+              description: typeof pkg?.description === "string" ? pkg.description : "",
+              adult_price: Number(pkg?.adult_price ?? 0),
+              child_price: Number(pkg?.child_price ?? 0),
+              is_active: pkg?.is_active !== false,
+            }))
+          : defaults.packages.map((pkg) => ({ ...pkg }));
+
+      const policiesForForm: FormCancellationPolicy[] =
+        Array.isArray(editingTour.cancellation_policies) && editingTour.cancellation_policies.length > 0
+          ? editingTour.cancellation_policies.map((policy) => ({
+              id: policy?.id ? String(policy.id) : undefined,
+              days_before: Number(policy?.days_before ?? 0),
+              refund_rate:
+                typeof policy?.refund_rate === "number"
+                  ? Math.max(0, Math.min(100, policy.refund_rate * 100))
+                  : 0,
+              description: typeof policy?.description === "string" ? policy.description : "",
+            }))
+          : defaults.cancellationPolicies.map((policy) => ({ ...policy }));
+
+      const categoriesForForm: FormCategory[] =
+        Array.isArray(editingTour.categories) && editingTour.categories.length > 0
+          ? editingTour.categories.map((category) => ({
+              id: category?.id ? String(category.id) : undefined,
+              name: typeof category?.name === "string" ? category.name : "",
+              slug: typeof category?.slug === "string" ? category.slug : "",
+            }))
+          : defaults.categories.map((category) => ({ ...category }));
+
       setFormData({
         title: editingTour.title || "",
         description: editingTour.description || "",
         destination: editingTour.destination || "",
-        base_price: editingTour.base_price || 0,
+        base_price: Number(
+          editingTour.base_price ?? packagesForForm?.[0]?.adult_price ?? defaults.base_price,
+        ),
         policy: editingTour.policy || "",
         tagsString: Array.isArray(editingTour.tags) ? editingTour.tags.join(", ") : "",
         imageUrlsString: Array.isArray(editingTour.media) ? editingTour.media.join("\n") : "",
-        itineraryItems: parsedItinerary.length > 0 ? parsedItinerary : initialFormData.itineraryItems,
-        start_date: editingTour.schedule?.start_date?.split("T")[0] || initialFormData.start_date,
-        end_date: editingTour.schedule?.end_date?.split("T")[0] || initialFormData.end_date,
-        seats_total: editingTour.schedule?.seats_total ?? initialFormData.seats_total,
-        seats_available: editingTour.schedule?.seats_available ?? initialFormData.seats_available,
-        season_price: editingTour.schedule?.season_price ?? initialFormData.season_price,
+        itineraryItems:
+          parsedItinerary.length > 0 ? parsedItinerary : defaults.itineraryItems.map((item) => ({ ...item })),
+        type: editingTour.type ?? defaults.type,
+        child_age_limit:
+          editingTour.child_age_limit !== undefined && editingTour.child_age_limit !== null
+            ? Number(editingTour.child_age_limit)
+            : defaults.child_age_limit,
+        requires_passport: editingTour.requires_passport ?? defaults.requires_passport,
+        requires_visa: editingTour.requires_visa ?? defaults.requires_visa,
+        status: editingTour.status ?? defaults.status,
+        schedules: schedulesForForm,
+        packages: packagesForForm,
+        cancellationPolicies: policiesForForm,
+        categories: categoriesForForm,
       });
       window.scrollTo({ top: 0, behavior: "smooth" });
     } else {
-      setFormData(initialFormData);
+      setFormData(createInitialFormData());
     }
-  }, [editingTour]);
+  }, [editingTour, baseFormDefaults]);
 
   // ---------------------------- HANDLERS ----------------------------
 
@@ -391,19 +662,31 @@ useEffect(() => { fetchTours(); }, []);
       }
   }
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
+  ) => {
     const { id, value } = e.target;
     // IMPROVEMENT: Chuyển đổi sang số an toàn hơn
-    if (["base_price", "season_price", "seats_total", "seats_available"].includes(id)) {
-        setFormData((prev) => ({ ...prev, [id]: Number(value) || 0 }));
+    if (["base_price"].includes(id)) {
+      setFormData((prev) => ({ ...prev, [id]: Number(value) || 0 }));
+    } else if (id === "child_age_limit") {
+      setFormData((prev) => ({
+        ...prev,
+        child_age_limit: value === "" ? null : Number(value) || null,
+      }));
     } else {
-        setFormData((prev) => ({ ...prev, [id]: value }));
+      setFormData((prev) => ({ ...prev, [id]: value }));
     }
+  };
+
+  const handleCheckboxChange = (id: "requires_passport" | "requires_visa") => (event: React.ChangeEvent<HTMLInputElement>) => {
+    const { checked } = event.target;
+    setFormData((prev) => ({ ...prev, [id]: checked }));
   };
 
   const handleAddTour = () => {
     setEditingTour(null);
-    setFormData(initialFormData);
+    setFormData(createInitialFormData());
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -455,63 +738,289 @@ const handleMoveItinerary = (index: number, delta: number) => {
     }
   };
 
+  const handleScheduleChange = (
+    index: number,
+    field: keyof FormSchedule,
+    value: string | number,
+  ) => {
+    setFormData((prev) => {
+      const next = [...prev.schedules];
+      const target = { ...next[index] };
+      if (field === "start_date" || field === "end_date") {
+        target[field] = typeof value === "string" ? value : String(value);
+      } else {
+        const numeric = Number(value) || 0;
+        if (field === "seats_total") {
+          target.seats_total = numeric;
+        } else if (field === "seats_available") {
+          target.seats_available = numeric;
+        } else if (field === "season_price") {
+          target.season_price = numeric;
+        }
+      }
+      next[index] = target;
+      return { ...prev, schedules: next };
+    });
+  };
+
+  const addSchedule = () => {
+    setFormData((prev) => ({
+      ...prev,
+      schedules: [
+        ...prev.schedules,
+        {
+          start_date: "",
+          end_date: "",
+          seats_total: 0,
+          seats_available: 0,
+          season_price: 0,
+        },
+      ],
+    }));
+  };
+
+  const removeSchedule = (index: number) => {
+    setFormData((prev) => {
+      if (prev.schedules.length <= 1) return prev;
+      const next = prev.schedules.filter((_, i) => i !== index);
+      return { ...prev, schedules: next };
+    });
+  };
+
+  const handlePackageChange = (
+    index: number,
+    field: keyof FormPackage,
+    value: string | number | boolean,
+  ) => {
+    setFormData((prev) => {
+      const next = [...prev.packages];
+      const target = { ...next[index] };
+      if (field === "is_active") {
+        target.is_active = Boolean(value);
+      } else if (field === "adult_price" || field === "child_price") {
+        target[field] = Number(value) || 0;
+      } else if (field === "name" || field === "description") {
+        target[field] = typeof value === "string" ? value : String(value);
+      }
+      next[index] = target;
+      return {
+        ...prev,
+        packages: next,
+        base_price:
+          index === 0 && field === "adult_price"
+            ? target.adult_price
+            : prev.base_price,
+      };
+    });
+  };
+
+  const addPackage = () => {
+    setFormData((prev) => ({
+      ...prev,
+      packages: [
+        ...prev.packages,
+        {
+          name: "Gói dịch vụ",
+          description: "",
+          adult_price: 0,
+          child_price: 0,
+          is_active: true,
+        },
+      ],
+    }));
+  };
+
+  const removePackage = (index: number) => {
+    setFormData((prev) => {
+      if (prev.packages.length <= 1) return prev;
+      const next = prev.packages.filter((_, i) => i !== index);
+      return { ...prev, packages: next };
+    });
+  };
+
+  const handlePolicyChange = (
+    index: number,
+    field: keyof FormCancellationPolicy,
+    value: string | number,
+  ) => {
+    setFormData((prev) => {
+      const next = [...prev.cancellationPolicies];
+      const target = { ...next[index] };
+      if (field === "description") {
+        target.description = typeof value === "string" ? value : String(value);
+      } else if (field === "days_before") {
+        target.days_before = Number(value) || 0;
+      } else if (field === "refund_rate") {
+        const numeric = Number(value);
+        target.refund_rate = Number.isFinite(numeric) ? Math.max(0, Math.min(100, numeric)) : 0;
+      }
+      next[index] = target;
+      return { ...prev, cancellationPolicies: next };
+    });
+  };
+
+  const addPolicy = () => {
+    setFormData((prev) => ({
+      ...prev,
+      cancellationPolicies: [
+        ...prev.cancellationPolicies,
+        {
+          days_before: 0,
+          refund_rate: 0,
+          description: "",
+        },
+      ],
+    }));
+  };
+
+  const removePolicy = (index: number) => {
+    setFormData((prev) => {
+      if (prev.cancellationPolicies.length <= 1) return prev;
+      const next = prev.cancellationPolicies.filter((_, i) => i !== index);
+      return { ...prev, cancellationPolicies: next };
+    });
+  };
+
+  const handleCategoryChange = (
+    index: number,
+    field: keyof FormCategory,
+    value: string,
+  ) => {
+    setFormData((prev) => {
+      const next = [...prev.categories];
+      const target = { ...next[index] };
+      target[field] = value;
+      next[index] = target;
+      return { ...prev, categories: next };
+    });
+  };
+
+  const addCategory = () => {
+    setFormData((prev) => ({
+      ...prev,
+      categories: [
+        ...prev.categories,
+        {
+          name: "",
+          slug: "",
+        },
+      ],
+    }));
+  };
+
+  const removeCategory = (index: number) => {
+    setFormData((prev) => {
+      if (prev.categories.length <= 1) return prev;
+      const next = prev.categories.filter((_, i) => i !== index);
+      return { ...prev, categories: next };
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (formData.itineraryItems.some(item => !item.title || !item.detail)) {
-        toast({
-            title: "Thiếu thông tin hành trình",
-            description: "Tiêu đề và Chi tiết hoạt động trong Hành trình không được để trống.",
-            variant: "destructive",
-        });
-        return;
+    if (formData.itineraryItems.some((item) => !item.title || !item.detail)) {
+      toast({
+        title: "Thiếu thông tin hành trình",
+        description: "Tiêu đề và chi tiết hoạt động trong hành trình không được để trống.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (
+      formData.schedules.some(
+        (schedule) => !schedule.start_date || !schedule.end_date || schedule.seats_total <= 0,
+      )
+    ) {
+      toast({
+        title: "Lịch khởi hành chưa hợp lệ",
+        description: "Mỗi lịch cần có ngày bắt đầu/kết thúc và tổng số chỗ lớn hơn 0.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (formData.packages.some((pkg) => !pkg.name || pkg.adult_price <= 0)) {
+      toast({
+        title: "Thiếu thông tin gói dịch vụ",
+        description: "Tên gói và giá người lớn phải được nhập và lớn hơn 0.",
+        variant: "destructive",
+      });
+      return;
     }
 
     const tagsArray = formData.tagsString.split(",").map((t) => t.trim()).filter(Boolean);
-    const mediaArray = formData.imageUrlsString
-      .split(/\r?\n/)
-      .map((u) => u.trim())
-      .filter(Boolean);
-    const itineraryStrings = formData.itineraryItems.map(
-      (i) => `Ngày ${i.day}: ${i.title} - ${i.detail}`
-    );
+    const mediaArray = Array.from(
+      new Set(
+        formData.imageUrlsString
+          .split(/\r?\n/)
+          .map((u) => u.trim())
+          .filter(Boolean),
+      ),
+    ).filter((url) => /^(https?:\/\/|data:)/i.test(url));
 
-    const schedulePayload: any = {
-      start_date: formData.start_date,
-      end_date: formData.end_date,
-      seats_total: Number(formData.seats_total),
-      seats_available: Math.min(Number(formData.seats_available), Number(formData.seats_total)),
-      season_price: Number(formData.season_price),
-    };
-    if (editingTour?.schedule?.id) {
-      schedulePayload.id = editingTour.schedule.id;
-    }
+    const itineraryPayload = formData.itineraryItems.map((item, index) => ({
+      day: item.day || index + 1,
+      title: item.title,
+      detail: item.detail,
+    }));
 
-    const baseAdultPrice = Number(formData.base_price) || 0;
-    const computedChildPrice =
-      baseAdultPrice > 0 ? Math.round(baseAdultPrice * 0.75) : 0;
+    const schedulesPayload = formData.schedules.map((schedule) => ({
+      ...(schedule.id ? { id: schedule.id } : {}),
+      start_date: schedule.start_date,
+      end_date: schedule.end_date,
+      seats_total: Number(schedule.seats_total) || 0,
+      seats_available: Math.min(
+        Number(schedule.seats_available) || 0,
+        Number(schedule.seats_total) || 0,
+      ),
+      season_price: Number(schedule.season_price) || 0,
+    }));
 
-    const packagesPayload = [
-      {
-        name: formData.title || "Gói tiêu chuẩn",
-        description: formData.description || "",
-        adult_price: baseAdultPrice,
-        child_price: computedChildPrice,
-        is_active: true,
-      },
-    ];
+    const packagesPayload = formData.packages.map((pkg) => ({
+      ...(pkg.id ? { id: pkg.id } : {}),
+      name: pkg.name || "Gói dịch vụ",
+      description: pkg.description,
+      adult_price: Number(pkg.adult_price) || 0,
+      child_price: Number(pkg.child_price) || 0,
+      is_active: Boolean(pkg.is_active),
+    }));
+
+    const cancellationPayload = formData.cancellationPolicies.map((policy) => ({
+      ...(policy.id ? { id: policy.id } : {}),
+      days_before: Number(policy.days_before) || 0,
+      refund_rate: Math.max(0, Math.min(1, (Number(policy.refund_rate) || 0) / 100)),
+      description: policy.description,
+    }));
+
+    const categoriesPayload = formData.categories
+      .map((category) => ({
+        ...(category.id ? { id: category.id } : {}),
+        name: category.name.trim(),
+        slug: category.slug.trim(),
+      }))
+      .filter((category) => category.name);
 
     const payload = {
       title: formData.title,
       description: formData.description,
       destination: formData.destination,
-      base_price: Number(formData.base_price),
+      base_price: Number(formData.base_price) || (packagesPayload[0]?.adult_price ?? 0),
       policy: formData.policy,
       tags: tagsArray,
       media: mediaArray,
-      itinerary: itineraryStrings,
-      schedule: schedulePayload,
+      itinerary: itineraryPayload,
+      type: formData.type,
+      child_age_limit: formData.child_age_limit ?? undefined,
+      requires_passport: formData.requires_passport,
+      requires_visa: formData.requires_visa,
+      status: formData.status,
+      schedules: schedulesPayload,
+      schedule: schedulesPayload[0] ?? undefined,
       packages: packagesPayload,
+      cancellation_policies: cancellationPayload,
+      categories: categoriesPayload,
     };
 
     await postTour(payload, !!editingTour, editingTour?.id);
@@ -521,6 +1030,7 @@ const handleMoveItinerary = (index: number, delta: number) => {
     const variants: Record<string, "default" | "secondary" | "destructive"> = {
       approved: "default",
       pending: "secondary",
+      draft: "secondary",
       rejected: "destructive",
     };
     return variants[status] || "secondary";
@@ -530,6 +1040,7 @@ const handleMoveItinerary = (index: number, delta: number) => {
     const texts: Record<string, string> = {
       approved: "Đã duyệt",
       pending: "Chờ duyệt",
+      draft: "Bản nháp",
       rejected: "Từ chối",
     };
     return texts[status] || status;
@@ -607,15 +1118,65 @@ const handleMoveItinerary = (index: number, delta: number) => {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="season_price">Giá mùa cao điểm</Label>
+                <Label htmlFor="type">Loại tour</Label>
+                <select
+                  id="type"
+                  value={formData.type}
+                  onChange={handleInputChange}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
+                >
+                  <option value="domestic">Tour nội địa</option>
+                  <option value="international">Tour quốc tế</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="child_age_limit">Giới hạn tuổi trẻ em</Label>
                 <Input
-                  id="season_price"
+                  id="child_age_limit"
                   type="number"
                   min="0"
-                  value={formData.season_price}
+                  value={formData.child_age_limit ?? ""}
                   onChange={handleInputChange}
-                  required
+                  placeholder="Ví dụ: 12"
                 />
+                <p className="text-xs text-muted-foreground">Để trống nếu tour không giới hạn độ tuổi.</p>
+              </div>
+              <div className="space-y-2">
+                <Label>Giấy tờ yêu cầu</Label>
+                <div className="flex flex-col gap-2 rounded-md border border-input bg-background px-3 py-2">
+                  <label className="flex items-center gap-2 text-sm text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={formData.requires_passport}
+                      onChange={handleCheckboxChange("requires_passport")}
+                      className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
+                    />
+                    Cần hộ chiếu
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={formData.requires_visa}
+                      onChange={handleCheckboxChange("requires_visa")}
+                      className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
+                    />
+                    Cần visa
+                  </label>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="status">Trạng thái</Label>
+                <select
+                  id="status"
+                  value={formData.status}
+                  onChange={handleInputChange}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
+                >
+                  <option value="draft">Bản nháp</option>
+                  <option value="pending">Chờ duyệt</option>
+                  <option value="approved">Đã duyệt</option>
+                  <option value="rejected">Từ chối</option>
+                </select>
               </div>
               <div className="space-y-2 xl:col-span-3">
                 <Label htmlFor="imageUrlsString">Danh sách ảnh</Label>
@@ -654,49 +1215,311 @@ const handleMoveItinerary = (index: number, delta: number) => {
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <div className="space-y-2">
-                <Label htmlFor="start_date">Ngày bắt đầu *</Label>
-                <Input
-                  id="start_date"
-                  type="date"
-                  value={formData.start_date}
-                  onChange={handleInputChange}
-                  required
-                />
+            <div className="space-y-4 rounded-lg border p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h3 className="flex items-center gap-2 text-lg font-semibold text-primary">
+                  <Calendar className="h-5 w-5" /> Lịch khởi hành
+                </h3>
+                <Button type="button" size="sm" variant="outline" onClick={addSchedule}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Thêm lịch
+                </Button>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="end_date">Ngày kết thúc *</Label>
-                <Input
-                  id="end_date"
-                  type="date"
-                  value={formData.end_date}
-                  onChange={handleInputChange}
-                  required
-                />
+              <div className="space-y-3">
+                {formData.schedules.map((schedule, index) => (
+                  <Card key={`schedule-${index}`} className="border border-dashed border-primary/30">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4">
+                      <CardTitle className="text-base font-semibold text-foreground">
+                        Lịch #{index + 1}
+                      </CardTitle>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive hover:text-red-600"
+                          onClick={() => removeSchedule(index)}
+                          disabled={formData.schedules.length === 1}
+                          aria-label="Xóa lịch khởi hành"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                      <div className="space-y-1">
+                        <Label>Ngày bắt đầu</Label>
+                        <Input
+                          type="date"
+                          value={schedule.start_date}
+                          onChange={(event) =>
+                            handleScheduleChange(index, "start_date", event.target.value)
+                          }
+                          required
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Ngày kết thúc</Label>
+                        <Input
+                          type="date"
+                          value={schedule.end_date}
+                          onChange={(event) =>
+                            handleScheduleChange(index, "end_date", event.target.value)
+                          }
+                          required
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Tổng số chỗ</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={schedule.seats_total}
+                          onChange={(event) =>
+                            handleScheduleChange(index, "seats_total", Number(event.target.value))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Số chỗ còn trống</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={schedule.seats_available}
+                          onChange={(event) =>
+                            handleScheduleChange(index, "seats_available", Number(event.target.value))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Giá mùa cao điểm</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={schedule.season_price}
+                          onChange={(event) =>
+                            handleScheduleChange(index, "season_price", Number(event.target.value))
+                          }
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="seats_total">Tổng số chỗ *</Label>
-                <Input
-                  id="seats_total"
-                  type="number"
-                  min="1"
-                  value={formData.seats_total}
-                  onChange={handleInputChange}
-                  required
-                />
+            </div>
+
+            <div className="space-y-4 rounded-lg border p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h3 className="flex items-center gap-2 text-lg font-semibold text-primary">
+                  <List className="h-5 w-5" /> Gói dịch vụ
+                </h3>
+                <Button type="button" size="sm" variant="outline" onClick={addPackage}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Thêm gói
+                </Button>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="seats_available">Số chỗ còn trống *</Label>
-                <Input
-                  id="seats_available"
-                  type="number"
-                  min="0"
-                  max={formData.seats_total}
-                  value={formData.seats_available}
-                  onChange={handleInputChange}
-                  required
-                />
+              <div className="space-y-3">
+                {formData.packages.map((pkg, index) => (
+                  <Card key={`package-${index}`} className="border border-dashed border-primary/30">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4">
+                      <CardTitle className="text-base font-semibold">Gói #{index + 1}</CardTitle>
+                      <div className="flex items-center gap-2">
+                        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <input
+                            type="checkbox"
+                            checked={pkg.is_active}
+                            onChange={(event) =>
+                              handlePackageChange(index, "is_active", event.target.checked)
+                            }
+                          />
+                          Đang mở bán
+                        </label>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="text-destructive hover:text-red-600"
+                          onClick={() => removePackage(index)}
+                          disabled={formData.packages.length === 1}
+                          aria-label="Xóa gói dịch vụ"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                      <div className="space-y-1 md:col-span-2">
+                        <Label>Tên gói</Label>
+                        <Input
+                          value={pkg.name}
+                          onChange={(event) =>
+                            handlePackageChange(index, "name", event.target.value)
+                          }
+                          placeholder="Gói tiêu chuẩn"
+                        />
+                      </div>
+                      <div className="space-y-1 md:col-span-2">
+                        <Label>Mô tả ngắn</Label>
+                        <Textarea
+                          rows={2}
+                          value={pkg.description}
+                          onChange={(event) =>
+                            handlePackageChange(index, "description", event.target.value)
+                          }
+                          placeholder="Bao gồm dịch vụ lưu trú, bữa ăn..."
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Giá người lớn</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={pkg.adult_price}
+                          onChange={(event) =>
+                            handlePackageChange(index, "adult_price", Number(event.target.value))
+                          }
+                          required
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Giá trẻ em</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={pkg.child_price}
+                          onChange={(event) =>
+                            handlePackageChange(index, "child_price", Number(event.target.value))
+                          }
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-4 rounded-lg border p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h3 className="flex items-center gap-2 text-lg font-semibold text-primary">
+                  <Shield className="h-5 w-5" /> Chính sách hoàn hủy
+                </h3>
+                <Button type="button" size="sm" variant="outline" onClick={addPolicy}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Thêm chính sách
+                </Button>
+              </div>
+              <div className="space-y-3">
+                {formData.cancellationPolicies.map((policy, index) => (
+                  <Card key={`policy-${index}`} className="border border-dashed border-primary/30">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4">
+                      <CardTitle className="text-base font-semibold">
+                        Chính sách #{index + 1}
+                      </CardTitle>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="text-destructive hover:text-red-600"
+                        onClick={() => removePolicy(index)}
+                        disabled={formData.cancellationPolicies.length === 1}
+                        aria-label="Xóa chính sách"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </CardHeader>
+                    <CardContent className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                      <div className="space-y-1">
+                        <Label>Số ngày trước khởi hành</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={policy.days_before}
+                          onChange={(event) =>
+                            handlePolicyChange(index, "days_before", Number(event.target.value))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Tỷ lệ hoàn (%)</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={policy.refund_rate}
+                          onChange={(event) =>
+                            handlePolicyChange(index, "refund_rate", Number(event.target.value))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1 md:col-span-2">
+                        <Label>Mô tả</Label>
+                        <Textarea
+                          rows={2}
+                          value={policy.description}
+                          onChange={(event) =>
+                            handlePolicyChange(index, "description", event.target.value)
+                          }
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+            
+
+            <div className="space-y-4 rounded-lg border p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h3 className="flex items-center gap-2 text-lg font-semibold text-primary">
+                  <List className="h-5 w-5" /> Danh mục hiển thị
+                </h3>
+                <Button type="button" size="sm" variant="outline" onClick={addCategory}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Thêm danh mục
+                </Button>
+              </div>
+              <div className="space-y-3">
+                {formData.categories.map((category, index) => (
+                  <Card key={`category-${index}`} className="border border-dashed border-primary/30">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4">
+                      <CardTitle className="text-base font-semibold">
+                        Danh mục #{index + 1}
+                      </CardTitle>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="text-destructive hover:text-red-600"
+                        onClick={() => removeCategory(index)}
+                        disabled={formData.categories.length === 1}
+                        aria-label="Xóa danh mục"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </CardHeader>
+                    <CardContent className="grid gap-3 md:grid-cols-2">
+                      <div className="space-y-1">
+                        <Label>Tên danh mục</Label>
+                        <Input
+                          value={category.name}
+                          onChange={(event) =>
+                            handleCategoryChange(index, "name", event.target.value)
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Slug</Label>
+                        <Input
+                          value={category.slug}
+                          onChange={(event) =>
+                            handleCategoryChange(index, "slug", event.target.value)
+                          }
+                          placeholder="tour-bien"
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
             </div>
 
@@ -785,7 +1608,7 @@ const handleMoveItinerary = (index: number, delta: number) => {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setFormData(initialFormData)}
+                  onClick={() => setFormData(createInitialFormData())}
                   disabled={isSubmitting}
                 >
                   Làm mới
@@ -810,223 +1633,332 @@ const handleMoveItinerary = (index: number, delta: number) => {
         </CardContent>
       </Card>
 
-        <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto scrollbar-hide">
-              <DialogHeader>
-                  <DialogTitle>{selectedTour ? selectedTour.title : "Đang tải chi tiết..."}</DialogTitle>
-                  <DialogDescription>
-                      {selectedTour ? (
-                          <>
-                              Chi tiết đầy đủ của tour. Trạng thái hiện tại: 
-                              <Badge variant={getStatusBadge(selectedTour.status)} className="ml-2">
-                                  {getStatusText(selectedTour.status)}
-                              </Badge>
-                          </>
-                      ) : "Vui lòng chờ trong giây lát..."}
-                  </DialogDescription>
-              </DialogHeader>
-
-              {isDetailLoading ? ( 
-                  <div className="flex justify-center items-center py-10">
-                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  </div>
-              ) : !selectedTour ? (
-                  <div className="text-center py-10">Không thể tải dữ liệu tour.</div>
+      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto scrollbar-hide">
+          <DialogHeader>
+            <DialogTitle>{selectedTour ? selectedTour.title : "Đang tải chi tiết tour"}</DialogTitle>
+            <DialogDescription>
+              {selectedTour ? (
+                <span className="inline-flex items-center gap-2">
+                  Chi tiết đầy đủ của tour
+                  <Badge variant={getStatusBadge(selectedTour.status)}>{getStatusText(selectedTour.status)}</Badge>
+                </span>
               ) : (
-                  <div className="space-y-6 pt-4">
-                      <Card>
-                          <CardHeader><CardTitle className="text-lg flex items-center gap-2"><List className="h-4 w-4"/> Thông tin cơ bản</CardTitle></CardHeader>
-                          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div>
-                                  <p className="text-sm font-semibold">Địa điểm:</p>
-                                  <p className="font-medium">{selectedTour.destination}</p>
-                              </div>
-                              <div>
-                                  <p className="text-sm font-semibold">Giá cơ bản:</p>
-                                  <p className="font-medium">{selectedTour.base_price.toLocaleString("vi-VN")}₫</p>
-                              </div>
-                              <div className="col-span-2">
-                                  <p className="text-sm font-semibold">Mô tả:</p>
-                                  <p className="text-gray-600 whitespace-pre-wrap">{selectedTour.description}</p>
-                              </div>
-                              <div className="col-span-2">
-                                  <p className="text-sm font-semibold">Chính sách:</p>
-                                  <p className="text-gray-600 whitespace-pre-wrap">{selectedTour.policy}</p>
-                              </div>
-                              <div className="col-span-2">
-                                  <p className="text-sm font-semibold">Tags:</p>
-                                  <div className="flex flex-wrap gap-2 pt-1">
-                                      {Array.isArray(selectedTour.tags) && selectedTour.tags.map((tag, i) => (
-                                          <Badge key={i} variant="secondary">{tag}</Badge>
-                                      ))}
-                                  </div>
-                              </div>
-                          </CardContent>
-                      </Card>
-
-                      {selectedTour.schedule ? (
-                        <Card>
-                          <CardHeader>
-                            <CardTitle className="text-lg flex items-center gap-2"><Calendar className="h-4 w-4"/> Lịch trình & Chỗ ngồi</CardTitle>
-                          </CardHeader>
-                          <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                            <div>
-                              <p className="text-sm font-semibold">Ngày đi:</p>
-                              <p className="font-medium">{selectedTour.schedule.start_date?.split('T')[0]}</p>
-                            </div>
-                            <div>
-                              <p className="text-sm font-semibold">Ngày về:</p>
-                              <p className="font-medium">{selectedTour.schedule.end_date?.split('T')[0]}</p>
-                            </div>
-                            <div>
-                              <p className="text-sm font-semibold">Giá cao điểm:</p>
-                              <p className="font-medium">{selectedTour.schedule.season_price?.toLocaleString("vi-VN")}₫</p>
-                            </div>
-                            <div>
-                              <p className="text-sm font-semibold">Tổng chỗ:</p>
-                              <p className="font-medium">{selectedTour.schedule.seats_total}</p>
-                            </div>
-                            <div>
-                              <p className="text-sm font-semibold">Còn trống:</p>
-                              <p className="font-medium">{selectedTour.schedule.seats_available}</p>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ) : (
-                        <Card>
-                          <CardHeader>
-                            <CardTitle className="text-lg flex items-center gap-2"><Calendar className="h-4 w-4"/> Lịch trình & Chỗ ngồi</CardTitle>
-                          </CardHeader>
-                          <CardContent>
-                            <p className="text-sm text-muted-foreground">Chưa có lịch trình cho tour này.</p>
-                          </CardContent>
-                        </Card>
-                      )}
-
-                      <Card>
-                          <CardHeader><CardTitle className="text-lg flex items-center gap-2"><MapPin className="h-4 w-4"/> Hành trình chi tiết</CardTitle></CardHeader>
-                          <CardContent className="space-y-4">
-                              {parseItineraryString(selectedTour.itinerary).map((item, i) => (
-                                  <div key={i} className="border-l-4 border-orange-400 pl-4">
-                                      <p className="font-semibold text-gray-800">Ngày {item.day}: {item.title}</p>
-                                      <p className="text-sm text-gray-600">{item.detail}</p>
-                                  </div>
-                              ))}
-                          </CardContent>
-                      </Card>
-
-                        <Card>
-                          <CardHeader>
-                            <CardTitle className="text-lg flex items-center gap-2">
-                              <Image className="h-4 w-4" /> Bộ sưu tập ảnh
-                            </CardTitle>
-                          </CardHeader>
-                          <CardContent>
-                            {mediaList.length > 0 ? (
-                              <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-                                <div className="relative w-full overflow-hidden rounded-xl border bg-muted aspect-[16/9]">
-                                  {/* FIX: Kiểm tra `currentImage` tồn tại trước khi render img */}
-                                  {currentImage ? (
-                                    <img
-                                      src={currentImage}
-                                      alt={`Ảnh tour ${selectedImageIndex + 1}`}
-                                      className="h-full w-full object-cover"
-                                      onError={(e) => {
-                                        // Ẩn ảnh nếu có lỗi tải
-                                        (e.currentTarget as HTMLImageElement).style.display = "none";
-                                        // Hoặc có thể thay thế bằng ảnh placeholder
-                                        // e.currentTarget.src = "/placeholder.png"; 
-                                      }}
-                                    />
-                                  ) : (
-                                    <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">
-                                      Không thể hiển thị ảnh.
-                                    </div>
-                                  )}
-
-                                  {mediaList.length > 1 && (
-                                    <>
-                                      <button
-                                        type="button"
-                                        className={`absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/25 p-2 text-white transition hover:bg-black/40 focus:outline-none focus:ring-2 focus:ring-white ${
-                                          selectedImageIndex === 0 ? "opacity-40 cursor-not-allowed" : ""
-                                        }`}
-                                        onClick={() => setSelectedImageIndex((idx) => Math.max(idx - 1, 0))}
-                                        disabled={selectedImageIndex === 0}
-                                        aria-label="Ảnh trước"
-                                      >
-                                        <ChevronLeft className="h-5 w-5" />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className={`absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/25 p-2 text-white transition hover:bg-black/40 focus:outline-none focus:ring-2 focus:ring-white ${
-                                          selectedImageIndex === mediaList.length - 1 ? "opacity-40 cursor-not-allowed" : ""
-                                        }`}
-                                        onClick={() => setSelectedImageIndex((idx) => Math.min(idx + 1, mediaList.length - 1))}
-                                        disabled={selectedImageIndex === mediaList.length - 1}
-                                        aria-label="Ảnh tiếp theo"
-                                      >
-                                        <ChevronRight className="h-5 w-5" />
-                                      </button>
-                                    </>
-                                  )}
-                                  <span className="absolute bottom-3 right-4 rounded-full bg-black/40 px-3 py-1 text-xs text-white">
-                                    {Math.min(selectedImageIndex + 1, mediaList.length)} / {mediaList.length}
-                                  </span>
-                                </div>
-
-                                <div className="flex gap-3 overflow-x-auto lg:flex-col lg:overflow-y-auto">
-                                  {mediaList.map((url, idx) => (
-                                    <button
-                                      type="button"
-                                      key={`${url}-${idx}`}
-                                      onClick={() => setSelectedImageIndex(idx)}
-                                      className={`flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-md border transition focus:outline-none focus:ring-2 focus:ring-primary ${
-                                        idx === selectedImageIndex
-                                          ? "border-primary ring-1 ring-primary"
-                                          : "border-transparent opacity-80 hover:opacity-100"
-                                      }`}
-                                      aria-label={`Chọn ảnh ${idx + 1}`}
-                                    >
-                                      <img
-                                        src={url}
-                                        alt={`Thumbnail ${idx + 1}`}
-                                        className="h-full w-full object-cover"
-                                        onError={(e) => {
-                                          (e.currentTarget as HTMLImageElement).style.visibility = "hidden";
-                                        }}
-                                      />
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                            ) : (
-                              <p className="text-sm text-muted-foreground">Chưa có ảnh nào cho tour này.</p>
-                            )}
-                          </CardContent>
-                        </Card>
-                  </div>
+                "Vui lòng chờ trong giây lát..."
               )}
+            </DialogDescription>
+          </DialogHeader>
 
-              <div className="flex justify-end pt-4">
-                  {selectedTour && (
-                    <Button
-                      variant="secondary"
-                      className="mr-2"
-                      onClick={() => {
-                        setIsDetailOpen(false);
-                        setEditingTour(selectedTour);
-                      }}
-                      disabled={selectedTour.status === 'approved'}
-                    >
-                      Chỉnh sửa
-                    </Button>
+          {isDetailLoading ? (
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : !selectedTour ? (
+            <div className="py-10 text-center text-sm text-muted-foreground">Không thể tải dữ liệu tour.</div>
+          ) : (
+            <div className="space-y-6 pt-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg font-semibold">Thông tin cơ bản</CardTitle>
+                </CardHeader>
+                <CardContent className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <p className="text-sm font-semibold text-muted-foreground">Địa điểm</p>
+                    <p className="font-medium text-foreground">{selectedTour.destination}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-muted-foreground">Giá cơ bản</p>
+                    <p className="font-medium text-foreground">
+                      {typeof selectedTour.base_price === "number"
+                        ? `${selectedTour.base_price.toLocaleString("vi-VN")}₫`
+                        : "—"}
+                    </p>
+                  </div>
+                  <div className="md:col-span-2">
+                    <p className="text-sm font-semibold text-muted-foreground">Mô tả</p>
+                    <p className="whitespace-pre-wrap text-sm text-muted-foreground">{selectedTour.description}</p>
+                  </div>
+                  <div className="md:col-span-2">
+                    <p className="text-sm font-semibold text-muted-foreground">Chính sách</p>
+                    <p className="whitespace-pre-wrap text-sm text-muted-foreground">{selectedTour.policy}</p>
+                  </div>
+                  {Array.isArray(selectedTour.tags) && selectedTour.tags.length > 0 ? (
+                    <div className="md:col-span-2">
+                      <p className="text-sm font-semibold text-muted-foreground">Tags</p>
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {selectedTour.tags.map((tag, index) => (
+                          <Badge key={`${tag}-${index}`} variant="secondary">
+                            {tag}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg font-semibold">
+                    <Calendar className="h-4 w-4" />
+                    Lịch trình &amp; chỗ ngồi
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {Array.isArray(selectedTour.schedules) && selectedTour.schedules.length > 0 ? (
+                    <div className="space-y-4">
+                      {selectedTour.schedules.map((schedule, index) => (
+                        <div
+                          key={schedule?.id ?? index}
+                          className="grid grid-cols-2 gap-4 rounded-lg border border-dashed border-primary/30 p-3 md:grid-cols-3"
+                        >
+                          <div>
+                            <p className="text-sm font-semibold text-muted-foreground">Ngày đi</p>
+                            <p className="font-medium text-foreground">
+                              {schedule?.start_date ? String(schedule.start_date).split("T")[0] : "—"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-muted-foreground">Ngày về</p>
+                            <p className="font-medium text-foreground">
+                              {schedule?.end_date ? String(schedule.end_date).split("T")[0] : "—"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-muted-foreground">Giá mùa cao điểm</p>
+                            <p className="font-medium text-foreground">
+                              {schedule?.season_price !== undefined && schedule?.season_price !== null
+                                ? `${Number(schedule.season_price).toLocaleString("vi-VN")}₫`
+                                : "—"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-muted-foreground">Tổng chỗ</p>
+                            <p className="font-medium text-foreground">{schedule?.seats_total ?? "—"}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-muted-foreground">Còn trống</p>
+                            <p className="font-medium text-foreground">{schedule?.seats_available ?? "—"}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Chưa có lịch trình cho tour này.</p>
                   )}
-                  <Button variant="outline" onClick={() => setIsDetailOpen(false)}>Đóng</Button>
-              </div>
-          </DialogContent>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg font-semibold">
+                    <MapPin className="h-4 w-4" />
+                    Hành trình chi tiết
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {parseItineraryString(selectedTour.itinerary).map((item, index) => (
+                    <div key={`${item.day}-${index}`} className="border-l-4 border-orange-400 pl-4">
+                      <p className="font-semibold text-foreground">
+                        Ngày {item.day}: {item.title}
+                      </p>
+                      <p className="text-sm text-muted-foreground">{item.detail}</p>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              {Array.isArray(selectedTour.packages) && selectedTour.packages.length > 0 ? (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-lg font-semibold">
+                      <List className="h-4 w-4" />
+                      Gói dịch vụ
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {selectedTour.packages.map((pkg, index) => (
+                      <div
+                        key={pkg.id ?? index}
+                        className="space-y-2 rounded-lg border border-dashed border-primary/30 p-3"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-semibold text-foreground">
+                            {pkg.name ?? `Gói dịch vụ #${index + 1}`}
+                          </p>
+                          <Badge variant={pkg.is_active ? "default" : "secondary"}>
+                            {pkg.is_active ? "Đang mở bán" : "Tạm dừng"}
+                          </Badge>
+                        </div>
+                        {pkg.description && (
+                          <p className="text-sm text-muted-foreground">{pkg.description}</p>
+                        )}
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div>
+                            <p className="text-muted-foreground">Giá người lớn</p>
+                            <p className="font-medium text-foreground">
+                              {pkg.adult_price !== undefined && pkg.adult_price !== null
+                                ? `${Number(pkg.adult_price).toLocaleString("vi-VN")}₫`
+                                : "—"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Giá trẻ em</p>
+                            <p className="font-medium text-foreground">
+                              {pkg.child_price !== undefined && pkg.child_price !== null
+                                ? `${Number(pkg.child_price).toLocaleString("vi-VN")}₫`
+                                : "—"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              ) : null}
+
+              {Array.isArray(selectedTour.cancellation_policies) &&
+              selectedTour.cancellation_policies.length > 0 ? (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-lg font-semibold">
+                      <Shield className="h-4 w-4" />
+                      Chính sách hoàn hủy
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {selectedTour.cancellation_policies.map((policy, index) => (
+                      <div
+                        key={policy.id ?? index}
+                        className="space-y-1 rounded-lg border border-dashed border-primary/20 p-3"
+                      >
+                        <p className="text-sm font-semibold text-foreground">
+                          Trước {policy.days_before ?? "—"} ngày
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Hoàn lại {policy.refund_rate !== undefined && policy.refund_rate !== null
+                            ? `${Number(policy.refund_rate * 100).toFixed(0)}%`
+                            : "Theo thỏa thuận"}
+                        </p>
+                        {policy.description && (
+                          <p className="text-xs text-muted-foreground">{policy.description}</p>
+                        )}
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              ) : null}
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg font-semibold">
+                    <Image className="h-4 w-4" />
+                    Bộ sưu tập ảnh
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {mediaList.length > 0 ? (
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+                      <div className="relative aspect-[16/9] w-full overflow-hidden rounded-xl border bg-muted">
+                        {currentImage ? (
+                          <img
+                            src={currentImage}
+                            alt={`Ảnh tour ${selectedImageIndex + 1}`}
+                            className="h-full w-full object-cover"
+                            onError={(event) => {
+                              (event.currentTarget as HTMLImageElement).style.display = "none"
+                            }}
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">
+                            Không thể hiển thị ảnh.
+                          </div>
+                        )}
+                        {mediaList.length > 1 && (
+                          <>
+                            <button
+                              type="button"
+                              className={`absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/25 p-2 text-white transition hover:bg-black/40 focus:outline-none focus:ring-2 focus:ring-white ${
+                                selectedImageIndex === 0 ? "cursor-not-allowed opacity-40" : ""
+                              }`}
+                              onClick={() => setSelectedImageIndex((index) => Math.max(index - 1, 0))}
+                              disabled={selectedImageIndex === 0}
+                              aria-label="Ảnh trước"
+                            >
+                              <ChevronLeft className="h-5 w-5" />
+                            </button>
+                            <button
+                              type="button"
+                              className={`absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/25 p-2 text-white transition hover:bg-black/40 focus:outline-none focus:ring-2 focus:ring-white ${
+                                selectedImageIndex === mediaList.length - 1 ? "cursor-not-allowed opacity-40" : ""
+                              }`}
+                              onClick={() =>
+                                setSelectedImageIndex((index) => Math.min(index + 1, mediaList.length - 1))
+                              }
+                              disabled={selectedImageIndex === mediaList.length - 1}
+                              aria-label="Ảnh tiếp theo"
+                            >
+                              <ChevronRight className="h-5 w-5" />
+                            </button>
+                          </>
+                        )}
+                        <span className="absolute bottom-3 right-4 rounded-full bg-black/40 px-3 py-1 text-xs text-white">
+                          {Math.min(selectedImageIndex + 1, mediaList.length)} / {mediaList.length}
+                        </span>
+                      </div>
+
+                      <div className="flex gap-3 overflow-x-auto lg:flex-col lg:overflow-y-auto">
+                        {mediaList.map((url, index) => (
+                          <button
+                            type="button"
+                            key={`${url}-${index}`}
+                            onClick={() => setSelectedImageIndex(index)}
+                            className={`flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-md border transition focus:outline-none focus:ring-2 focus:ring-primary ${
+                              index === selectedImageIndex
+                                ? "border-primary ring-1 ring-primary"
+                                : "border-transparent opacity-80 hover:opacity-100"
+                            }`}
+                            aria-label={`Chọn ảnh ${index + 1}`}
+                          >
+                            <img
+                              src={url}
+                              alt={`Thumbnail ${index + 1}`}
+                              className="h-full w-full object-cover"
+                              onError={(event) => {
+                                (event.currentTarget as HTMLImageElement).style.visibility = "hidden"
+                              }}
+                            />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Chưa có ảnh nào cho tour này.</p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-4">
+            {selectedTour && (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setIsDetailOpen(false)
+                  setEditingTour(selectedTour)
+                }}
+                disabled={selectedTour.status === "approved"}
+              >
+                Chỉnh sửa
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => setIsDetailOpen(false)}>
+              Đóng
+            </Button>
+          </div>
+        </DialogContent>
       </Dialog>
-      
       <Card>
         <CardHeader>
           <CardTitle>Danh sách Tour đã đăng</CardTitle>

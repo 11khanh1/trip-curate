@@ -23,6 +23,7 @@ const fallbackActivities = [
     image: DEFAULT_TOUR_IMAGE,
     rating: 4.8,
     reviewCount: 1240,
+    bookingsCount: 24500,
     price: 890000,
     duration: "2-3 ngày",
     category: "Tour",
@@ -36,6 +37,7 @@ const fallbackActivities = [
     image: "https://images.unsplash.com/photo-1505765050516-f72dcac9c60e?w=800&h=600&fit=crop",
     rating: 4.7,
     reviewCount: 980,
+    bookingsCount: 18700,
     price: 1250000,
     duration: "3 ngày 2 đêm",
     category: "Combo nghỉ dưỡng",
@@ -49,6 +51,7 @@ const fallbackActivities = [
     image: "https://images.unsplash.com/photo-1526481280695-3c469b17b2cc?w=800&h=600&fit=crop",
     rating: 4.9,
     reviewCount: 1560,
+    bookingsCount: 16200,
     price: 590000,
     duration: "1 ngày",
     category: "Trải nghiệm",
@@ -68,6 +71,15 @@ const normalizeDuration = (duration?: number | string | null) => {
   return trimmed.length > 0 ? trimmed : "Linh hoạt";
 };
 
+const coerceNumber = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
 const featureFromSchedule = (tour: PublicTour) => {
   const firstSchedule = tour.schedules?.[0];
   if (firstSchedule?.start_date) {
@@ -80,6 +92,46 @@ const featureFromSchedule = (tour: PublicTour) => {
     return `${tour.bookings_count.toLocaleString("vi-VN")} lượt đặt`;
   }
   return "Xác nhận tức thời";
+};
+
+const resolveTourRating = (tour: PublicTour): number | null => {
+  const candidates = [
+    tour.average_rating,
+    tour.rating_average,
+    (tour as Record<string, unknown> | undefined)?.averageRating,
+    (tour as Record<string, unknown> | undefined)?.rating,
+  ];
+  for (const candidate of candidates) {
+    const parsed = coerceNumber(candidate);
+    if (parsed !== null && parsed > 0) {
+      return parsed;
+    }
+  }
+  return null;
+};
+
+const resolveReviewCount = (tour: PublicTour): number | null => {
+  const candidates = [
+    tour.rating_count,
+    tour.reviews_count,
+    (tour as Record<string, unknown> | undefined)?.reviewsCount,
+    (tour as Record<string, unknown> | undefined)?.review_count,
+  ];
+  for (const candidate of candidates) {
+    const parsed = coerceNumber(candidate);
+    if (parsed !== null && parsed >= 0) {
+      return parsed;
+    }
+  }
+  return null;
+};
+
+const resolveBookingCount = (tour: PublicTour): number | null => {
+  const parsed = coerceNumber(tour.bookings_count);
+  if (parsed !== null && parsed >= 0) return parsed;
+  const fallback = (tour as Record<string, unknown> | undefined)?.bookingsCount;
+  const parsedFallback = coerceNumber(fallback);
+  return parsedFallback !== null && parsedFallback >= 0 ? parsedFallback : null;
 };
 
 const mapTourToCard = (tour: PublicTour) => {
@@ -118,14 +170,18 @@ const mapTourToCard = (tour: PublicTour) => {
     tour.id ??
     tour.uuid ??
     `tour-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
+  const rating = resolveTourRating(tour);
+  const reviewCount = resolveReviewCount(tour);
+  const bookingsCount = resolveBookingCount(tour);
 
   return {
     id: String(id),
     title,
     location,
     image,
-    rating: 4.7,
-    reviewCount: tour.bookings_count ?? 1250,
+    rating,
+    reviewCount,
+    bookingsCount,
     price,
     duration: normalizeDuration(tour.duration),
     category,

@@ -158,12 +158,23 @@ export interface AdminTour {
   currency?: string;
   location?: string;
   category?: string;
-  duration?: string;
+  duration?: string | number | null;
   start_date?: string;
   end_date?: string;
   created_at?: string;
   updated_at?: string;
   thumbnail_url?: string | null;
+  tags?: string[];
+  media?: string[];
+  itinerary?: unknown;
+  type?: string | null;
+  child_age_limit?: number | null;
+  requires_passport?: boolean | null;
+  requires_visa?: boolean | null;
+  schedules?: AdminTourSchedule[];
+  packages?: AdminTourPackage[];
+  cancellation_policies?: AdminTourCancellationPolicy[];
+  categories?: AdminTourCategory[];
   [key: string]: unknown;
 }
 
@@ -381,13 +392,40 @@ export async function updateAdminPartnerStatus(id: string | number, status: Part
 
 export interface AdminTourSchedule {
   id?: string | number;
-  title?: string;
   start_date?: string;
   end_date?: string;
-  capacity?: number;
-  slots_available?: number;
-  price?: number;
-  notes?: string | null;
+  seats_total?: number | null;
+  seats_available?: number | null;
+  season_price?: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  [key: string]: unknown;
+}
+
+export interface AdminTourPackage {
+  id?: string | number;
+  name?: string | null;
+  description?: string | null;
+  adult_price?: number | null;
+  child_price?: number | null;
+  is_active?: boolean | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  [key: string]: unknown;
+}
+
+export interface AdminTourCancellationPolicy {
+  id?: string | number;
+  days_before?: number | null;
+  refund_rate?: number | null;
+  description?: string | null;
+  [key: string]: unknown;
+}
+
+export interface AdminTourCategory {
+  id?: string | number;
+  name?: string | null;
+  slug?: string | null;
   [key: string]: unknown;
 }
 

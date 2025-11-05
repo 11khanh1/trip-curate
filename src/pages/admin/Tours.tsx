@@ -24,7 +24,21 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { StatCard } from "@/components/admin/StatCard";
-import { Loader2, MapPin, CheckCircle2, Clock, XCircle, Search, DollarSign, CalendarDays, Phone, Mail, User } from "lucide-react";
+import {
+  Loader2,
+  MapPin,
+  CheckCircle2,
+  Clock,
+  XCircle,
+  Search,
+  DollarSign,
+  CalendarDays,
+  Phone,
+  Mail,
+  User,
+  List,
+  Shield,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -35,6 +49,10 @@ import {
   type AdminTourStatus,
   type AdminTourParams,
   type AdminTourDetail,
+  type AdminTourSchedule,
+  type AdminTourPackage,
+  type AdminTourCancellationPolicy,
+  type AdminTourCategory,
   type PaginatedResponse,
 } from "@/services/adminApi";
 
@@ -118,12 +136,100 @@ const formatCurrency = (amount?: number | string, currency?: string) => {
   }).format(numeric);
 };
 
+const formatRefundRateLabel = (rate?: number | null) => {
+  if (typeof rate !== "number" || Number.isNaN(rate)) return null;
+  const normalized = rate > 1 ? rate : rate * 100;
+  return `${Math.round(normalized)}%`;
+};
+
+const extractTrimmedString = (value: unknown): string | null => {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+const toStringArray = (value: unknown): string[] => {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (typeof item === "string") return item.trim();
+        if (
+          item &&
+          typeof item === "object" &&
+          typeof (item as Record<string, unknown>).url === "string"
+        ) {
+          return ((item as Record<string, unknown>).url as string).trim();
+        }
+        return "";
+      })
+      .filter(Boolean);
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        return toStringArray(parsed);
+      } catch {
+        return trimmed.split(/\s*,\s*/).filter(Boolean);
+      }
+    }
+    return trimmed.split(/\s*,\s*/).filter(Boolean);
+  }
+  return [];
+};
+
+const parseItineraryEntries = (
+  value: unknown,
+): Array<{ day: number; title: string; detail: string }> => {
+  if (!Array.isArray(value)) return [];
+  return value.map((entry, index) => {
+    if (entry && typeof entry === "object") {
+      const record = entry as Record<string, unknown>;
+      const dayRaw = record.day ?? record.order ?? index + 1;
+      const day =
+        typeof dayRaw === "number" && Number.isFinite(dayRaw)
+          ? dayRaw
+          : Number(dayRaw) || index + 1;
+      const title =
+        typeof record.title === "string" && record.title.trim()
+          ? record.title.trim()
+          : typeof record.name === "string" && record.name.trim()
+          ? record.name.trim()
+          : `Hoạt động ngày ${day}`;
+      const detail =
+        typeof record.detail === "string" && record.detail.trim()
+          ? record.detail.trim()
+          : typeof record.description === "string" && record.description.trim()
+          ? record.description.trim()
+          : "Chưa có chi tiết.";
+      return { day, title, detail };
+    }
+    if (typeof entry === "string") {
+      const parts = entry.split(":");
+      const dayMatch = parts[0]?.match(/\d+/);
+      const day = dayMatch ? parseInt(dayMatch[0], 10) : index + 1;
+      const content = parts.slice(1).join(":").trim();
+      const detailParts = content.split(" - ");
+      return {
+        day,
+        title: detailParts[0]?.trim() || `Hoạt động ngày ${day}`,
+        detail: detailParts.slice(1).join(" - ").trim() || "Chưa có chi tiết.",
+      };
+    }
+    return { day: index + 1, title: `Hoạt động ngày ${index + 1}`, detail: "Chưa có chi tiết." };
+  });
+};
+
 const normalizeTour = (tour: AdminTour): NormalizedTour => {
+  const tourRecord = tour as AdminTour & Record<string, unknown>;
   const rawStatus = typeof tour.status === "string" ? tour.status.toLowerCase() : undefined;
   const status: AdminTourStatus =
     rawStatus === "approved" ? "approved" : rawStatus === "rejected" ? "rejected" : "pending";
 
-  const fallbackUuid = tour["uuid"];
+  const fallbackUuid = tourRecord["uuid"];
   const idCandidate =
     typeof tour.id === "string"
       ? tour.id
@@ -133,38 +239,88 @@ const normalizeTour = (tour: AdminTour): NormalizedTour => {
           ? fallbackUuid
           : undefined;
 
-  const rawTitle = tour["title"];
-  const rawDestination = tour["destination"];
-  const priceValue =
-    typeof tour.price === "number"
-      ? tour.price
-      : typeof tour.price === "string"
-        ? Number(tour.price)
-        : undefined;
-  const currency = typeof tour.currency === "string" ? tour.currency : "VND";
+  const titleCandidate =
+    extractTrimmedString(tour.name) ??
+    extractTrimmedString(tourRecord.title) ??
+    extractTrimmedString(tourRecord["tour_name"]) ??
+    "Chưa đặt tên";
+
+  const destinationCandidate =
+    extractTrimmedString(tour.location) ??
+    extractTrimmedString(tourRecord.destination) ??
+    extractTrimmedString(tourRecord["place"]) ??
+    "—";
+
+  const packages = Array.isArray(tour.packages)
+    ? tour.packages.filter((pkg): pkg is AdminTourPackage => Boolean(pkg))
+    : [];
+  const primaryPackage = packages.find((pkg) => pkg?.is_active !== false) ?? packages[0];
+
+  const rawBasePrice = tourRecord.base_price as unknown;
+
+  const basePrice = (() => {
+    if (typeof rawBasePrice === "number" && Number.isFinite(rawBasePrice)) return rawBasePrice;
+    if (typeof rawBasePrice === "string" && rawBasePrice.trim()) {
+      const parsed = Number(rawBasePrice);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+    if (primaryPackage) {
+      const priceCandidate =
+        typeof primaryPackage.adult_price === "number"
+          ? primaryPackage.adult_price
+          : typeof primaryPackage.adult_price === "string"
+          ? Number(primaryPackage.adult_price)
+          : undefined;
+      if (typeof priceCandidate === "number" && Number.isFinite(priceCandidate)) {
+        return priceCandidate;
+      }
+    }
+    if (typeof tour.price === "number" && Number.isFinite(tour.price)) return tour.price;
+    if (typeof tour.price === "string" && (tour.price as string).trim()) {
+    const parsed = Number(tour.price);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+    return undefined;
+  })();
+
   const formattedPrice =
-    typeof priceValue === "number" && Number.isFinite(priceValue) && priceValue > 0
-      ? new Intl.NumberFormat("vi-VN", {
-          style: currency.toUpperCase() === "USD" ? "currency" : "decimal",
-          currency: currency.toUpperCase() === "USD" ? "USD" : undefined,
-          maximumFractionDigits: 0,
-        }).format(priceValue)
+    typeof basePrice === "number" && Number.isFinite(basePrice) && basePrice > 0
+      ? new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 0 }).format(basePrice)
       : "Liên hệ";
+
+  const schedules = Array.isArray(tour.schedules)
+    ? tour.schedules.filter((schedule): schedule is AdminTourSchedule => Boolean(schedule))
+    : [];
+  const fallbackSchedule = tourRecord.schedule as AdminTourSchedule | undefined;
+  const primarySchedule =
+    schedules.find(
+      (schedule) =>
+        typeof schedule?.start_date === "string" && schedule.start_date.trim().length > 0,
+    ) ?? fallbackSchedule;
+
+  const startDate =
+    typeof primarySchedule?.start_date === "string" && primarySchedule.start_date.trim()
+      ? primarySchedule.start_date
+      : typeof tour.start_date === "string" && tour.start_date.trim()
+      ? tour.start_date
+      : undefined;
+  const endDate =
+    typeof primarySchedule?.end_date === "string" && primarySchedule.end_date.trim()
+      ? primarySchedule.end_date
+      : typeof tour.end_date === "string" && tour.end_date.trim()
+      ? tour.end_date
+      : undefined;
 
   return {
     id: String(idCandidate ?? tour.id ?? ""),
-    name: typeof tour.name === "string" && tour.name.trim() ? tour.name : (typeof rawTitle === "string" ? rawTitle : "Chưa đặt tên"),
+    name: titleCandidate,
     status,
     partner: tour.partner?.company_name ?? tour.partner?.user?.name ?? "Đối tác",
     price: formattedPrice,
-    location: typeof tour.location === "string" && tour.location.trim()
-      ? tour.location
-      : typeof rawDestination === "string"
-        ? rawDestination
-        : "—",
+    location: destinationCandidate,
     createdAt: tour.created_at,
-    startDate: tour.start_date,
-    endDate: tour.end_date,
+    startDate: startDate ?? undefined,
+    endDate: endDate ?? undefined,
   };
 };
 
@@ -340,7 +496,9 @@ export default function AdminTours() {
   });
 
   const detailTour = tourDetailQuery.data;
-  const detailSchedules = detailTour?.schedules ?? [];
+  const detailSchedules = (detailTour?.schedules ?? []).filter(
+    (schedule): schedule is AdminTourSchedule => Boolean(schedule),
+  );
   const fallbackTour = detailTourId ? tours.find((item) => item.id === detailTourId) : undefined;
   const detailNormalized = detailTour ? normalizeTour(detailTour) : fallbackTour;
   const detailStatusMeta = detailNormalized ? STATUS_LABELS[detailNormalized.status] ?? STATUS_LABELS.pending : undefined;
@@ -357,15 +515,39 @@ export default function AdminTours() {
     detailPriceLabelRaw === "—" && typeof detailNormalized?.price === "string"
       ? detailNormalized.price
       : detailPriceLabelRaw;
+  const detailTags = toStringArray(detailTour?.tags);
+  const detailCategories = (detailTour?.categories ?? []).filter(
+    (category): category is AdminTourCategory => Boolean(category),
+  );
+  const detailPackages = (detailTour?.packages ?? []).filter(
+    (pkg): pkg is AdminTourPackage => Boolean(pkg),
+  );
+  const detailCancellationPolicies = (detailTour?.cancellation_policies ?? []).filter(
+    (policy): policy is AdminTourCancellationPolicy => Boolean(policy),
+  );
+  const detailItinerary = parseItineraryEntries(detailTour?.itinerary ?? []);
+  const detailRequiresPassport = Boolean(detailTour?.requires_passport);
+  const detailRequiresVisa = Boolean(detailTour?.requires_visa);
+  const detailChildAgeLimit =
+    typeof detailTour?.child_age_limit === "number" && Number.isFinite(detailTour.child_age_limit)
+      ? detailTour.child_age_limit
+      : null;
+  const detailType =
+    typeof detailTour?.type === "string" && detailTour.type.trim().length > 0
+      ? detailTour.type.trim()
+      : null;
   const detailErrorMessage = tourDetailQuery.isError
     ? extractErrorMessage(tourDetailQuery.error, "Không thể tải chi tiết tour.")
     : "";
   const isDetailLoading = tourDetailQuery.isFetching;
 
   const handleDetailClose = () => {
+    const currentId = detailTourId;
     setIsDetailOpen(false);
     setDetailTourId(null);
-    tourDetailQuery.remove?.();
+    if (currentId) {
+      queryClient.removeQueries({ queryKey: ["admin-tour", currentId] });
+    }
   };
 
   return (
@@ -654,23 +836,68 @@ export default function AdminTours() {
                 <div className="space-y-3">
                   <div className="flex flex-wrap items-center gap-3">
                     <p className="text-lg font-semibold text-foreground">{detailNormalized.name}</p>
-                    {detailStatusMeta ? <Badge variant={detailStatusMeta.badge}>{detailStatusMeta.label}</Badge> : null}
+                    {detailStatusMeta ? (
+                      <Badge variant={detailStatusMeta.badge}>{detailStatusMeta.label}</Badge>
+                    ) : null}
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    Địa điểm: <span className="font-medium text-foreground">{detailNormalized.location}</span>
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Thời gian:{" "}
-                    <span className="font-medium text-foreground">
-                      {formatDateLabel(detailNormalized.startDate)} → {formatDateLabel(detailNormalized.endDate)}
-                    </span>
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Giá niêm yết:{" "}
-                    <span className="font-medium text-foreground">
-                      {detailPriceLabel}
-                    </span>
-                  </p>
+                  <div className="grid gap-2 text-sm sm:grid-cols-2">
+                    <p className="text-muted-foreground">
+                      Địa điểm:{" "}
+                      <span className="font-medium text-foreground">{detailNormalized.location}</span>
+                    </p>
+                    <p className="text-muted-foreground">
+                      Giá niêm yết:{" "}
+                      <span className="font-medium text-foreground">{detailPriceLabel}</span>
+                    </p>
+                    <p className="text-muted-foreground">
+                      Thời gian:{" "}
+                      <span className="font-medium text-foreground">
+                        {formatDateLabel(detailNormalized.startDate)} → {formatDateLabel(detailNormalized.endDate)}
+                      </span>
+                    </p>
+                    <p className="text-muted-foreground">
+                      Loại tour:{" "}
+                      <span className="font-medium text-foreground">
+                        {detailType === "domestic"
+                          ? "Nội địa"
+                          : detailType === "international"
+                          ? "Quốc tế"
+                          : detailType ?? "Chưa cập nhật"}
+                      </span>
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <Badge variant={detailRequiresPassport ? "default" : "outline"}>
+                      {detailRequiresPassport ? "Cần hộ chiếu" : "Không cần hộ chiếu"}
+                    </Badge>
+                    <Badge variant={detailRequiresVisa ? "default" : "outline"}>
+                      {detailRequiresVisa ? "Cần visa" : "Không cần visa"}
+                    </Badge>
+                    {detailChildAgeLimit !== null ? (
+                      <Badge variant="secondary">Trẻ em ≤ {detailChildAgeLimit} tuổi</Badge>
+                    ) : null}
+                  </div>
+                  {detailTags.length > 0 ? (
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {detailTags.map((tag) => (
+                        <Badge key={tag} variant="outline" className="bg-primary/5 text-primary">
+                          #{tag}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : null}
+                  {detailCategories.length > 0 ? (
+                    <div className="flex flex-wrap gap-2 pt-1 text-xs text-muted-foreground">
+                      <span className="font-semibold text-foreground">Danh mục:</span>
+                      {detailCategories.map((category, index) => (
+                        <span key={category.id ?? index} className="rounded-full bg-muted px-2 py-1">
+                          {typeof category?.name === "string" && category.name.trim()
+                            ? category.name
+                            : `Danh mục #${index + 1}`}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2 text-sm">
@@ -702,35 +929,108 @@ export default function AdminTours() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Tiêu đề</TableHead>
                           <TableHead>Bắt đầu</TableHead>
                           <TableHead>Kết thúc</TableHead>
-                          <TableHead>Giá</TableHead>
-                          <TableHead>Số chỗ</TableHead>
+                          <TableHead>Giá mùa cao điểm</TableHead>
+                          <TableHead>Tổng chỗ</TableHead>
+                          <TableHead>Còn trống</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {detailSchedules.map((schedule, index) => (
                           <TableRow key={`${schedule.id ?? index}-${index}`}>
-                            <TableCell>
-                              {typeof schedule.title === "string" && schedule.title.trim()
-                                ? schedule.title
-                                : "Không tên"}
-                            </TableCell>
                             <TableCell>{formatDateLabel(schedule.start_date)}</TableCell>
                             <TableCell>{formatDateLabel(schedule.end_date)}</TableCell>
-                            <TableCell>{formatCurrency(schedule.price, detailTour?.currency)}</TableCell>
-                            <TableCell>
-                              {(schedule.slots_available ?? schedule.capacity) !== undefined
-                                ? `${schedule.slots_available ?? schedule.capacity} chỗ`
-                                : "—"}
-                            </TableCell>
+                            <TableCell>{formatCurrency(schedule.season_price, detailTour?.currency)}</TableCell>
+                            <TableCell>{schedule.seats_total ?? "—"}</TableCell>
+                            <TableCell>{schedule.seats_available ?? "—"}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
                     </Table>
                   ) : (
                     <p className="text-sm text-muted-foreground">Chưa có lịch khởi hành nào được cấu hình.</p>
+                  )}
+                </div>
+                {detailPackages.length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-foreground">Gói dịch vụ</p>
+                    <div className="space-y-2">
+                      {detailPackages.map((pkg, index) => (
+                        <div
+                          key={pkg.id ?? index}
+                          className="rounded-lg border border-dashed border-primary/20 p-3 space-y-2"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="font-semibold text-foreground">
+                              {typeof pkg.name === "string" && pkg.name.trim()
+                                ? pkg.name
+                                : `Gói dịch vụ #${index + 1}`}
+                            </p>
+                            <Badge variant={pkg.is_active === false ? "secondary" : "default"}>
+                              {pkg.is_active === false ? "Ngừng bán" : "Đang mở bán"}
+                            </Badge>
+                          </div>
+                          {pkg.description && (
+                            <p className="text-sm text-muted-foreground">{pkg.description}</p>
+                          )}
+                          <div className="grid gap-2 text-sm sm:grid-cols-2">
+                            <p>
+                              <span className="text-muted-foreground">Giá người lớn:</span>{" "}
+                              <span className="font-medium text-foreground">
+                                {formatCurrency(pkg.adult_price, detailTour?.currency)}
+                              </span>
+                            </p>
+                            <p>
+                              <span className="text-muted-foreground">Giá trẻ em:</span>{" "}
+                              <span className="font-medium text-foreground">
+                                {formatCurrency(pkg.child_price, detailTour?.currency)}
+                              </span>
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                {detailCancellationPolicies.length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-foreground">Chính sách hoàn hủy</p>
+                    <div className="space-y-2">
+                      {detailCancellationPolicies.map((policy, index) => (
+                        <div
+                          key={policy.id ?? index}
+                          className="rounded border border-muted-foreground/20 bg-muted/20 px-3 py-2 text-sm"
+                        >
+                          <p className="font-medium text-foreground">
+                            Trước {policy.days_before ?? "—"} ngày
+                          </p>
+                          <p className="text-muted-foreground">
+                                  Hoàn lại {formatRefundRateLabel(policy.refund_rate) ?? "Theo thỏa thuận"}
+                          </p>
+                          {policy.description && (
+                            <p className="mt-1 text-xs text-muted-foreground">{policy.description}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-foreground">Lịch trình chi tiết</p>
+                  {detailItinerary.length > 0 ? (
+                    <div className="space-y-3">
+                      {detailItinerary.map((item) => (
+                        <div key={`${item.day}-${item.title}`} className="border-l-4 border-primary/60 pl-3">
+                          <p className="font-semibold text-foreground">
+                            Ngày {item.day}: {item.title}
+                          </p>
+                          <p className="text-sm text-muted-foreground">{item.detail}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Chưa cập nhật lịch trình chi tiết.</p>
                   )}
                 </div>
               </div>
@@ -758,3 +1058,4 @@ export default function AdminTours() {
     </div>
   );
 }
+

@@ -557,9 +557,16 @@ const TravelHeader = () => {
                 <HelpCircle className="w-4 h-4 mr-1" />
                 Trợ giúp
               </Button>
-              <Button variant="ghost" size="sm" className="hidden md:flex text-gray-600 hover:text-gray-800 text-sm">
-                <Clock className="w-4 h-4 mr-1" />
-                Xem gần đây
+              <Button
+                variant="ghost"
+                size="sm"
+                className="hidden md:flex text-gray-600 hover:text-gray-800 text-sm"
+                asChild
+              >
+                <Link to="/recent" className="inline-flex items-center">
+                  <Clock className="w-4 h-4 mr-1" />
+                  Xem gần đây
+                </Link>
               </Button>
             
 

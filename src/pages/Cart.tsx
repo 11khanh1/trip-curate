@@ -33,8 +33,9 @@ export type TourCardProps = {
   title: string;
   location: string;
   image: string;
-  rating: number;
-  reviewCount: number;
+  rating?: number | null;
+  reviewCount?: number | null;
+  bookingsCount?: number | null;
   price: number;
   duration: string;
   category: string;
@@ -44,6 +45,15 @@ export type TourCardProps = {
 
 const DEFAULT_TOUR_IMAGE =
   "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&h=600&fit=crop";
+
+const coerceNumber = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
 
 const normalizeDuration = (duration?: number | string | null) => {
   if (duration === null || duration === undefined) return "Linh hoạt";
@@ -107,14 +117,26 @@ const mapTourToCard = (tour: PublicTour): TourCardProps => {
     tour.id ??
     tour.uuid ??
     `tour-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
+  const ratingValue =
+    coerceNumber(tour.rating_average) ??
+    coerceNumber(tour.average_rating) ??
+    coerceNumber((tour as Record<string, unknown>)?.rating);
+  const reviewCountValue =
+    coerceNumber(tour.rating_count) ??
+    coerceNumber(tour.reviews_count) ??
+    coerceNumber((tour as Record<string, unknown>)?.reviewsCount);
+  const bookingsCountValue =
+    coerceNumber(tour.bookings_count) ??
+    coerceNumber((tour as Record<string, unknown>)?.bookingsCount);
 
   return {
     id: String(id),
     title,
     location,
     image,
-    rating: tour.rating_average ?? tour.average_rating ?? 4.7,
-    reviewCount: tour.rating_count ?? tour.reviews_count ?? tour.bookings_count ?? 1250,
+    rating: ratingValue,
+    reviewCount: reviewCountValue,
+    bookingsCount: bookingsCountValue,
     price,
     duration: normalizeDuration(tour.duration),
     category,
@@ -495,6 +517,7 @@ const CartPage = () => {
                           className="border border-slate-100 transition hover:-translate-y-1 hover:shadow-lg"
                           href={`/activity/${item.tourId}`}
                           image={item.thumbnail ?? "https://via.placeholder.com/400x300"}
+                          imageContainerClassName="h-36 sm:w-36 lg:w-40"
                           title={item.tourTitle}
                           category={item.packageName ?? "Gói dịch vụ"}
                           location={item.scheduleTitle ?? "Lịch khởi hành linh hoạt"}
