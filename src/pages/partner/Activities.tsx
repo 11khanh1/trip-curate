@@ -40,6 +40,8 @@ import { apiClient } from "@/lib/api-client";
 const PARTNER_TOUR_ENDPOINT = "/partner/tours";
 
 // ---------------------------- INTERFACES ----------------------------
+type ItineraryType = "single-day" | "multi-day";
+
 interface ItineraryItem {
   day: number;
   title: string;
@@ -56,6 +58,7 @@ interface Tour {
   tags: string[];
   media: string[];
   itinerary: string[];
+  itinerary_type?: ItineraryType | string | null;
   type?: string | null;
   child_age_limit?: number | null;
   requires_passport?: boolean;
@@ -146,6 +149,7 @@ type FormData = {
   tagsString: string;
   imageUrlsString: string;
   itineraryItems: ItineraryItem[];
+  itineraryType: ItineraryType;
   type: string;
   child_age_limit: number | null;
   requires_passport: boolean;
@@ -166,6 +170,7 @@ const createInitialFormData = (): FormData => ({
   tagsString: "",
   imageUrlsString: "",
   itineraryItems: [{ day: 1, title: "", detail: "" }],
+  itineraryType: "multi-day",
   type: "domestic",
   child_age_limit: null,
   requires_passport: false,
@@ -337,6 +342,13 @@ export default function PartnerActivities() {
         })
       : [];
 
+    const rawItineraryType =
+      typeof t.itinerary_type === "string" ? t.itinerary_type.toLowerCase().trim() : null;
+    const normalizedItineraryType: ItineraryType | null =
+      rawItineraryType === "single-day" || rawItineraryType === "multi-day"
+        ? (rawItineraryType as ItineraryType)
+        : null;
+
     return {
       id: String(t.id ?? t.uuid ?? ""),
       title: t.title || "",
@@ -347,6 +359,7 @@ export default function PartnerActivities() {
       tags: toStringArray(t.tags),
       media,
       itinerary: itineraryStrings.filter(Boolean),
+      itinerary_type: normalizedItineraryType,
       schedule: primarySchedule,
       schedules: schedulesArray.length > 0 ? (schedulesArray as NonNullable<typeof schedulesArray>) : fallbackSchedule ? [fallbackSchedule] : [],
       packages: Array.isArray(t.packages) ? (t.packages as any[]).map((pkg) => ({
@@ -442,15 +455,34 @@ useEffect(() => { fetchTours(); }, []);
       }
 
       if (typeof entry === "string") {
-        const parts = entry.split(":");
-        const dayMatch = parts[0]?.match(/\d+/);
-        const day = dayMatch ? parseInt(dayMatch[0], 10) : index + 1;
-        const content = parts.slice(1).join(":").trim();
-        const detailParts = content.split(" - ");
+        const trimmed = entry.trim();
+        if (!trimmed) {
+          return {
+            day: index + 1,
+            title: `Hoạt động ngày ${index + 1}`,
+            detail: "Chưa có chi tiết.",
+          };
+        }
+
+        const dayPattern = /^ngày\s*(\d+)\s*[:-]?\s*/i;
+        const dayMatch = trimmed.match(dayPattern);
+        const day = dayMatch ? parseInt(dayMatch[1], 10) : index + 1;
+        const withoutPrefix = dayMatch ? trimmed.replace(dayPattern, "") : trimmed;
+
+        const hyphenParts = withoutPrefix.split(" - ");
+        let titleCandidate = hyphenParts[0]?.trim() ?? "";
+        let detailCandidate = hyphenParts.slice(1).join(" - ").trim();
+
+        if (!detailCandidate && withoutPrefix.includes(":")) {
+          const colonParts = withoutPrefix.split(":");
+          titleCandidate = (colonParts[0] ?? titleCandidate).trim();
+          detailCandidate = colonParts.slice(1).join(":").trim();
+        }
+
         return {
           day,
-          title: detailParts[0]?.trim() || `Hoạt động ngày ${day}`,
-          detail: detailParts.slice(1).join(" - ").trim() || "Chưa có chi tiết.",
+          title: titleCandidate || (dayMatch ? `Ngày ${day}` : `Hoạt động ${index + 1}`),
+          detail: detailCandidate || "Chưa có chi tiết.",
         };
       }
 
@@ -461,6 +493,36 @@ useEffect(() => { fetchTours(); }, []);
       };
     });
   };
+
+  const detectItineraryType = (items: ItineraryItem[]): ItineraryType => {
+    if (!items || items.length === 0) return "multi-day";
+    const timePattern = /^([01]?\d|2[0-3])(:[0-5]\d)?(\s*(am|pm))?$/i;
+    const normalizedTitles = items.map((item) => (item.title || "").trim().toLowerCase());
+    const allTimes = normalizedTitles.length > 0
+      && normalizedTitles.every((title) => timePattern.test(title) && !title.startsWith("ngày"));
+    if (allTimes) {
+      return "single-day";
+    }
+
+    const hasExplicitDay =
+      normalizedTitles.some((title) => title.startsWith("ngày")) || items.some((item) => (item.day ?? 1) > 1);
+
+    if (hasExplicitDay) {
+      return "multi-day";
+    }
+
+    return items.length > 1 ? "multi-day" : "single-day";
+  };
+
+  const selectedTourItineraryItems = selectedTour
+    ? parseItineraryString(selectedTour.itinerary)
+    : [];
+
+  const selectedTourItineraryType: ItineraryType =
+    selectedTour &&
+    (selectedTour.itinerary_type === "single-day" || selectedTour.itinerary_type === "multi-day")
+      ? (selectedTour.itinerary_type as ItineraryType)
+      : detectItineraryType(selectedTourItineraryItems);
 
   const postTour = async (payload: any, isEdit = false, id?: string) => {
     setIsSubmitting(true);
@@ -620,6 +682,12 @@ useEffect(() => { fetchTours(); }, []);
             }))
           : defaults.categories.map((category) => ({ ...category }));
 
+      const normalizedEditingType =
+        editingTour.itinerary_type === "single-day" || editingTour.itinerary_type === "multi-day"
+          ? (editingTour.itinerary_type as ItineraryType)
+          : null;
+      const detectedItineraryType = normalizedEditingType ?? detectItineraryType(parsedItinerary);
+
       setFormData({
         title: editingTour.title || "",
         description: editingTour.description || "",
@@ -632,6 +700,7 @@ useEffect(() => { fetchTours(); }, []);
         imageUrlsString: Array.isArray(editingTour.media) ? editingTour.media.join("\n") : "",
         itineraryItems:
           parsedItinerary.length > 0 ? parsedItinerary : defaults.itineraryItems.map((item) => ({ ...item })),
+        itineraryType: detectedItineraryType,
         type: editingTour.type ?? defaults.type,
         child_age_limit:
           editingTour.child_age_limit !== undefined && editingTour.child_age_limit !== null
@@ -702,6 +771,21 @@ useEffect(() => { fetchTours(); }, []);
     setEditingTour(null);
     setFormData(createInitialFormData());
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleItineraryTypeChange = (type: ItineraryType) => {
+    setFormData((prev) => {
+      if (prev.itineraryType === type) return prev;
+      const updatedItems = prev.itineraryItems.map((item, index) => ({
+        ...item,
+        day: index + 1,
+      }));
+      return {
+        ...prev,
+        itineraryType: type,
+        itineraryItems: updatedItems,
+      };
+    });
   };
 
   const handleItineraryChange = (
@@ -939,7 +1023,7 @@ const handleMoveItinerary = (index: number, delta: number) => {
     if (formData.itineraryItems.some((item) => !item.title || !item.detail)) {
       toast({
         title: "Thiếu thông tin hành trình",
-        description: "Tiêu đề và chi tiết hoạt động trong hành trình không được để trống.",
+        description: "Giờ/Ngày và mô tả hoạt động trong hành trình không được để trống.",
         variant: "destructive",
       });
       return;
@@ -983,9 +1067,9 @@ const handleMoveItinerary = (index: number, delta: number) => {
     ).filter((url) => /^(https?:\/\/|data:)/i.test(url));
 
     const itineraryPayload = formData.itineraryItems.map((item, index) => ({
-      day: item.day || index + 1,
-      title: item.title,
-      detail: item.detail,
+      day: formData.itineraryType === "multi-day" ? item.day || index + 1 : index + 1,
+      title: item.title.trim(),
+      detail: item.detail.trim(),
     }));
 
     const schedulesPayload = formData.schedules.map((schedule) => ({
@@ -1034,6 +1118,7 @@ const handleMoveItinerary = (index: number, delta: number) => {
       tags: tagsArray,
       media: mediaArray,
       itinerary: itineraryPayload,
+      itinerary_type: formData.itineraryType,
       type: formData.type,
       child_age_limit: formData.child_age_limit ?? undefined,
       requires_passport: formData.requires_passport,
@@ -1563,9 +1648,31 @@ const handleMoveItinerary = (index: number, delta: number) => {
 
             <div className="space-y-4 rounded-lg border p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <h3 className="flex items-center gap-2 text-lg font-semibold text-primary">
-                  <MapPin className="h-5 w-5" /> Hành trình & gói dịch vụ
-                </h3>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+                  <h3 className="flex items-center gap-2 text-lg font-semibold text-primary">
+                    <MapPin className="h-5 w-5" /> Hành trình & gói dịch vụ
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={formData.itineraryType === "single-day" ? "default" : "outline"}
+                      onClick={() => handleItineraryTypeChange("single-day")}
+                      aria-pressed={formData.itineraryType === "single-day"}
+                    >
+                      Tour trong ngày
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={formData.itineraryType === "multi-day" ? "default" : "outline"}
+                      onClick={() => handleItineraryTypeChange("multi-day")}
+                      aria-pressed={formData.itineraryType === "multi-day"}
+                    >
+                      Tour dài ngày
+                    </Button>
+                  </div>
+                </div>
                 <Button type="button" size="sm" onClick={addItineraryItem}>
                   <Plus className="mr-2 h-4 w-4" />
                   Thêm dòng lịch trình
@@ -1576,7 +1683,11 @@ const handleMoveItinerary = (index: number, delta: number) => {
                 {formData.itineraryItems.map((item, i) => (
                   <Card key={i} className="border border-dashed border-primary/40">
                     <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 p-4">
-                      <CardTitle className="text-base font-semibold">Ngày {item.day}</CardTitle>
+                      <CardTitle className="text-base font-semibold">
+                        {formData.itineraryType === "multi-day"
+                          ? `Ngày ${item.day}`
+                          : item.title?.trim() || `Hoạt động ${i + 1}`}
+                      </CardTitle>
                       <div className="flex gap-2">
                         <Button
                           type="button"
@@ -1601,20 +1712,34 @@ const handleMoveItinerary = (index: number, delta: number) => {
                     <CardContent className="space-y-3 p-4 pt-0">
                       <div className="grid gap-3 md:grid-cols-2">
                         <div className="space-y-2">
-                          <Label>Tiêu đề</Label>
+                          <Label>
+                            {formData.itineraryType === "single-day" ? "Giờ" : "Ngày"}
+                          </Label>
                           <Input
                             value={item.title}
                             onChange={(e) => handleItineraryChange(i, "title", e.target.value)}
-                            placeholder="Tham quan vịnh Hạ Long"
+                            placeholder={
+                              formData.itineraryType === "single-day"
+                                ? "08:30"
+                                : `Ngày ${item.day}: Tiêu đề`
+                            }
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label>Chi tiết</Label>
+                          <Label>
+                            {formData.itineraryType === "single-day"
+                              ? "Mô tả hành trình"
+                              : "Mô tả"}
+                          </Label>
                           <Textarea
                             value={item.detail}
                             onChange={(e) => handleItineraryChange(i, "detail", e.target.value)}
                             rows={3}
-                            placeholder="Hoạt động chính, dịch vụ đi kèm..."
+                            placeholder={
+                              formData.itineraryType === "single-day"
+                                ? "Hoạt động chính, địa điểm tham quan..."
+                                : "Hoạt động chính, dịch vụ đi kèm..."
+                            }
                           />
                         </div>
                       </div>
@@ -1803,14 +1928,25 @@ const handleMoveItinerary = (index: number, delta: number) => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {parseItineraryString(selectedTour.itinerary).map((item, index) => (
-                    <div key={`${item.day}-${index}`} className="border-l-4 border-orange-400 pl-4">
-                      <p className="font-semibold text-foreground">
-                        Ngày {item.day}: {item.title}
-                      </p>
-                      <p className="text-sm text-muted-foreground">{item.detail}</p>
-                    </div>
-                  ))}
+                  {selectedTourItineraryItems.length > 0 ? (
+                    selectedTourItineraryItems.map((item, index) => {
+                      const isSingleDay = selectedTourItineraryType === "single-day";
+                      const trimmedTitle = item.title?.trim() ?? "";
+                      const label = isSingleDay
+                        ? trimmedTitle || `Hoạt động ${index + 1}`
+                        : `Ngày ${item.day}: ${trimmedTitle || `Hoạt động ${item.day}`}`;
+                      return (
+                        <div key={`${item.day}-${index}`} className="border-l-4 border-orange-400 pl-4">
+                          <p className="font-semibold text-foreground">{label}</p>
+                          <p className="text-sm text-muted-foreground">{item.detail}</p>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      Chưa có hành trình cho tour này.
+                    </p>
+                  )}
                 </CardContent>
               </Card>
 
