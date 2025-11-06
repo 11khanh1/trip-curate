@@ -79,6 +79,9 @@ export interface Booking {
   updated_at?: string;
   expires_at?: string | null;
   payment_url?: string | null;
+  paymentUrl?: string | null;
+  paymentQrUrl?: string | null;
+  payment_qr_url?: string | null;
   payment_id?: string | number | null;
   can_cancel?: boolean;
   contact?: BookingContact | null;
@@ -163,6 +166,9 @@ export interface CreateBookingResponse {
   booking: Booking;
   payment_id?: string | number | null;
   payment_url?: string | null;
+  paymentUrl?: string | null;
+  paymentQrUrl?: string | null;
+  payment_qr_url?: string | null;
 }
 
 export async function createBooking(payload: CreateBookingPayload): Promise<CreateBookingResponse> {
@@ -198,6 +204,8 @@ export interface BookingPaymentIntentResponse {
   booking?: Booking;
   payment_url?: string | null;
   paymentUrl?: string | null;
+  payment_qr_url?: string | null;
+  paymentQrUrl?: string | null;
   url?: string | null;
   payment_id?: string | number | null;
   paymentId?: string | number | null;

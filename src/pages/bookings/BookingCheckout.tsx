@@ -459,62 +459,84 @@ const BookingCheckout = () => {
       }
 
       if (payload.payment_method === "sepay") {
+        const normalizePaymentUrl = (value?: string | null) =>
+          value && String(value).trim().length ? String(value).trim() : undefined;
+        const bookingPaymentUrl =
+          normalizePaymentUrl(bookingEntity?.payment_url) ?? normalizePaymentUrl(bookingEntity?.paymentUrl);
         const directPaymentUrl =
-          response.payment_url ??
-          (bookingEntity?.payment_url && String(bookingEntity.payment_url).trim().length
-            ? String(bookingEntity.payment_url)
-            : undefined);
-        if (bookingIdentifier) {
-          if (directPaymentUrl) {
-            const derivedOrderCode =
-              extractOrderCode(directPaymentUrl) ??
-              bookingCode ??
-              (response.payment_id ? String(response.payment_id) : undefined);
-            const amountFromResponse =
-              typeof bookingEntity?.total_amount === "number"
-                ? bookingEntity.total_amount
-                : typeof bookingEntity?.total_price === "number"
-                ? bookingEntity.total_price
-                : totalPrice;
-            const currencyFromResponse =
-              (bookingEntity?.currency && String(bookingEntity.currency).trim()) || displayCurrency;
-            
+          normalizePaymentUrl(response.payment_url) ??
+          normalizePaymentUrl(response.paymentUrl) ??
+          bookingPaymentUrl;
+        const resolvedQrImage =
+          response.paymentQrUrl ??
+          response.payment_qr_url ??
+          bookingEntity?.paymentQrUrl ??
+          bookingEntity?.payment_qr_url ??
+          deduceSepayQrImage(response) ??
+          deduceSepayQrImage(bookingEntity) ??
+          deriveQrFromPaymentUrl(directPaymentUrl) ??
+          deriveQrFromPaymentUrl(response.payment_url) ??
+          deriveQrFromPaymentUrl(response.paymentUrl) ??
+          deriveQrFromPaymentUrl(bookingPaymentUrl);
 
-          }
-
+        if (bookingIdentifier && directPaymentUrl) {
           const derivedOrderCode =
-            extractOrderCode(response.payment_url ?? "") ??
+            extractOrderCode(directPaymentUrl) ??
             bookingCode ??
             (response.payment_id ? String(response.payment_id) : undefined);
-          if (response.payment_url) {
-            const amountFromResponse =
-              typeof bookingEntity?.total_amount === "number"
-                ? bookingEntity.total_amount
-                : typeof bookingEntity?.total_price === "number"
-                ? bookingEntity.total_price
-                : totalPrice;
-            const currencyFromResponse =
-              (bookingEntity?.currency && String(bookingEntity.currency).trim()) || displayCurrency;
-            const qrImage = deduceSepayQrImage(response) ?? deriveQrFromPaymentUrl(response.payment_url);
+          const amountFromResponse =
+            typeof bookingEntity?.total_amount === "number"
+              ? bookingEntity.total_amount
+              : typeof bookingEntity?.total_price === "number"
+              ? bookingEntity.total_price
+              : totalPrice;
+          const currencyFromResponse =
+            (bookingEntity?.currency && String(bookingEntity.currency).trim()) || displayCurrency;
 
-            setSepayPanel({
-              bookingId: String(bookingIdentifier),
-              paymentUrl: response.payment_url,
-              orderCode: derivedOrderCode ?? undefined,
-              bookingCode,
-              paymentId: response.payment_id ? String(response.payment_id) : undefined,
-              amount: amountFromResponse,
-              currency: currencyFromResponse,
-              qrImage: qrImage ?? null,
-              providerName,
-            });
-            setShouldPollSepayStatus(true);
-            return;
-          }
-        }
-        if (response.payment_url) {
+          setSepayPanel({
+            bookingId: String(bookingIdentifier),
+            paymentUrl: directPaymentUrl,
+            orderCode: derivedOrderCode ?? undefined,
+            bookingCode,
+            paymentId: response.payment_id ? String(response.payment_id) : undefined,
+            amount: amountFromResponse,
+            currency: currencyFromResponse,
+            qrImage: resolvedQrImage ?? null,
+            providerName,
+          });
           setShouldPollSepayStatus(true);
-          window.location.href = response.payment_url;
+          return;
+        }
+
+        if (resolvedQrImage && bookingIdentifier) {
+          const amountFromResponse =
+            typeof bookingEntity?.total_amount === "number"
+              ? bookingEntity.total_amount
+              : typeof bookingEntity?.total_price === "number"
+              ? bookingEntity.total_price
+              : totalPrice;
+          const currencyFromResponse =
+            (bookingEntity?.currency && String(bookingEntity.currency).trim()) || displayCurrency;
+
+          setSepayPanel({
+            bookingId: String(bookingIdentifier),
+            paymentUrl: directPaymentUrl ?? "",
+            orderCode:
+              bookingCode ?? (response.payment_id ? String(response.payment_id) : undefined) ?? undefined,
+            bookingCode,
+            paymentId: response.payment_id ? String(response.payment_id) : undefined,
+            amount: amountFromResponse,
+            currency: currencyFromResponse,
+            qrImage: resolvedQrImage ?? null,
+            providerName,
+          });
+          setShouldPollSepayStatus(true);
+          return;
+        }
+
+        if (directPaymentUrl) {
+          setShouldPollSepayStatus(true);
+          window.location.href = directPaymentUrl;
           return;
         }
       }
