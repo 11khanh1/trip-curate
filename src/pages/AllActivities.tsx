@@ -22,7 +22,7 @@ import {
   type PublicTour,
 } from "@/services/publicApi";
 import { apiClient } from "@/lib/api-client";
-import { getTourStartingPrice } from "@/lib/tour-utils";
+import { getTourPriceInfo } from "@/lib/tour-utils";
 
 const PER_PAGE = 50;
 
@@ -167,7 +167,8 @@ const mapTourToCard = (tour: PublicTour) => {
     return `${normalizedBase}${trimmed.startsWith("/") ? trimmed.slice(1) : trimmed}`;
   };
   const image = resolveTourImage();
-  const price = getTourStartingPrice(tour);
+  const priceInfo = getTourPriceInfo(tour);
+  const price = priceInfo.price;
   const category =
     tour.categories && tour.categories.length > 0
       ? tour.categories[0]?.name ?? "Tour"
@@ -193,6 +194,12 @@ const mapTourToCard = (tour: PublicTour) => {
   const rating = resolveTourRating(tour);
   const reviewCount = resolveReviewCount(tour);
   const bookingsCount = resolveBookingCount(tour);
+  const promotionLabel =
+    priceInfo.autoPromotion?.description ??
+    (priceInfo.autoPromotion?.code ? `Mã ${priceInfo.autoPromotion.code}` : undefined) ??
+    (typeof priceInfo.discountPercent === "number" && priceInfo.discountPercent > 0
+      ? `Giảm ${Math.round(priceInfo.discountPercent)}%`
+      : undefined);
 
   return {
     id: String(tour.id ?? tour.uuid ?? fallbackId),
@@ -203,6 +210,10 @@ const mapTourToCard = (tour: PublicTour) => {
     reviewCount,
     bookingsCount,
     price,
+    originalPrice: priceInfo.originalPrice,
+    discount:
+      typeof priceInfo.discountPercent === "number" ? Math.round(priceInfo.discountPercent) : undefined,
+    promotionLabel,
     duration: normalizeDuration(tour.duration),
     category,
     features,

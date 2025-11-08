@@ -22,6 +22,19 @@ export interface HomePromotion {
   is_active?: boolean;
 }
 
+export interface AutoPromotion {
+  id: string | number;
+  code?: string | null;
+  description?: string | null;
+  discount_type: PromotionDiscountType;
+  value: number;
+  discount_amount?: number | null;
+  valid_from?: string | null;
+  valid_to?: string | null;
+  is_active?: boolean | null;
+  [key: string]: unknown;
+}
+
 export interface PublicTourSchedule {
   id?: string | number;
   title?: string | null;
@@ -111,6 +124,10 @@ export interface PublicTour {
   schedules?: PublicTourSchedule[];
   created_at?: string;
   updated_at?: string;
+  price_after_discount?: number | null;
+  priceAfterDiscount?: number | null;
+  auto_promotion?: AutoPromotion | null;
+  autoPromotion?: AutoPromotion | null;
   [key: string]: unknown;
 }
 

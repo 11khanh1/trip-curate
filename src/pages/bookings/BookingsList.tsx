@@ -599,6 +599,15 @@ const BookingsList = () => {
                 (booking.schedule?.start_date ? `Lịch ${formatDate(booking.schedule.start_date)}` : undefined);
               const packageName = booking.package?.name ?? "Gói tiêu chuẩn";
               const bookingTotal = booking.total_amount ?? booking.total_price ?? null;
+              const appliedPromotions = Array.isArray(booking.promotions) ? booking.promotions : [];
+              const discountTotal =
+                typeof booking.discount_total === "number"
+                  ? booking.discount_total
+                  : appliedPromotions.reduce(
+                      (sum, promo) =>
+                        typeof promo?.discount_amount === "number" ? sum + promo.discount_amount : sum,
+                      0,
+                    );
               const bookingDate = booking.booking_date ?? booking.booked_at ?? booking.created_at ?? null;
               const totalAdults = booking.total_adults ?? booking.adults ?? 0;
               const totalChildren = booking.total_children ?? booking.children ?? 0;
@@ -833,6 +842,11 @@ const BookingsList = () => {
                           ? formatCurrency(bookingTotal, booking.currency ?? "VND")
                           : "Đang cập nhật"}
                       </p>
+                      {discountTotal > 0 && (
+                        <p className="text-sm font-medium text-emerald-600">
+                          Tiết kiệm: {formatCurrency(discountTotal, booking.currency ?? "VND")}
+                        </p>
+                      )}
                       {guestSummary && (
                         <p>
                           Số khách: <span className="font-medium text-foreground">{guestSummary}</span>
@@ -851,6 +865,19 @@ const BookingsList = () => {
                             {paymentMethodLabel(booking.payment_method)}
                           </span>
                         </p>
+                      )}
+                      {appliedPromotions.length > 0 && (
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          {appliedPromotions.map((promo) => (
+                            <Badge
+                              key={promo.id ?? promo.code ?? `${booking.id}-promo`}
+                              variant="outline"
+                              className="border-emerald-200 text-emerald-600"
+                            >
+                              {promo.description ?? (promo.code ? `Mã ${promo.code}` : "Khuyến mãi tự động")}
+                            </Badge>
+                          ))}
+                        </div>
                       )}
                     </div>
                     <div className="flex flex-wrap items-center gap-2">

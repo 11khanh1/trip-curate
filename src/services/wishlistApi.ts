@@ -1,5 +1,5 @@
 import { apiClient, extractData } from "@/lib/api-client";
-import type { CancellationPolicy, TourType } from "@/services/publicApi";
+import type { AutoPromotion, CancellationPolicy, TourType } from "@/services/publicApi";
 
 export interface WishlistTourPackage {
   id: string;
@@ -26,6 +26,8 @@ export interface WishlistTour {
   destination: string | null;
   duration: number | null;
   base_price: number | null;
+  price_after_discount?: number | null;
+  priceAfterDiscount?: number | null;
   season_price?: number | null;
   child_age_limit?: number | null;
   requires_passport?: boolean | null;
@@ -43,6 +45,8 @@ export interface WishlistTour {
   partner?: Record<string, unknown> | null;
   status?: string;
   available?: boolean;
+  auto_promotion?: AutoPromotion | null;
+  autoPromotion?: AutoPromotion | null;
   [key: string]: unknown;
 }
 

@@ -4,6 +4,7 @@ import type {
   PublicTour,
   PublicTourPackage,
   PublicTourSchedule,
+  PromotionDiscountType,
 } from "@/services/publicApi";
 
 export type BookingStatus = "pending" | "confirmed" | "cancelled" | "expired" | "completed" | string;
@@ -58,6 +59,16 @@ export interface BookingPayment {
   [key: string]: unknown;
 }
 
+export interface BookingPromotion {
+  id?: string | number;
+  code?: string | null;
+  discount_type?: PromotionDiscountType | string | null;
+  value?: number | null;
+  discount_amount?: number | null;
+  description?: string | null;
+  [key: string]: unknown;
+}
+
 export interface Booking {
   id: string | number;
   code?: string;
@@ -95,6 +106,8 @@ export interface Booking {
   passengers?: BookingPassenger[];
   payments?: BookingPayment[];
   review?: BookingReviewSummary | null;
+  discount_total?: number | null;
+  promotions?: BookingPromotion[] | null;
   [key: string]: unknown;
 }
 
@@ -159,6 +172,7 @@ export interface CreateBookingPayload {
   notes?: string;
   payment_method: "offline" | "sepay";
   passengers: CreateBookingPassengerInput[];
+  promotion_code?: string;
 }
 
 export interface CreateBookingResponse {
@@ -169,6 +183,8 @@ export interface CreateBookingResponse {
   paymentUrl?: string | null;
   paymentQrUrl?: string | null;
   payment_qr_url?: string | null;
+  promotions?: BookingPromotion[] | null;
+  discount_total?: number | null;
 }
 
 export async function createBooking(payload: CreateBookingPayload): Promise<CreateBookingResponse> {

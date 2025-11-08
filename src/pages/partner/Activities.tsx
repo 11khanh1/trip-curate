@@ -1,9 +1,18 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -34,8 +43,16 @@ import {
   ChevronLeft,
   ChevronRight,
   Shield,
+  Gift,
 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
+import {
+  createPartnerPromotion,
+  deletePartnerPromotion,
+  fetchPartnerPromotions,
+  updatePartnerPromotion,
+  type PartnerPromotion,
+} from "@/services/partnerApi";
 
 const PARTNER_TOUR_ENDPOINT = "/partner/tours";
 
@@ -161,6 +178,26 @@ type FormData = {
   categories: FormCategory[];
 };
 
+type PromotionFormState = {
+  discount_type: "percent" | "percentage" | "fixed";
+  value: string;
+  max_usage: string;
+  valid_from: string;
+  valid_to: string;
+  description: string;
+  is_active: boolean;
+};
+
+const createInitialPromotionForm = (): PromotionFormState => ({
+  discount_type: "percent",
+  value: "",
+  max_usage: "",
+  valid_from: "",
+  valid_to: "",
+  description: "",
+  is_active: true,
+});
+
 const createInitialFormData = (): FormData => ({
   title: "",
   description: "",
@@ -221,6 +258,12 @@ export default function PartnerActivities() {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const baseFormDefaults = useMemo(() => createInitialFormData(), []);
   const [formData, setFormData] = useState<FormData>(() => createInitialFormData());
+  const [promotionForm, setPromotionForm] = useState<PromotionFormState>(createInitialPromotionForm());
+  const [editingPromotion, setEditingPromotion] = useState<PartnerPromotion | null>(null);
+  const [partnerPromotions, setPartnerPromotions] = useState<PartnerPromotion[]>([]);
+  const [promotionTourId, setPromotionTourId] = useState<string | number | null>(null);
+  const [isPromotionLoading, setIsPromotionLoading] = useState(false);
+  const [isPromotionSaving, setIsPromotionSaving] = useState(false);
 
   // Giả lập hàm toast để code chạy được
   const toast = ({ title, description, variant }: any) => {
@@ -247,7 +290,69 @@ export default function PartnerActivities() {
     }
   }, [isDetailOpen, mediaList]);
 
+  const loadPromotions = useCallback(
+    async (tourId: string | number) => {
+      setIsPromotionLoading(true);
+      try {
+        const data = await fetchPartnerPromotions(tourId);
+        setPartnerPromotions(data);
+      } catch (error) {
+        console.error("Không thể tải khuyến mãi:", error);
+        toast({
+          title: "Lỗi tải khuyến mãi",
+          description:
+            (error as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+            "Vui lòng thử lại sau.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsPromotionLoading(false);
+      }
+    },
+    [toast],
+  );
+
+  useEffect(() => {
+    if (editingTour?.id) {
+      setPromotionTourId(editingTour.id);
+    }
+  }, [editingTour?.id]);
+
+  useEffect(() => {
+    if (promotionTourId) {
+      setPromotionForm(createInitialPromotionForm());
+      setEditingPromotion(null);
+      void loadPromotions(promotionTourId);
+    } else {
+      setPartnerPromotions([]);
+    }
+  }, [promotionTourId, loadPromotions]);
+
   // ---------------------------- UTILS & API ----------------------------
+
+  const resolvePromotionTypeText = (type?: string | null) => {
+    const normalized = type?.toString().toLowerCase();
+    if (normalized === "fixed") return "Giảm cố định";
+    if (normalized === "percent" || normalized === "percentage") return "Giảm theo %";
+    return "Khuyến mãi";
+  };
+
+  const resolvePromotionValueText = (promotion: PartnerPromotion) => {
+    const numericValue =
+      typeof promotion.value === "number" && Number.isFinite(promotion.value) ? promotion.value : 0;
+    const normalized = promotion.discount_type?.toString().toLowerCase();
+    if (normalized === "fixed") {
+      return `${numericValue.toLocaleString("vi-VN")}₫`;
+    }
+    return `${numericValue}%`;
+  };
+
+  const formatPromotionDate = (value?: string | null) => {
+    if (!value) return "—";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return value;
+    return parsed.toLocaleDateString("vi-VN");
+  };
 
   // Chuẩn hoá dữ liệu trả về từ API (tags text[], media/itinerary jsonb, schedule có thể null)
   const toStringArray = (value: unknown): string[] => {
@@ -836,6 +941,125 @@ const handleMoveItinerary = (index: number, delta: number) => {
     }
   };
 
+  const handlePromotionFormChange = <K extends keyof PromotionFormState>(
+    field: K,
+    value: PromotionFormState[K],
+  ) => {
+    setPromotionForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleEditPromotion = (promotion: PartnerPromotion) => {
+    setPromotionForm({
+      discount_type:
+        (promotion.discount_type as PromotionFormState["discount_type"]) ?? "percent",
+      value:
+        promotion.value !== undefined && promotion.value !== null ? String(promotion.value) : "",
+      max_usage:
+        promotion.max_usage !== undefined && promotion.max_usage !== null
+          ? String(promotion.max_usage)
+          : "",
+      valid_from: promotion.valid_from ? promotion.valid_from.slice(0, 10) : "",
+      valid_to: promotion.valid_to ? promotion.valid_to.slice(0, 10) : "",
+      description: promotion.description ?? "",
+      is_active: promotion.is_active ?? true,
+    });
+    setEditingPromotion(promotion);
+  };
+
+  const handleResetPromotionForm = () => {
+    setPromotionForm(createInitialPromotionForm());
+    setEditingPromotion(null);
+  };
+
+  const handlePromotionSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const numericValue = Number(promotionForm.value);
+    if (!Number.isFinite(numericValue) || numericValue <= 0) {
+      toast({
+        title: "Giá trị khuyến mãi chưa hợp lệ",
+        description: "Vui lòng nhập số lớn hơn 0.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!editingPromotion && !promotionTourId) {
+      toast({
+        title: "Chưa chọn tour",
+        description: "Hãy chọn tour cần quản lý khuyến mãi trước khi thêm mới.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const payload = {
+      discount_type: promotionForm.discount_type,
+      value: numericValue,
+      max_usage: promotionForm.max_usage ? Number(promotionForm.max_usage) || 0 : undefined,
+      valid_from: promotionForm.valid_from || undefined,
+      valid_to: promotionForm.valid_to || undefined,
+      description: promotionForm.description?.trim() || undefined,
+      is_active: promotionForm.is_active,
+    };
+
+    setIsPromotionSaving(true);
+    try {
+      if (editingPromotion?.id) {
+        await updatePartnerPromotion(editingPromotion.id, payload);
+        toast({
+          title: "Đã cập nhật khuyến mãi",
+          description: "Thông tin khuyến mãi đã được lưu.",
+        });
+      } else if (promotionTourId) {
+        await createPartnerPromotion({ ...payload, tour_id: promotionTourId });
+        toast({
+          title: "Đã tạo khuyến mãi",
+          description: "Khuyến mãi mới đã được thêm cho tour.",
+        });
+      }
+      handleResetPromotionForm();
+      if (promotionTourId) {
+        await loadPromotions(promotionTourId);
+      }
+    } catch (error) {
+      console.error("Không thể lưu khuyến mãi:", error);
+      toast({
+        title: "Lỗi lưu khuyến mãi",
+        description:
+          (error as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+          "Vui lòng thử lại sau.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsPromotionSaving(false);
+    }
+  };
+
+  const handleDeletePromotion = async (promotion: PartnerPromotion) => {
+    if (!promotion?.id) return;
+    setIsPromotionSaving(true);
+    try {
+      await deletePartnerPromotion(promotion.id);
+      toast({
+        title: "Đã xoá khuyến mãi",
+        description: "Khuyến mãi đã được xoá khỏi tour.",
+      });
+      if (promotionTourId) {
+        await loadPromotions(promotionTourId);
+      }
+    } catch (error) {
+      console.error("Không thể xoá khuyến mãi:", error);
+      toast({
+        title: "Lỗi xoá khuyến mãi",
+        description:
+          (error as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+          "Vui lòng thử lại sau.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsPromotionSaving(false);
+    }
+  };
+
   const handleScheduleChange = (
     index: number,
     field: keyof FormSchedule,
@@ -1160,19 +1384,6 @@ const handleMoveItinerary = (index: number, delta: number) => {
   // ---------------------------- RENDER ----------------------------
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between md:gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">Quản lý Tour</h1>
-          <p className="text-sm text-muted-foreground">
-            Tạo mới hoặc chỉnh sửa tour trước khi gửi duyệt.
-          </p>
-        </div>
-        <Button variant="outline" onClick={handleAddTour} className="w-full gap-2 md:w-auto">
-          <Plus className="h-4 w-4" />
-          Thêm tour mới
-        </Button>
-      </div>
-
       <Card>
         <CardHeader className="space-y-1">
           <CardTitle>{editingTour ? "Cập nhật tour" : "Thêm tour mới"}</CardTitle>
@@ -1322,6 +1533,249 @@ const handleMoveItinerary = (index: number, delta: number) => {
                 />
               </div>
             </div>
+
+            <Card className="border-none bg-white shadow-sm">
+              <CardHeader className="space-y-1">
+                <CardTitle className="flex items-center gap-2 text-lg font-semibold text-primary">
+                  <Gift className="h-5 w-5" />
+                  Khuyến mãi tự động
+                </CardTitle>
+                <CardDescription>
+                  Tạo các ưu đãi tự áp dụng cho tour này. Khuyến mãi sẽ tự động trừ tiền khi khách đặt tour.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid gap-4 md:grid-cols-[minmax(200px,280px)_1fr]">
+                  <div className="space-y-2">
+                    <Label>Chọn tour để quản lý khuyến mãi</Label>
+                    <Select
+                      value={promotionTourId ? String(promotionTourId) : ""}
+                      onValueChange={(value) => {
+                        setPromotionTourId(value);
+                        handleResetPromotionForm();
+                      }}
+                      disabled={isPromotionSaving || isPromotionLoading || tours.length === 0}
+                    >
+                      <SelectTrigger>
+                        <SelectValue
+                          placeholder={tours.length === 0 ? "Chưa có tour nào" : "Chọn tour đã tạo"}
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {tours.map((tour) => (
+                          <SelectItem key={tour.id} value={String(tour.id)}>
+                            {tour.title}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    {promotionTourId
+                      ? "Bạn có thể thêm hoặc cập nhật khuyến mãi cho tour đã chọn."
+                      : "Vui lòng chọn một tour đã lưu để bật khuyến mãi tự động."}
+                  </div>
+                </div>
+
+                {promotionTourId ? (
+                  <>
+                    <form className="grid gap-4 md:grid-cols-2" onSubmit={handlePromotionSubmit}>
+                      <div className="space-y-2">
+                        <Label>Loại giảm giá</Label>
+                        <Select
+                          value={promotionForm.discount_type}
+                          onValueChange={(value) =>
+                            handlePromotionFormChange(
+                              "discount_type",
+                              value as PromotionFormState["discount_type"],
+                            )
+                          }
+                          disabled={isPromotionSaving}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Chọn loại giảm" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="percent">Giảm theo %</SelectItem>
+                            <SelectItem value="fixed">Giảm cố định</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Giá trị</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={promotionForm.value}
+                          onChange={(event) => handlePromotionFormChange("value", event.target.value)}
+                          placeholder={promotionForm.discount_type === "fixed" ? "500000" : "10"}
+                          disabled={isPromotionSaving}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Số lượt tối đa</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={promotionForm.max_usage}
+                          onChange={(event) =>
+                            handlePromotionFormChange("max_usage", event.target.value)
+                          }
+                          placeholder="Không giới hạn"
+                          disabled={isPromotionSaving}
+                        />
+                      </div>
+                      <div className="grid gap-2 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label>Hiệu lực từ</Label>
+                          <Input
+                            type="date"
+                            value={promotionForm.valid_from}
+                            onChange={(event) =>
+                              handlePromotionFormChange("valid_from", event.target.value)
+                            }
+                            disabled={isPromotionSaving}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Đến</Label>
+                          <Input
+                            type="date"
+                            value={promotionForm.valid_to}
+                            onChange={(event) =>
+                              handlePromotionFormChange("valid_to", event.target.value)
+                            }
+                            disabled={isPromotionSaving}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2 md:col-span-2">
+                        <Label>Mô tả hiển thị</Label>
+                        <Textarea
+                          rows={2}
+                          value={promotionForm.description}
+                          onChange={(event) =>
+                            handlePromotionFormChange("description", event.target.value)
+                          }
+                          placeholder="Ví dụ: Giảm 10% cho khách đặt trước 30 ngày"
+                          disabled={isPromotionSaving}
+                        />
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Switch
+                          checked={promotionForm.is_active}
+                          onCheckedChange={(checked) =>
+                            handlePromotionFormChange("is_active", Boolean(checked))
+                          }
+                          disabled={isPromotionSaving}
+                        />
+                        <span className="text-sm text-muted-foreground">
+                          {promotionForm.is_active ? "Đang kích hoạt" : "Tạm tắt"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 md:col-span-2">
+                        <Button type="submit" disabled={isPromotionSaving}>
+                          {isPromotionSaving ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Đang lưu...
+                            </>
+                          ) : editingPromotion ? (
+                            "Cập nhật khuyến mãi"
+                          ) : (
+                            "Thêm khuyến mãi"
+                          )}
+                        </Button>
+                        {editingPromotion ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            disabled={isPromotionSaving}
+                            onClick={handleResetPromotionForm}
+                          >
+                            Huỷ chỉnh sửa
+                          </Button>
+                        ) : null}
+                      </div>
+                    </form>
+                    <div className="space-y-3">
+                      {isPromotionLoading ? (
+                        <Skeleton className="h-24 w-full rounded-xl" />
+                      ) : partnerPromotions.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          Chưa có khuyến mãi nào được thiết lập cho tour này.
+                        </p>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="text-left text-muted-foreground">
+                                <th className="px-3 py-2">Mã</th>
+                                <th className="px-3 py-2">Loại</th>
+                                <th className="px-3 py-2">Giá trị</th>
+                                <th className="px-3 py-2">Thời gian</th>
+                                <th className="px-3 py-2">Trạng thái</th>
+                                <th className="px-3 py-2 text-right">Thao tác</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {partnerPromotions.map((promotion) => (
+                                <tr key={promotion.id} className="border-t">
+                                  <td className="px-3 py-2 font-medium">
+                                    {promotion.code ?? "Tự động"}
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    {resolvePromotionTypeText(promotion.discount_type)}
+                                  </td>
+                                  <td className="px-3 py-2">{resolvePromotionValueText(promotion)}</td>
+                                  <td className="px-3 py-2 text-sm text-muted-foreground">
+                                    {formatPromotionDate(promotion.valid_from)} –{" "}
+                                    {formatPromotionDate(promotion.valid_to)}
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <Badge variant={promotion.is_active ? "default" : "secondary"}>
+                                      {promotion.is_active ? "Đang bật" : "Tạm tắt"}
+                                    </Badge>
+                                  </td>
+                                  <td className="px-3 py-2 text-right">
+                                    <div className="flex items-center justify-end gap-1">
+                                      <Button
+                                        type="button"
+                                        size="icon"
+                                        variant="ghost"
+                                        onClick={() => handleEditPromotion(promotion)}
+                                        aria-label="Chỉnh sửa khuyến mãi"
+                                      >
+                                        <Edit className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        size="icon"
+                                        variant="ghost"
+                                        className="text-destructive hover:text-red-600"
+                                        onClick={() => handleDeletePromotion(promotion)}
+                                        aria-label="Xoá khuyến mãi"
+                                        disabled={isPromotionSaving}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Hiện chưa có tour nào được chọn. Hãy chọn tour ở phía trên để thêm và quản lý khuyến mãi tự động.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
 
             <div className="space-y-4 rounded-lg border p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">

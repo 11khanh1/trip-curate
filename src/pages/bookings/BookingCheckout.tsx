@@ -10,7 +10,15 @@ import Footer from "@/components/Footer";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
@@ -27,6 +35,7 @@ import { useRecommendationRealtimeRefresh } from "@/hooks/useRecommendationRealt
 import {
   createBooking,
   fetchBookingPaymentStatus,
+  type BookingPromotion,
   type BookingPaymentStatusResponse,
   type CreateBookingPayload,
 } from "@/services/bookingApi";
@@ -59,6 +68,8 @@ interface SepayPanelState {
   currency: string;
   qrImage?: string | null;
   providerName: string;
+  discountTotal?: number | null;
+  promotions?: BookingPromotion[] | null;
 }
 
 const normalizeStatus = (status?: string | null) => (status ?? "").toString().trim().toLowerCase();
@@ -191,6 +202,7 @@ const bookingSchema = z.object({
     .min(6, "Số điện thoại chưa hợp lệ")
     .refine(isValidVietnamPhone, "Số điện thoại không hợp lệ"),
   notes: z.string().optional(),
+  promotion_code: z.string().optional(),
   payment_method: z.enum(["offline", "sepay"]),
   passengers: z.array(passengerSchema).min(1, "Cần tối thiểu 1 hành khách"),
 });
@@ -226,6 +238,7 @@ const BookingCheckout = () => {
       contact_email: "",
       contact_phone: "",
       notes: "",
+      promotion_code: "",
       payment_method: "sepay",
       passengers: [],
     },
@@ -478,6 +491,24 @@ const BookingCheckout = () => {
           deriveQrFromPaymentUrl(response.payment_url) ??
           deriveQrFromPaymentUrl(response.paymentUrl) ??
           deriveQrFromPaymentUrl(bookingPaymentUrl);
+        const bookingPromotions =
+          response.booking?.promotions ??
+          (Array.isArray(response.promotions) ? response.promotions : null);
+        const bookingDiscountTotal =
+          typeof response.booking?.discount_total === "number"
+            ? response.booking.discount_total
+            : typeof response.discount_total === "number"
+            ? response.discount_total
+            : null;
+        const inferredDiscountTotal =
+          bookingDiscountTotal ??
+          (Array.isArray(bookingPromotions)
+            ? bookingPromotions.reduce(
+                (sum, promo) =>
+                  typeof promo?.discount_amount === "number" ? sum + promo.discount_amount : sum,
+                0,
+              )
+            : null);
 
         if (bookingIdentifier && directPaymentUrl) {
           const derivedOrderCode =
@@ -503,6 +534,8 @@ const BookingCheckout = () => {
             currency: currencyFromResponse,
             qrImage: resolvedQrImage ?? null,
             providerName,
+            discountTotal: inferredDiscountTotal ?? null,
+            promotions: bookingPromotions ?? null,
           });
           setShouldPollSepayStatus(true);
           return;
@@ -529,6 +562,8 @@ const BookingCheckout = () => {
             currency: currencyFromResponse,
             qrImage: resolvedQrImage ?? null,
             providerName,
+            discountTotal: inferredDiscountTotal ?? null,
+            promotions: bookingPromotions ?? null,
           });
           setShouldPollSepayStatus(true);
           return;
@@ -646,6 +681,30 @@ const BookingCheckout = () => {
 
   const sepayAmountLabel = sepayPanel ? formatCurrency(sepayPanel.amount, sepayPanel.currency) : "";
   const sepayFeeLabel = sepayPanel ? formatCurrency(0, sepayPanel.currency) : "";
+  const sepayDiscountTotal =
+    typeof sepayPanel?.discountTotal === "number"
+      ? sepayPanel.discountTotal
+      : Array.isArray(sepayPanel?.promotions)
+      ? sepayPanel.promotions.reduce(
+          (sum, promo) =>
+            typeof promo?.discount_amount === "number" ? sum + promo.discount_amount : sum,
+          0,
+        )
+      : null;
+  const sepayOriginalAmount =
+    typeof sepayPanel?.amount === "number" && typeof sepayDiscountTotal === "number"
+      ? sepayPanel.amount + sepayDiscountTotal
+      : null;
+  const sepayDiscountLabel =
+    sepayPanel && typeof sepayDiscountTotal === "number"
+      ? formatCurrency(sepayDiscountTotal, sepayPanel.currency)
+      : "";
+  const sepayOriginalLabel =
+    sepayPanel && typeof sepayOriginalAmount === "number"
+      ? formatCurrency(sepayOriginalAmount, sepayPanel.currency)
+      : "";
+  const sepayAppliedPromotions =
+    sepayPanel?.promotions?.filter((promo): promo is BookingPromotion => Boolean(promo)) ?? [];
   const sepayStatusNormalized = normalizeStatus(
     sepayPaymentStatus?.status ?? sepayPaymentStatus?.payment?.status,
   );
@@ -754,6 +813,11 @@ const BookingCheckout = () => {
       passengers: payloadPassengers,
     };
 
+    const promotionCode = values.promotion_code?.trim();
+    if (promotionCode) {
+      payload.promotion_code = promotionCode;
+    }
+
     if (values.children > 0) {
       payload.children = values.children;
     }
@@ -834,19 +898,52 @@ const BookingCheckout = () => {
                   </div>
                   <div className="rounded-2xl border bg-muted/40 p-6 text-sm text-muted-foreground">
                     <dl className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <dt className="text-muted-foreground">Số tiền thanh toán</dt>
-                        <dd className="text-lg font-semibold text-foreground">{sepayAmountLabel}</dd>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <dt>Giá trị đơn hàng</dt>
-                        <dd className="font-medium text-foreground">{sepayAmountLabel}</dd>
-                      </div>
+                      {sepayOriginalLabel ? (
+                        <div className="flex items-center justify-between">
+                          <dt>Tạm tính</dt>
+                          <dd className="font-medium text-muted-foreground line-through">
+                            {sepayOriginalLabel}
+                          </dd>
+                        </div>
+                      ) : null}
+                      {sepayDiscountLabel ? (
+                        <div className="flex items-center justify-between text-emerald-600">
+                          <dt>Khuyến mãi</dt>
+                          <dd className="font-semibold">- {sepayDiscountLabel}</dd>
+                        </div>
+                      ) : null}
                       <div className="flex items-center justify-between">
                         <dt>Phí giao dịch</dt>
                         <dd className="font-medium text-foreground">{sepayFeeLabel}</dd>
                       </div>
+                      <div className="flex items-center justify-between">
+                        <dt className="text-muted-foreground">Số tiền thanh toán</dt>
+                        <dd className="text-lg font-semibold text-foreground">{sepayAmountLabel}</dd>
+                      </div>
                     </dl>
+                    {sepayAppliedPromotions.length > 0 && (
+                      <div className="mt-4 rounded-2xl bg-emerald-50/80 p-4 text-sm text-emerald-800">
+                        <p className="font-semibold text-emerald-700">Khuyến mãi đã áp dụng</p>
+                        <ul className="mt-3 space-y-2">
+                          {sepayAppliedPromotions.map((promo, index) => (
+                            <li
+                              key={promo.id ?? promo.code ?? `sepay-promo-${index}`}
+                              className="flex items-center justify-between gap-4"
+                            >
+                              <span>
+                                {promo.description ??
+                                  (promo.code ? `Mã ${promo.code}` : "Khuyến mãi tự động")}
+                              </span>
+                              {typeof promo.discount_amount === "number" ? (
+                                <span className="font-medium text-emerald-700">
+                                  -{formatCurrency(promo.discount_amount, sepayPanel?.currency ?? "VND")}
+                                </span>
+                              ) : null}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                     <Separator className="my-4" />
                     <dl className="space-y-4">
                       <div className="flex items-center justify-between">
@@ -1308,6 +1405,26 @@ const BookingCheckout = () => {
                           </div>
                         )}
                       </div>
+                      <FormField
+                        control={form.control}
+                        name="promotion_code"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Mã khuyến mãi (tuỳ chọn)</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="Nhập mã ưu đãi nếu bạn có"
+                                {...field}
+                                value={field.value ?? ""}
+                              />
+                            </FormControl>
+                            <FormDescription>
+                              Hệ thống vẫn tự áp dụng khuyến mãi nội bộ nếu tour của bạn đủ điều kiện.
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                       <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
                         {tourTypeLabel ? (
                           <p className="text-foreground">

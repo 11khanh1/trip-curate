@@ -20,6 +20,7 @@ interface TourCardProps {
   price: number;
   originalPrice?: number;
   discount?: number;
+  promotionLabel?: string | null;
   duration: string;
   category: string;
   isPopular?: boolean;
@@ -36,6 +37,7 @@ const TourCard = ({
   price,
   originalPrice,
   discount,
+  promotionLabel,
   bookingsCount,
   duration,
   category,
@@ -193,6 +195,12 @@ const TourCard = ({
     Number.isFinite(originalPrice) &&
     hasPrice &&
     originalPrice > price;
+  const normalizedPromotionLabel =
+    typeof promotionLabel === "string" && promotionLabel.trim().length > 0
+      ? promotionLabel.trim()
+      : typeof discount === "number" && Number.isFinite(discount) && discount > 0
+      ? `Giảm ${Math.round(discount)}%`
+      : null;
 
   const resolvedRating =
     typeof rating === "number" && Number.isFinite(rating) ? Math.round(rating * 10) / 10 : null;
@@ -237,9 +245,9 @@ const TourCard = ({
               Phổ biến
             </Badge>
           )}
-          {discount && (
-            <Badge variant="destructive" className="ml-2">
-              Giảm {discount}%
+          {normalizedPromotionLabel && (
+            <Badge variant="destructive" className="ml-2 bg-red-600 text-white hover:bg-red-700">
+              {normalizedPromotionLabel}
             </Badge>
           )}
         </div>

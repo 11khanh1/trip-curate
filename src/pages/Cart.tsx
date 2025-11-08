@@ -20,7 +20,7 @@ import { useUser } from "@/context/UserContext";
 import { fetchTrendingTours, type PublicTour, type CancellationPolicy } from "@/services/publicApi";
 import { addWishlistItem, type WishlistItem } from "@/services/wishlistApi";
 import { apiClient } from "@/lib/api-client";
-import { getTourStartingPrice } from "@/lib/tour-utils";
+import { getTourPriceInfo } from "@/lib/tour-utils";
 import { useToast } from "@/hooks/use-toast";
 
 // ====================================================================================
@@ -37,6 +37,9 @@ export type TourCardProps = {
   reviewCount?: number | null;
   bookingsCount?: number | null;
   price: number;
+  originalPrice?: number;
+  discount?: number;
+  promotionLabel?: string | null;
   duration: string;
   category: string;
   features: string[];
@@ -101,7 +104,8 @@ const mapTourToCard = (tour: PublicTour): TourCardProps => {
     return `${normalizedBase}${trimmed.startsWith("/") ? trimmed.slice(1) : trimmed}`;
   };
   const image = resolveTourImage();
-  const price = getTourStartingPrice(tour);
+  const priceInfo = getTourPriceInfo(tour);
+  const price = priceInfo.price;
   const category =
     tour.categories && tour.categories.length > 0
       ? tour.categories[0]?.name ?? "Tour"
@@ -138,6 +142,15 @@ const mapTourToCard = (tour: PublicTour): TourCardProps => {
     reviewCount: reviewCountValue,
     bookingsCount: bookingsCountValue,
     price,
+    originalPrice: priceInfo.originalPrice,
+    discount:
+      typeof priceInfo.discountPercent === "number" ? Math.round(priceInfo.discountPercent) : undefined,
+    promotionLabel:
+      priceInfo.autoPromotion?.description ??
+      (priceInfo.autoPromotion?.code ? `Mã ${priceInfo.autoPromotion.code}` : undefined) ??
+      (typeof priceInfo.discountPercent === "number" && priceInfo.discountPercent > 0
+        ? `Giảm ${Math.round(priceInfo.discountPercent)}%`
+        : undefined),
     duration: normalizeDuration(tour.duration),
     category,
     features,

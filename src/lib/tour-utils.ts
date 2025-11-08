@@ -1,4 +1,4 @@
-import type { PublicTour, PublicTourPackage, PublicTourSchedule } from "@/services/publicApi";
+import type { AutoPromotion, PublicTour, PublicTourPackage, PublicTourSchedule } from "@/services/publicApi";
 
 const parseNumeric = (value: unknown): number | null => {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -89,7 +89,38 @@ const extractSchedulePrice = (
   return pickBestPrice(candidates);
 };
 
-export const getTourStartingPrice = (tour: PublicTour | Record<string, unknown>): number => {
+const resolveBasePriceField = (tour: PublicTour | Record<string, unknown>): number | undefined => {
+  if (!tour || typeof tour !== "object") return undefined;
+  const record = tour as Record<string, unknown>;
+  const candidates = collectNumericCandidates([record.base_price, record.basePrice]);
+  return candidates.find((value) => value >= 0);
+};
+
+const resolvePriceAfterDiscountField = (tour: PublicTour | Record<string, unknown>): number | undefined => {
+  if (!tour || typeof tour !== "object") return undefined;
+  const record = tour as Record<string, unknown>;
+  const candidates = collectNumericCandidates([
+    record.price_after_discount,
+    record.priceAfterDiscount,
+    record.price_after,
+    record.priceAfter,
+  ]);
+  return candidates.find((value) => value >= 0);
+};
+
+const extractAutoPromotionFromTour = (
+  tour: PublicTour | Record<string, unknown>,
+): AutoPromotion | null => {
+  if (!tour || typeof tour !== "object") return null;
+  const record = tour as Record<string, unknown>;
+  const candidate = record.auto_promotion ?? record.autoPromotion;
+  if (candidate && typeof candidate === "object") {
+    return candidate as AutoPromotion;
+  }
+  return null;
+};
+
+const computeLegacyStartingPrice = (tour: PublicTour | Record<string, unknown>): number => {
   if (!tour || typeof tour !== "object") return 0;
   const record = tour as Record<string, unknown>;
 
@@ -134,6 +165,55 @@ export const getTourStartingPrice = (tour: PublicTour | Record<string, unknown>)
   const best = pickBestPrice(candidates);
   if (best === undefined) return 0;
   return Math.max(0, Math.round(best));
+};
+
+export interface TourPriceInfo {
+  price: number;
+  originalPrice?: number;
+  discountAmount?: number;
+  discountPercent?: number;
+  autoPromotion?: AutoPromotion | null;
+}
+
+export const getTourPriceInfo = (tour: PublicTour | Record<string, unknown>): TourPriceInfo => {
+  const fallbackPrice = computeLegacyStartingPrice(tour);
+  const discountPrice = resolvePriceAfterDiscountField(tour);
+  const price =
+    typeof discountPrice === "number" && Number.isFinite(discountPrice) ? discountPrice : fallbackPrice;
+
+  const baseField = resolveBasePriceField(tour);
+  const originalCandidate =
+    typeof baseField === "number" && Number.isFinite(baseField)
+      ? baseField
+      : typeof discountPrice === "number" && Number.isFinite(discountPrice) && discountPrice < fallbackPrice
+      ? fallbackPrice
+      : undefined;
+
+  let originalPrice =
+    typeof originalCandidate === "number" && originalCandidate > 0 ? originalCandidate : undefined;
+  let discountAmount: number | undefined;
+  let discountPercent: number | undefined;
+
+  if (typeof originalPrice === "number" && originalPrice > 0 && price < originalPrice) {
+    discountAmount = originalPrice - price;
+    discountPercent = Math.round((discountAmount / originalPrice) * 100);
+  } else {
+    originalPrice = undefined;
+  }
+
+  const autoPromotion = extractAutoPromotionFromTour(tour);
+
+  return {
+    price,
+    originalPrice,
+    discountAmount,
+    discountPercent,
+    autoPromotion,
+  };
+};
+
+export const getTourStartingPrice = (tour: PublicTour | Record<string, unknown>): number => {
+  return getTourPriceInfo(tour).price;
 };
 
 export const formatCurrency = (value: number | null | undefined, options?: Intl.NumberFormatOptions) => {

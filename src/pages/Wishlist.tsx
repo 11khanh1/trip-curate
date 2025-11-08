@@ -33,7 +33,7 @@ import {
   X,
 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
-import { formatCurrency, getTourStartingPrice } from "@/lib/tour-utils";
+import { formatCurrency, getTourPriceInfo } from "@/lib/tour-utils";
 import { fetchTrendingTours, type PublicTour, type CancellationPolicy, type TourType } from "@/services/publicApi";
 import { Users } from "lucide-react";
 
@@ -342,8 +342,19 @@ const WishlistPage = () => {
           tourRecord?.["category"],
         ) ?? partnerName ?? "Tour";
 
-      const priceValue = tourRecord ? getTourStartingPrice(tourRecord) : 0;
+      const priceInfo = tourRecord ? getTourPriceInfo(tourRecord as PublicTour) : null;
+      const priceValue = priceInfo ? priceInfo.price : 0;
       const priceLabel = formatCurrency(priceValue);
+      const originalPriceLabel =
+        priceInfo?.originalPrice && priceInfo.originalPrice > priceValue
+          ? formatCurrency(priceInfo.originalPrice)
+          : undefined;
+      const promotionBadge =
+        priceInfo?.autoPromotion?.description ??
+        (priceInfo?.autoPromotion?.code ? `Mã ${priceInfo.autoPromotion.code}` : undefined) ??
+        (priceInfo && typeof priceInfo.discountPercent === "number" && priceInfo.discountPercent > 0
+          ? `Giảm ${Math.round(priceInfo.discountPercent)}%`
+          : undefined);
 
       const firstSchedule = schedules.find((entry) => isRecord(entry) && readRecordString(entry as Record<string, unknown>, "start_date"));
       const firstScheduleStart =
@@ -462,6 +473,8 @@ const WishlistPage = () => {
         image: resolveImageFromTour(item.tour),
         priceLabel,
         priceValue,
+        originalPriceLabel,
+        promotionBadge,
         status: item.status,
         statusText,
         statusBadge,
@@ -640,6 +653,11 @@ const WishlistPage = () => {
                                 Phổ biến
                               </Badge>
                             ) : null}
+                            {item.promotionBadge ? (
+                              <Badge variant="destructive" className="bg-red-600 text-white">
+                                {item.promotionBadge}
+                              </Badge>
+                            ) : null}
                             {item.statusBadge ? (
                               <Badge variant={item.statusBadge.variant} className="backdrop-blur bg-white/90 text-slate-700">
                                 {item.statusBadge.label}
@@ -723,9 +741,16 @@ const WishlistPage = () => {
                               </span>
                             ) : null}
                           </div>
-                          <div className="flex items-center justify-between border-t border-dashed pt-4">
-                            <span className="text-sm text-muted-foreground">Từ</span>
-                            <span className="text-2xl font-semibold text-primary">{item.priceLabel}</span>
+                          <div className="flex flex-col items-end gap-1 border-t border-dashed pt-4">
+                            {item.originalPriceLabel ? (
+                              <span className="text-xs text-muted-foreground line-through">
+                                {item.originalPriceLabel}
+                              </span>
+                            ) : null}
+                            <div className="flex items-baseline gap-2">
+                              <span className="text-sm text-muted-foreground">Từ</span>
+                              <span className="text-2xl font-semibold text-primary">{item.priceLabel}</span>
+                            </div>
                           </div>
                           <div className={`flex items-center gap-2 text-sm ${statusClass}`}>
                             <CheckCircle2 className="h-4 w-4" />
@@ -776,13 +801,19 @@ const WishlistPage = () => {
                       {comparedTours.map((tour) => {
                         const tourId = String(tour.id ?? tour.uuid ?? tour.tour_id ?? "");
                         const image = resolveImageFromTour(tour);
-                        const startingPrice = getTourStartingPrice(tour as any);
+                        const priceInfo = getTourPriceInfo(tour as PublicTour);
+                        const startingPrice = priceInfo.price;
                         const priceLabel = formatCurrency(startingPrice);
-                        const hasOriginal =
-                          typeof tour.season_price === "number" &&
-                          Number.isFinite(tour.season_price) &&
-                          tour.season_price > (startingPrice ?? 0);
-                        const originalLabel = hasOriginal ? formatCurrency(tour.season_price) : null;
+                        const originalLabel =
+                          priceInfo.originalPrice && priceInfo.originalPrice > startingPrice
+                            ? formatCurrency(priceInfo.originalPrice)
+                            : null;
+                        const promotionBadge =
+                          priceInfo.autoPromotion?.description ??
+                          (priceInfo.autoPromotion?.code ? `Mã ${priceInfo.autoPromotion.code}` : undefined) ??
+                          (typeof priceInfo.discountPercent === "number" && priceInfo.discountPercent > 0
+                            ? `Giảm ${Math.round(priceInfo.discountPercent)}%`
+                            : undefined);
                         const tourRating = normalizeRating(tour);
                         const tourStatus = tour.status ?? "Đang cập nhật";
                         const itinerary =
@@ -817,12 +848,19 @@ const WishlistPage = () => {
                           >
                             <div className="relative h-48 w-full overflow-hidden">
                               <img src={image} alt={tour.title ?? "Tour"} className="h-full w-full object-cover" />
-                              <Badge
-                                className="absolute left-4 top-4 uppercase"
-                                variant={tour.available === false ? "destructive" : "secondary"}
-                              >
-                                {tour.available === false ? "Không khả dụng" : tourStatus}
-                              </Badge>
+                              <div className="absolute left-4 top-4 flex flex-col gap-2">
+                                <Badge
+                                  className="uppercase"
+                                  variant={tour.available === false ? "destructive" : "secondary"}
+                                >
+                                  {tour.available === false ? "Không khả dụng" : tourStatus}
+                                </Badge>
+                                {promotionBadge ? (
+                                  <Badge variant="destructive" className="bg-red-600 text-white">
+                                    {promotionBadge}
+                                  </Badge>
+                                ) : null}
+                              </div>
                             </div>
                             <CardContent className="space-y-4 p-5">
                               <div className="flex items-start justify-between gap-3">
@@ -855,12 +893,12 @@ const WishlistPage = () => {
                                 <div className="flex items-center justify-between gap-3">
                                   <span className="text-sm text-muted-foreground">Giá từ</span>
                                   <div className="flex flex-col items-end">
-                                    <span className="text-xl font-semibold text-primary">{priceLabel}</span>
                                     {originalLabel ? (
                                       <span className="text-xs text-muted-foreground line-through">
                                         {originalLabel}
                                       </span>
                                     ) : null}
+                                    <span className="text-xl font-semibold text-primary">{priceLabel}</span>
                                   </div>
                                 </div>
                               </div>
@@ -1009,14 +1047,18 @@ const WishlistRecommendations = () => {
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {tours.slice(0, 6).map((tour) => {
           const id = tour.id ?? tour.uuid ?? Math.random().toString(36).slice(2, 8);
-          const price = getTourStartingPrice(tour);
-          const priceLabel = formatCurrency(price);
+          const priceInfo = getTourPriceInfo(tour as PublicTour);
+          const priceLabel = formatCurrency(priceInfo.price);
           const originalLabel =
-            typeof tour.season_price === "number" &&
-            Number.isFinite(tour.season_price) &&
-            tour.season_price > price
-              ? formatCurrency(tour.season_price)
+            priceInfo.originalPrice && priceInfo.originalPrice > priceInfo.price
+              ? formatCurrency(priceInfo.originalPrice)
               : undefined;
+          const promotionBadge =
+            priceInfo.autoPromotion?.description ??
+            (priceInfo.autoPromotion?.code ? `Mã ${priceInfo.autoPromotion.code}` : undefined) ??
+            (typeof priceInfo.discountPercent === "number" && priceInfo.discountPercent > 0
+              ? `Giảm ${Math.round(priceInfo.discountPercent)}%`
+              : undefined);
           const features: string[] = [];
           if (tour.requires_passport) features.push("Yêu cầu hộ chiếu");
           if (tour.requires_visa) features.push("Yêu cầu visa");
@@ -1041,6 +1083,13 @@ const WishlistRecommendations = () => {
               priceLabel={priceLabel}
               originalPriceLabel={originalLabel}
               features={features}
+              topLeftOverlay={
+                promotionBadge ? (
+                  <Badge variant="destructive" className="bg-red-600 text-white">
+                    {promotionBadge}
+                  </Badge>
+                ) : null
+              }
             />
           );
         })}

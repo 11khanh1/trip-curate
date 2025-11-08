@@ -1,5 +1,6 @@
 import { apiClient } from "@/lib/api-client";
 import type { Booking } from "@/services/bookingApi";
+import type { PromotionDiscountType } from "@/services/publicApi";
 
 export type PartnerBookingStatus = "pending" | "confirmed" | "cancelled" | "completed";
 
@@ -19,6 +20,33 @@ export interface PartnerBookingListResponse {
   meta?: Record<string, unknown>;
   links?: Record<string, unknown>;
   raw?: unknown;
+}
+
+export interface PartnerPromotion {
+  id: string | number;
+  code?: string | null;
+  tour_id?: string | number | null;
+  discount_type: PromotionDiscountType;
+  value: number;
+  max_usage?: number | null;
+  usage_count?: number | null;
+  valid_from?: string | null;
+  valid_to?: string | null;
+  description?: string | null;
+  is_active?: boolean | null;
+  auto_apply?: boolean | null;
+  discount_amount?: number | null;
+  [key: string]: unknown;
+}
+
+export interface PartnerPromotionPayload {
+  discount_type: PromotionDiscountType;
+  value: number;
+  max_usage?: number | null;
+  valid_from?: string | null;
+  valid_to?: string | null;
+  description?: string | null;
+  is_active?: boolean | null;
 }
 
 const normalizePartnerBooking = (payload: unknown): PartnerBooking | null => {
@@ -109,4 +137,49 @@ export async function updatePartnerBookingStatus(
     message,
     raw: res.data,
   };
+}
+
+const normalizePromotionList = (payload: unknown): PartnerPromotion[] => {
+  if (Array.isArray(payload)) {
+    return payload as PartnerPromotion[];
+  }
+  if (payload && typeof payload === "object") {
+    if (Array.isArray((payload as { data?: unknown }).data)) {
+      return (payload as { data: PartnerPromotion[] }).data;
+    }
+    if (Array.isArray((payload as { promotions?: unknown }).promotions)) {
+      return (payload as { promotions: PartnerPromotion[] }).promotions;
+    }
+  }
+  return [];
+};
+
+export async function fetchPartnerPromotions(tourId: string | number): Promise<PartnerPromotion[]> {
+  const res = await apiClient.get("/partner/promotions", { params: { tour_id: tourId } });
+  return normalizePromotionList(res.data);
+}
+
+export async function createPartnerPromotion(
+  payload: PartnerPromotionPayload & { tour_id: string | number },
+): Promise<PartnerPromotion> {
+  const res = await apiClient.post("/partner/promotions", payload);
+  if (res.data && typeof res.data === "object" && "promotion" in res.data) {
+    return (res.data as { promotion: PartnerPromotion }).promotion;
+  }
+  return res.data as PartnerPromotion;
+}
+
+export async function updatePartnerPromotion(
+  id: string | number,
+  payload: PartnerPromotionPayload,
+): Promise<PartnerPromotion> {
+  const res = await apiClient.put(`/partner/promotions/${id}`, payload);
+  if (res.data && typeof res.data === "object" && "promotion" in res.data) {
+    return (res.data as { promotion: PartnerPromotion }).promotion;
+  }
+  return res.data as PartnerPromotion;
+}
+
+export async function deletePartnerPromotion(id: string | number): Promise<void> {
+  await apiClient.delete(`/partner/promotions/${id}`);
 }
