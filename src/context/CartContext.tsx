@@ -17,7 +17,8 @@ import {
   type CartApiItem,
   type CartApiResponse,
 } from "@/services/cartApi";
-import type { CancellationPolicy, TourType } from "@/services/publicApi";
+import type { AutoPromotion, CancellationPolicy, PublicTour, TourType } from "@/services/publicApi";
+import { applyAutoPromotionToPrice, getTourPriceInfo } from "@/lib/tour-utils";
 import { useUser } from "./UserContext";
 
 export interface CartItem {
@@ -44,6 +45,10 @@ export interface CartItem {
   childPrice: number;
   totalPrice: number;
   addedAt: string;
+  originalTotalPrice?: number | null;
+  discountPercent?: number | null;
+  discountAmount?: number | null;
+  promotionLabel?: string | null;
 }
 
 export interface CartItemInput {
@@ -61,6 +66,8 @@ export interface CartItemInput {
   childCount: number;
   adultPrice: number;
   childPrice: number;
+  originalTotalPrice?: number | null;
+  promotionLabel?: string | null;
 }
 
 interface CartContextValue {
@@ -207,6 +214,21 @@ const mapCartApiItemToCartItem = (item: CartApiItem): CartItem => {
     ? item.schedule_data
     : undefined;
 
+  const tourPriceInfo = tourData ? getTourPriceInfo(tourData as PublicTour) : null;
+  const autoPromotion =
+    (isRecord(item.auto_promotion) ? (item.auto_promotion as AutoPromotion) : null) ??
+    (isRecord((item as Record<string, unknown>).autoPromotion)
+      ? ((item as Record<string, unknown>).autoPromotion as AutoPromotion)
+      : null) ??
+    (tourData && isRecord((tourData as Record<string, unknown>).auto_promotion)
+      ? ((tourData as Record<string, unknown>).auto_promotion as AutoPromotion)
+      : null) ??
+    (tourData && isRecord((tourData as Record<string, unknown>).autoPromotion)
+      ? ((tourData as Record<string, unknown>).autoPromotion as AutoPromotion)
+      : null) ??
+    tourPriceInfo?.autoPromotion ??
+    null;
+
   const apiId = firstString(
     item.id,
     item.uuid,
@@ -242,7 +264,7 @@ const mapCartApiItemToCartItem = (item: CartApiItem): CartItem => {
     0,
   );
 
-  const adultPrice = parsePrice(
+  const baseAdultPrice = parsePrice(
     item.adult_price ??
       item.adultPrice ??
       packageData?.adult_price ??
@@ -251,7 +273,7 @@ const mapCartApiItemToCartItem = (item: CartApiItem): CartItem => {
       packageData?.priceAdult,
     0,
   );
-  const childPrice = parsePrice(
+  const baseChildPrice = parsePrice(
     item.child_price ??
       item.childPrice ??
       packageData?.child_price ??
@@ -260,11 +282,50 @@ const mapCartApiItemToCartItem = (item: CartApiItem): CartItem => {
       packageData?.priceChild,
     0,
   );
-  const totalPriceValue =
-    firstNumber(item.total_price, item.totalPrice, item.total_amount, item.subtotal) ??
-    adultCount * adultPrice +
-      childCount * childPrice;
-  const totalPrice = Math.max(0, totalPriceValue);
+  const baseSubtotal = adultCount * baseAdultPrice + childCount * baseChildPrice;
+  const apiSubtotal =
+    firstNumber(item.total_price, item.totalPrice, item.total_amount, item.subtotal) ?? baseSubtotal;
+  let totalPrice = Math.max(0, apiSubtotal);
+  let originalSubtotal: number | null = baseSubtotal > totalPrice ? baseSubtotal : null;
+
+  if (autoPromotion && baseSubtotal > 0) {
+    const applied = applyAutoPromotionToPrice(baseSubtotal, autoPromotion);
+    if (typeof applied.finalPrice === "number" && applied.finalPrice < totalPrice) {
+      totalPrice = applied.finalPrice;
+      originalSubtotal = applied.originalPrice ?? originalSubtotal ?? baseSubtotal;
+    } else if (
+      typeof applied.originalPrice === "number" &&
+      applied.originalPrice > totalPrice &&
+      !originalSubtotal
+    ) {
+      originalSubtotal = applied.originalPrice;
+    }
+  }
+
+  const ratio =
+    baseSubtotal > 0 ? Math.min(1, totalPrice / baseSubtotal) : 1;
+  const adultPrice =
+    baseAdultPrice > 0 ? Math.max(0, Math.round(baseAdultPrice * ratio)) : baseAdultPrice;
+  const childPrice =
+    baseChildPrice > 0 ? Math.max(0, Math.round(baseChildPrice * ratio)) : baseChildPrice;
+  const recomputedSubtotal = adultCount * adultPrice + childCount * childPrice;
+  const normalizedTotalPrice =
+    recomputedSubtotal > 0 ? recomputedSubtotal : Math.max(0, Math.round(totalPrice));
+  const originalTotalPrice =
+    originalSubtotal && originalSubtotal > normalizedTotalPrice
+      ? Math.round(originalSubtotal)
+      : null;
+  const discountAmount =
+    originalTotalPrice !== null ? originalTotalPrice - normalizedTotalPrice : null;
+  const discountPercent =
+    originalTotalPrice !== null && originalTotalPrice > 0 && discountAmount
+      ? Math.round((discountAmount / originalTotalPrice) * 100)
+      : null;
+  const promotionLabel =
+    (typeof autoPromotion?.description === "string" && autoPromotion.description.trim().length > 0
+      ? autoPromotion.description.trim()
+      : null) ??
+    (discountPercent ? `Giảm ${discountPercent}%` : null);
 
   const thumbnail =
     firstString(item.thumbnail, item.thumbnail_url, tourData?.thumbnail, tourData?.thumbnail_url) ??
@@ -347,7 +408,11 @@ const mapCartApiItemToCartItem = (item: CartApiItem): CartItem => {
     childCount,
     adultPrice,
     childPrice,
-    totalPrice,
+    totalPrice: normalizedTotalPrice,
+    originalTotalPrice: originalTotalPrice ?? null,
+    discountPercent,
+    discountAmount,
+    promotionLabel,
     addedAt: toIsoString(
       firstString(item.added_at, item.created_at, item.updated_at, item.inserted_at),
     ),
@@ -516,6 +581,52 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       try {
         const resource = await addCartItemRequest(payload);
         applyResource(resource);
+        const fallbackTotal = Math.max(
+          0,
+          Math.round(normalizedAdults * input.adultPrice + normalizedChildren * input.childPrice),
+        );
+        const fallbackOriginal =
+          typeof input.originalTotalPrice === "number" && input.originalTotalPrice > fallbackTotal
+            ? Math.round(input.originalTotalPrice)
+            : null;
+        let patched = false;
+        commitItems(
+          itemsRef.current.map((item) => {
+            if (
+              !patched &&
+              item.tourId === input.tourId &&
+              item.packageId === input.packageId &&
+              ((input.scheduleId ?? null) === (item.scheduleId ?? null)) &&
+              item.adultCount === normalizedAdults &&
+              item.childCount === normalizedChildren
+            ) {
+              patched = true;
+              const nextTotal = fallbackTotal > 0 ? fallbackTotal : item.totalPrice;
+              const originalTotal =
+                fallbackOriginal ??
+                (item.originalTotalPrice && item.originalTotalPrice > nextTotal
+                  ? item.originalTotalPrice
+                  : null);
+              const discountAmount =
+                originalTotal !== null ? originalTotal - nextTotal : item.discountAmount ?? null;
+              const discountPercent =
+                originalTotal !== null && originalTotal > 0 && discountAmount
+                  ? Math.round((discountAmount / originalTotal) * 100)
+                  : item.discountPercent ?? null;
+              return {
+                ...item,
+                adultPrice: input.adultPrice,
+                childPrice: input.childPrice,
+                totalPrice: nextTotal,
+                originalTotalPrice: originalTotal,
+                discountAmount,
+                discountPercent,
+                promotionLabel: input.promotionLabel ?? item.promotionLabel ?? null,
+              };
+            }
+            return item;
+          }),
+        );
         setError(null);
       } catch (err) {
         const normalized =

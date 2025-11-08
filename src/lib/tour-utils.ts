@@ -120,6 +120,70 @@ const extractAutoPromotionFromTour = (
   return null;
 };
 
+export const applyAutoPromotionToPrice = (
+  price: number | null | undefined,
+  promotion?: AutoPromotion | null,
+) => {
+  if (typeof price !== "number" || !Number.isFinite(price) || price <= 0) {
+    return { finalPrice: price ?? null, originalPrice: null, discountPercent: null, discountAmount: null };
+  }
+  if (!promotion || promotion.is_active === false) {
+    return {
+      finalPrice: Math.round(price),
+      originalPrice: null,
+      discountPercent: null,
+      discountAmount: null,
+    };
+  }
+
+  const normalizedType = promotion.discount_type?.toString().toLowerCase() ?? null;
+  const valueNumeric = parseNumeric(promotion.value);
+  const discountAmountNumeric = parseNumeric(promotion.discount_amount);
+
+  let nextPrice = price;
+  if (typeof discountAmountNumeric === "number" && discountAmountNumeric > 0) {
+    nextPrice = price - discountAmountNumeric;
+  } else if (
+    (normalizedType === "fixed" || normalizedType === "amount") &&
+    typeof valueNumeric === "number" &&
+    valueNumeric > 0
+  ) {
+    nextPrice = price - valueNumeric;
+  } else if (
+    (normalizedType === "percent" || normalizedType === "percentage") &&
+    typeof valueNumeric === "number" &&
+    valueNumeric > 0
+  ) {
+    nextPrice = price * (1 - valueNumeric / 100);
+  } else {
+    return {
+      finalPrice: Math.round(price),
+      originalPrice: null,
+      discountPercent: null,
+      discountAmount: null,
+    };
+  }
+
+  const finalPrice = Math.max(0, Math.round(nextPrice));
+  if (finalPrice >= price) {
+    return {
+      finalPrice: Math.round(price),
+      originalPrice: null,
+      discountPercent: null,
+      discountAmount: null,
+    };
+  }
+
+  const discountAmount = price - finalPrice;
+  const discountPercent = price > 0 ? Math.round((discountAmount / price) * 100) : null;
+  return {
+    finalPrice,
+    originalPrice: Math.round(price),
+    discountPercent,
+    discountAmount,
+  };
+};
+
 const computeLegacyStartingPrice = (tour: PublicTour | Record<string, unknown>): number => {
   if (!tour || typeof tour !== "object") return 0;
   const record = tour as Record<string, unknown>;
@@ -178,16 +242,13 @@ export interface TourPriceInfo {
 export const getTourPriceInfo = (tour: PublicTour | Record<string, unknown>): TourPriceInfo => {
   const fallbackPrice = computeLegacyStartingPrice(tour);
   const discountPrice = resolvePriceAfterDiscountField(tour);
-  const price =
-    typeof discountPrice === "number" && Number.isFinite(discountPrice) ? discountPrice : fallbackPrice;
+  const hasDiscountPrice =
+    typeof discountPrice === "number" && Number.isFinite(discountPrice) && discountPrice > 0;
+  let price = hasDiscountPrice ? Math.round(discountPrice!) : fallbackPrice;
 
   const baseField = resolveBasePriceField(tour);
   const originalCandidate =
-    typeof baseField === "number" && Number.isFinite(baseField)
-      ? baseField
-      : typeof discountPrice === "number" && Number.isFinite(discountPrice) && discountPrice < fallbackPrice
-      ? fallbackPrice
-      : undefined;
+    typeof baseField === "number" && Number.isFinite(baseField) && baseField > 0 ? baseField : undefined;
 
   let originalPrice =
     typeof originalCandidate === "number" && originalCandidate > 0 ? originalCandidate : undefined;
@@ -202,6 +263,30 @@ export const getTourPriceInfo = (tour: PublicTour | Record<string, unknown>): To
   }
 
   const autoPromotion = extractAutoPromotionFromTour(tour);
+
+  if (
+    (!hasDiscountPrice || price >= fallbackPrice) &&
+    (!discountAmount || discountAmount <= 0) &&
+    autoPromotion &&
+    fallbackPrice > 0
+  ) {
+    const applied = applyAutoPromotionToPrice(originalPrice ?? fallbackPrice, autoPromotion);
+    if (
+      typeof applied.finalPrice === "number" &&
+      Number.isFinite(applied.finalPrice) &&
+      applied.finalPrice > 0 &&
+      applied.finalPrice < price
+    ) {
+      price = applied.finalPrice;
+      originalPrice = applied.originalPrice ?? originalPrice ?? fallbackPrice;
+      discountAmount =
+        typeof originalPrice === "number" && originalPrice > price ? originalPrice - price : undefined;
+      discountPercent =
+        typeof originalPrice === "number" && originalPrice > price
+          ? Math.round(((originalPrice - price) / originalPrice) * 100)
+          : undefined;
+    }
+  }
 
   return {
     price,

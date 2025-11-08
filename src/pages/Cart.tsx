@@ -595,6 +595,16 @@ const CartPage = () => {
                         documentLabel,
                         cancellationLabel,
                       ].filter((value): value is string => Boolean(value));
+                      const discountBadges: string[] = [];
+                      if (item.discountAmount && item.discountAmount > 0) {
+                        discountBadges.push(`Tiết kiệm ${formatter.format(item.discountAmount)}`);
+                      }
+                      if (item.promotionLabel) {
+                        discountBadges.push(item.promotionLabel);
+                      } else if (item.discountPercent && item.discountPercent > 0) {
+                        discountBadges.push(`Giảm ${item.discountPercent}%`);
+                      }
+                      const decoratedFeatures = [...discountBadges, ...features];
                       const normalizedTourId = String(item.tourId);
                       const isWishlisted = wishlistTourIds.has(normalizedTourId);
                       const isSavingWishlist = pendingWishlistTourId === normalizedTourId;
@@ -613,7 +623,12 @@ const CartPage = () => {
                           rating={null}
                           ratingCount={null}
                           priceLabel={formatter.format(item.totalPrice)}
-                          features={features}
+                          originalPriceLabel={
+                            item.originalTotalPrice && item.originalTotalPrice > item.totalPrice
+                              ? formatter.format(item.originalTotalPrice)
+                              : undefined
+                          }
+                          features={decoratedFeatures}
                           topLeftOverlay={
                             <Checkbox
                               checked={selectedIds.has(item.id)}

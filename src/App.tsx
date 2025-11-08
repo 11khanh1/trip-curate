@@ -49,6 +49,7 @@ import PartnerBookings from "./pages/partner/Bookings";
 import PartnerRevenue from "./pages/partner/Revenue";
 import PartnerAnalytics from "./pages/partner/Analytics";
 import PartnerSettings from "./pages/partner/Settings";
+import PartnerPromotions from "./pages/partner/Promotions";
 import AuthCallback from "./pages/AuthCallback";
 import ResultSearch from "./pages/ResultSearch";
 import ScrollToTop from "@/components/ScrollToTop";
@@ -121,6 +122,7 @@ const App = () => (
         <Route path="/partner" element={<PartnerLayout />}>
           <Route index element={<PartnerDashboard />} />
           <Route path="activities" element={<PartnerActivities />} />
+          <Route path="promotions" element={<PartnerPromotions />} />
           <Route path="bookings" element={<PartnerBookings />} />
           <Route path="revenue" element={<PartnerRevenue />} />
           <Route path="analytics" element={<PartnerAnalytics />} />

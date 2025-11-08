@@ -41,6 +41,7 @@ import {
 } from "@/services/bookingApi";
 import { fetchTourDetail, type PublicTour, type PublicTourPackage, type PublicTourSchedule } from "@/services/publicApi";
 import { deduceSepayQrImage, deriveQrFromPaymentUrl } from "@/lib/sepay";
+import { applyAutoPromotionToPrice, getTourPriceInfo } from "@/lib/tour-utils";
 import {
   isPastDate,
   isValidVietnamPhone,
@@ -256,6 +257,7 @@ const BookingCheckout = () => {
     queryFn: () => fetchTourDetail(tourId),
     enabled: Boolean(tourId),
   });
+  const tourPriceInfo = useMemo(() => (tour ? getTourPriceInfo(tour) : null), [tour]);
 
   const packages = useMemo(() => tour?.packages ?? [], [tour?.packages]);
   const schedules = useMemo(() => tour?.schedules ?? [], [tour?.schedules]);
@@ -398,12 +400,62 @@ const BookingCheckout = () => {
     return raw.length > 0 ? raw : "VND";
   }, [tour?.currency]);
 
-  const totalPrice = useMemo(() => {
-    if (!selectedPackage) return 0;
-    const adultPrice = selectedPackage.adult_price ?? tour?.base_price ?? 0;
-    const childPrice = selectedPackage.child_price ?? selectedPackage.adult_price ?? tour?.base_price ?? 0;
-    return adults * adultPrice + children * childPrice;
-  }, [adults, children, selectedPackage, tour?.base_price]);
+  const priceSummary = useMemo(() => {
+    if (!selectedPackage) {
+      return { total: 0, original: null, discountAmount: null, discountPercent: null, promotionLabel: null };
+    }
+    const selectedPackageRecord = selectedPackage as Record<string, unknown>;
+    const baseAdultPrice =
+      coerceNumber(selectedPackage.adult_price) ??
+      coerceNumber(selectedPackageRecord.adultPrice) ??
+      coerceNumber(tour?.base_price) ??
+      0;
+    const baseChildPrice =
+      coerceNumber(selectedPackage.child_price) ??
+      coerceNumber(selectedPackageRecord.childPrice) ??
+      baseAdultPrice;
+    const baseSubtotal = adults * baseAdultPrice + children * baseChildPrice;
+    if (baseSubtotal <= 0) {
+      return { total: 0, original: null, discountAmount: null, discountPercent: null, promotionLabel: null };
+    }
+    const autoPromotion = tourPriceInfo?.autoPromotion ?? null;
+    let total = baseSubtotal;
+    let original: number | null = null;
+    if (autoPromotion) {
+      const applied = applyAutoPromotionToPrice(baseSubtotal, autoPromotion);
+      if (typeof applied.finalPrice === "number" && applied.finalPrice < total) {
+        total = applied.finalPrice;
+        original = applied.originalPrice ?? baseSubtotal;
+      } else if (typeof applied.originalPrice === "number" && applied.originalPrice > total) {
+        original = applied.originalPrice;
+      }
+    }
+    if (!original && baseSubtotal > total) {
+      original = baseSubtotal;
+    }
+    const normalizedTotal = Math.max(0, Math.round(total));
+    const normalizedOriginal = original && original > normalizedTotal ? Math.round(original) : null;
+    const discountAmount =
+      normalizedOriginal !== null ? Math.max(0, normalizedOriginal - normalizedTotal) : null;
+    const discountPercent =
+      normalizedOriginal !== null && normalizedOriginal > 0 && discountAmount
+        ? Math.round((discountAmount / normalizedOriginal) * 100)
+        : null;
+    const promotionLabel =
+      (tourPriceInfo?.autoPromotion?.description &&
+        tourPriceInfo.autoPromotion.description.trim().length > 0
+        ? tourPriceInfo.autoPromotion.description.trim()
+        : null) ??
+      (discountPercent ? `Giảm ${discountPercent}%` : null);
+    return {
+      total: normalizedTotal,
+      original: normalizedOriginal,
+      discountAmount,
+      discountPercent,
+      promotionLabel: promotionLabel ?? null,
+    };
+  }, [adults, children, selectedPackage, tour?.base_price, tourPriceInfo]);
+  const totalPrice = priceSummary.total;
 
   const mutation = useMutation({
     mutationFn: (payload: CreateBookingPayload) => createBooking(payload),
@@ -1437,13 +1489,39 @@ const BookingCheckout = () => {
                       <Separator />
                       <div className="flex items-center justify-between text-base font-semibold text-foreground">
                         <span>Tổng cộng</span>
-                        <span>
-                          {totalPrice.toLocaleString("vi-VN", {
-                            style: "currency",
-                            currency: displayCurrency,
-                            minimumFractionDigits: 0,
-                          })}
-                        </span>
+                        <div className="flex flex-col items-end gap-0.5 text-right">
+                          {priceSummary.original && (
+                            <span className="text-sm text-muted-foreground line-through">
+                              {priceSummary.original.toLocaleString("vi-VN", {
+                                style: "currency",
+                                currency: displayCurrency,
+                                minimumFractionDigits: 0,
+                              })}
+                            </span>
+                          )}
+                          <span className="text-2xl font-bold text-primary">
+                            {totalPrice.toLocaleString("vi-VN", {
+                              style: "currency",
+                              currency: displayCurrency,
+                              minimumFractionDigits: 0,
+                            })}
+                          </span>
+                          {priceSummary.promotionLabel ? (
+                            <span className="text-xs font-medium text-emerald-600">
+                              {priceSummary.promotionLabel}
+                            </span>
+                          ) : null}
+                          {priceSummary.discountAmount ? (
+                            <span className="text-xs text-emerald-600">
+                              Tiết kiệm{" "}
+                              {priceSummary.discountAmount.toLocaleString("vi-VN", {
+                                style: "currency",
+                                currency: displayCurrency,
+                                minimumFractionDigits: 0,
+                              })}
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                       <Separator />
                       <FormField

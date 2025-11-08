@@ -48,6 +48,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import {
   fetchTourDetail,
   fetchTrendingTours,
+  type AutoPromotion,
   type CancellationPolicy,
   type PublicTour,
   type PublicTourSchedule,
@@ -58,7 +59,7 @@ import { useCart } from "@/context/CartContext";
 import { useUser } from "@/context/UserContext";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { useRecommendationRealtimeRefresh } from "@/hooks/useRecommendationRealtimeRefresh";
-import { getTourStartingPrice } from "@/lib/tour-utils";
+import { applyAutoPromotionToPrice, getTourPriceInfo, getTourStartingPrice } from "@/lib/tour-utils";
 import { addWishlistItem, removeWishlistItem, type WishlistItem } from "@/services/wishlistApi";
 import {
   fetchTourReviews,
@@ -104,6 +105,7 @@ type RelatedActivity = {
   category: string;
   isPopular?: boolean;
   features: string[];
+  promotionLabel?: string | null;
 };
 
 interface ActivityDetailView {
@@ -121,6 +123,8 @@ interface ActivityDetailView {
   price?: number | null;
   originalPrice?: number | null;
   discount?: number | null;
+  promotionLabel?: string | null;
+  autoPromotion?: AutoPromotion | null;
   duration?: string | number | null;
   images: string[];
   highlights: string[];
@@ -220,6 +224,7 @@ const parseScheduleNumber = (...values: Array<unknown>): number | null => {
   }
   return null;
 };
+
 
 const resolveTourTypeLabel = (type?: TourType | string | null) => {
   if (!type) return null;
@@ -378,19 +383,34 @@ const toRelatedActivity = (tour: PublicTour): RelatedActivity => {
     ...(Array.isArray(tour.gallery) ? tour.gallery : []),
   ].filter(Boolean) as string[];
 
-  const basePrice =
-    typeof tour.base_price === "number" && Number.isFinite(tour.base_price)
-      ? Math.max(0, tour.base_price)
-      : undefined;
-  const price = basePrice ?? getTourStartingPrice(tour);
-  const originalPriceRaw =
+  const priceInfo = getTourPriceInfo(tour);
+  const price =
+    typeof priceInfo.price === "number" && Number.isFinite(priceInfo.price)
+      ? Math.max(0, Math.round(priceInfo.price))
+      : getTourStartingPrice(tour);
+  const seasonPrice =
     typeof tour.season_price === "number" && Number.isFinite(tour.season_price)
       ? Math.max(0, tour.season_price)
       : undefined;
-  const discount =
-    typeof originalPriceRaw === "number" && price > 0 && originalPriceRaw > price
-      ? Math.round(((originalPriceRaw - price) / originalPriceRaw) * 100)
+  const originalPrice =
+    typeof priceInfo.originalPrice === "number" && Number.isFinite(priceInfo.originalPrice)
+      ? Math.max(0, Math.round(priceInfo.originalPrice))
+      : seasonPrice && seasonPrice > price
+      ? seasonPrice
       : undefined;
+  const discount =
+    typeof priceInfo.discountPercent === "number" && priceInfo.discountPercent > 0
+      ? priceInfo.discountPercent
+      : typeof originalPrice === "number" && originalPrice > price
+      ? Math.round(((originalPrice - price) / originalPrice) * 100)
+      : undefined;
+  const promotionLabel =
+    typeof discount === "number" && discount > 0
+      ? `Giảm ${discount}%`
+      : typeof priceInfo.autoPromotion?.description === "string" &&
+        priceInfo.autoPromotion.description.trim().length > 0
+      ? priceInfo.autoPromotion.description.trim()
+      : null;
 
   const ratingValue =
     parseFloatOrNull(tour.rating_average ?? undefined) ??
@@ -413,8 +433,9 @@ const toRelatedActivity = (tour: PublicTour): RelatedActivity => {
     reviewCount: reviewCountValue,
     bookingsCount: bookingsCountValue,
     price,
-    originalPrice: originalPriceRaw,
+    originalPrice,
     discount,
+    promotionLabel,
     duration:
       typeof tour.duration === "number"
         ? `${tour.duration} giờ`
@@ -430,6 +451,41 @@ const normalizeTourDetail = (
   relatedTours: PublicTour[] = [],
 ): ActivityDetailView | null => {
   if (!tour) return null;
+  const priceInfo = getTourPriceInfo(tour);
+  const autoPromotion = priceInfo.autoPromotion ?? null;
+  const adjustPriceWithPromotion = (
+    value: number | null | undefined,
+    fallbackOriginal?: number | null,
+  ) => {
+    const result = applyAutoPromotionToPrice(value, autoPromotion);
+    const finalPrice =
+      typeof result.finalPrice === "number" && Number.isFinite(result.finalPrice)
+        ? result.finalPrice
+        : typeof value === "number"
+        ? value
+        : null;
+    const derivedOriginal =
+      result.originalPrice ??
+      (typeof fallbackOriginal === "number" &&
+      typeof finalPrice === "number" &&
+      fallbackOriginal > finalPrice
+        ? fallbackOriginal
+        : null);
+    const discountPercent =
+      result.discountPercent ??
+      (typeof derivedOriginal === "number" &&
+      typeof finalPrice === "number" &&
+      derivedOriginal > finalPrice
+        ? Math.round(((derivedOriginal - finalPrice) / derivedOriginal) * 100)
+        : null);
+    return {
+      price: typeof finalPrice === "number" ? Math.round(finalPrice) : finalPrice,
+      originalPrice:
+        typeof derivedOriginal === "number" ? Math.round(derivedOriginal) : derivedOriginal,
+      discountPercent,
+    };
+  };
+
   const rawTourType =
     typeof tour.type === "string" && tour.type.trim().length > 0 ? tour.type.trim() : null;
   const childAgeLimit = parseIntOrNull(
@@ -495,13 +551,15 @@ const seasonPriceValue = parseFloatOrNull(tour.season_price);
           pkg?.child_price ?? (pkg as Record<string, unknown>)?.childPrice ?? null,
         );
         const effectivePrice = adultPrice ?? childPrice ?? basePriceValue ?? null;
+        const adjustedPrice = adjustPriceWithPromotion(effectivePrice, seasonPriceValue ?? null);
         return {
           id: String(pkg?.id ?? `${id}-package-${index}`),
           packageId: String(pkg?.id ?? `${id}-package-${index}`),
           name: pkg?.name ?? `Gói dịch vụ ${index + 1}`,
-          price: effectivePrice,
-          originalPrice: seasonPriceValue ?? null,
-          adultPrice: adultPrice ?? null,
+          price: adjustedPrice.price ?? effectivePrice,
+          originalPrice:
+            adjustedPrice.originalPrice ?? (typeof seasonPriceValue === "number" ? seasonPriceValue : null),
+          adultPrice: adjustedPrice.price ?? adultPrice ?? null,
           childPrice: childPrice ?? null,
           isActive: pkg?.is_active ?? true,
           includes: [],
@@ -520,11 +578,16 @@ const seasonPriceValue = parseFloatOrNull(tour.season_price);
             (schedule as Record<string, unknown>)?.price_from ??
             null,
         );
+        const adjustedSchedulePrice = adjustPriceWithPromotion(
+          schedulePrice ?? basePriceValue ?? null,
+          seasonPriceValue ?? null,
+        );
         return {
           id: String(schedule?.id ?? `${id}-schedule-${index}`),
           name: schedule?.title ?? `Lịch trình ${index + 1}`,
-          price: schedulePrice ?? basePriceValue ?? null,
-          originalPrice: seasonPriceValue ?? null,
+          price: adjustedSchedulePrice.price ?? schedulePrice ?? basePriceValue ?? null,
+          originalPrice:
+            adjustedSchedulePrice.originalPrice ?? (typeof seasonPriceValue === "number" ? seasonPriceValue : null),
           includes: [],
           startDate: schedule?.start_date ?? null,
           endDate: schedule?.end_date ?? null,
@@ -631,6 +694,38 @@ const seasonPriceValue = parseFloatOrNull(tour.season_price);
     .map(toRelatedActivity)
     .slice(0, 3);
 
+  const basePriceCandidate =
+    basePriceValue ??
+    sortedPackages[0]?.adultPrice ??
+    sortedPackages[0]?.price ??
+    seasonPriceValue ??
+    null;
+  const adjustedActivityPrice = adjustPriceWithPromotion(basePriceCandidate, seasonPriceValue ?? null);
+  const finalActivityPrice =
+    adjustedActivityPrice.price ??
+    (typeof basePriceCandidate === "number" ? basePriceCandidate : null);
+  const finalOriginalPrice =
+    adjustedActivityPrice.originalPrice ??
+    (typeof seasonPriceValue === "number" &&
+    typeof finalActivityPrice === "number" &&
+    seasonPriceValue > finalActivityPrice
+      ? seasonPriceValue
+      : null);
+  const activityDiscount =
+    adjustedActivityPrice.discountPercent ??
+    priceInfo.discountPercent ??
+    (typeof finalOriginalPrice === "number" &&
+    typeof finalActivityPrice === "number" &&
+    finalOriginalPrice > finalActivityPrice
+      ? Math.round(((finalOriginalPrice - finalActivityPrice) / finalOriginalPrice) * 100)
+      : null);
+  const activityPromotionLabel =
+    typeof activityDiscount === "number" && activityDiscount > 0
+      ? `Giảm ${activityDiscount}%`
+      : typeof autoPromotion?.description === "string" && autoPromotion.description.trim().length > 0
+      ? autoPromotion.description.trim()
+      : null;
+
   return {
     id,
     title: tour.title ?? tour.name ?? "Tour chưa có tên",
@@ -643,9 +738,11 @@ const seasonPriceValue = parseFloatOrNull(tour.season_price);
     rating: tour.rating_average ?? tour.average_rating ?? null,
     reviewCount: tour.rating_count ?? tour.reviews_count ?? null,
     bookedCount: tour.bookings_count ?? null,
-    price: basePriceValue ?? sortedPackages[0]?.adultPrice ?? sortedPackages[0]?.price ?? seasonPriceValue ?? null,
-    originalPrice: seasonPriceValue ?? null,
-    discount: null,
+    price: finalActivityPrice,
+    originalPrice: finalOriginalPrice ?? null,
+    discount: activityDiscount ?? null,
+    promotionLabel: activityPromotionLabel,
+    autoPromotion,
     duration: typeof tour.duration === "number" ? `${tour.duration} giờ` : tour.duration,
     images: uniqueImages,
     highlights,
@@ -1231,6 +1328,26 @@ useEffect(() => {
     return Math.min(...candidates);
   }, [activity, adultUnitPrice]);
 
+  const showOriginalPrice =
+    typeof activity?.originalPrice === "number" &&
+    displayPrice !== null &&
+    activity.originalPrice > displayPrice;
+
+  const priceBadgeLabel = useMemo(() => {
+    if (typeof activity?.discount === "number" && activity.discount > 0) {
+      return `Giảm ${activity.discount}%`;
+    }
+    if (activity?.promotionLabel) {
+      return activity.promotionLabel;
+    }
+    return null;
+  }, [activity?.discount, activity?.promotionLabel]);
+
+  const savingsAmount =
+    showOriginalPrice && displayPrice !== null && typeof activity?.originalPrice === "number"
+      ? activity.originalPrice - displayPrice
+      : null;
+
   const handleTabChange = (nextTab: string) => {
     setActiveTab(nextTab);
     if (searchParams.get(TAB_QUERY_KEY) === nextTab) {
@@ -1353,6 +1470,22 @@ useEffect(() => {
         ? new Date(selectedSchedule.start_date).toLocaleDateString("vi-VN")
         : undefined);
 
+    const computedTotal =
+      totalPrice !== null
+        ? totalPrice
+        : safeAdultCount * adultUnitPrice + safeChildCount * childUnitPrice;
+    const perAdultOriginal =
+      typeof selectedPackage.originalPrice === "number" && selectedPackage.originalPrice > 0
+        ? selectedPackage.originalPrice
+        : adultUnitPrice;
+    const perChildOriginal =
+      typeof selectedPackage.childPrice === "number" && selectedPackage.childPrice > 0
+        ? selectedPackage.childPrice
+        : childUnitPrice;
+    const rawOriginalTotal = perAdultOriginal * safeAdultCount + perChildOriginal * safeChildCount;
+    const originalTotalPrice =
+      rawOriginalTotal > computedTotal ? Math.round(rawOriginalTotal) : null;
+
     try {
       await addItem({
         tourId: activity.id,
@@ -1369,6 +1502,8 @@ useEffect(() => {
         childCount: safeChildCount,
         adultPrice: adultUnitPrice,
         childPrice: childUnitPrice,
+        originalTotalPrice,
+        promotionLabel: priceBadgeLabel ?? null,
       });
 
       toast({
@@ -2348,15 +2483,35 @@ useEffect(() => {
               <Card className="w-full shadow-xl">
                 <CardContent className="pt-6">
                   <div className="space-y-4">
-                    <div>
+                    <div className="space-y-1">
+                      {showOriginalPrice && (
+                        <div className="flex flex-wrap items-center gap-3">
+                          <span className="text-base text-muted-foreground line-through">
+                            ₫ {activity?.originalPrice?.toLocaleString("vi-VN")}
+                          </span>
+                          {priceBadgeLabel && (
+                            <Badge variant="destructive" className="text-xs font-semibold uppercase">
+                              {priceBadgeLabel}
+                            </Badge>
+                          )}
+                        </div>
+                      )}
                       {displayPrice !== null ? (
-                        <span className="text-3xl font-bold">
-                          ₫ {displayPrice.toLocaleString()}
-                        </span>
+                        <div className="flex items-end gap-2">
+                          <span className="text-sm text-muted-foreground">Chỉ từ</span>
+                          <span className="text-3xl font-bold text-primary">
+                            ₫ {displayPrice.toLocaleString("vi-VN")}
+                          </span>
+                        </div>
                       ) : (
                         <span className="text-sm text-muted-foreground">
                           Giá sẽ được cập nhật trong thời gian sớm nhất.
                         </span>
+                      )}
+                      {savingsAmount !== null && savingsAmount > 0 && (
+                        <p className="text-xs font-medium text-emerald-600">
+                          Tiết kiệm ₫ {savingsAmount.toLocaleString("vi-VN")} so với giá gốc
+                        </p>
                       )}
                     </div>
                       <Button
