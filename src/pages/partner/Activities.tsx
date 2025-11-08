@@ -265,11 +265,13 @@ export default function PartnerActivities() {
   const [isPromotionLoading, setIsPromotionLoading] = useState(false);
   const [isPromotionSaving, setIsPromotionSaving] = useState(false);
 
-  // Giả lập hàm toast để code chạy được
-  const toast = ({ title, description, variant }: any) => {
-    console.log(`[TOAST - ${variant || "default"}]: ${title} - ${description}`);
-    alert(`${title}: ${description}`);
-  };
+  const showToast = useCallback(
+    ({ title, description, variant }: { title: string; description?: string; variant?: "default" | "destructive" }) => {
+      console.log(`[TOAST - ${variant || "default"}]: ${title}${description ? ` - ${description}` : ""}`);
+      alert(`${title}${description ? `: ${description}` : ""}`);
+    },
+    [],
+  );
 
   const mediaList = useMemo(() => {
     if (!selectedTour || !Array.isArray(selectedTour.media)) return [];
@@ -298,7 +300,7 @@ export default function PartnerActivities() {
         setPartnerPromotions(data);
       } catch (error) {
         console.error("Không thể tải khuyến mãi:", error);
-        toast({
+        showToast({
           title: "Lỗi tải khuyến mãi",
           description:
             (error as { response?: { data?: { message?: string } } })?.response?.data?.message ??
@@ -309,7 +311,7 @@ export default function PartnerActivities() {
         setIsPromotionLoading(false);
       }
     },
-    [toast],
+    [showToast],
   );
 
   useEffect(() => {
@@ -519,7 +521,7 @@ const fetchTours = async () => {
     setTours(normalized);
   } catch (err: any) {
     console.error("Error fetching tours:", err);
-    toast({
+    showToast({
       title: "Lỗi tải Tour",
       description: err?.response?.data?.message || "Không thể tải danh sách tour.",
       variant: "destructive",
@@ -644,7 +646,7 @@ useEffect(() => { fetchTours(); }, []);
         },
       });
 
-      toast({
+      showToast({
         title: "Thành công",
         description: res.data.message || (isEdit ? "Tour đã được cập nhật." : "Tour đã được tạo."),
       });
@@ -654,7 +656,7 @@ useEffect(() => { fetchTours(); }, []);
       setFormData(createInitialFormData());
     } catch (err: any) {
       console.error(err);
-      toast({
+      showToast({
         title: "Lỗi",
         description: err.response?.data?.message || `Không thể ${isEdit ? "cập nhật" : "tạo"} tour.`,
         variant: "destructive",
@@ -673,7 +675,7 @@ useEffect(() => { fetchTours(); }, []);
         { headers: { 'Content-Type': 'application/json' } }
       );
 
-      toast({
+      showToast({
         title: "Gửi duyệt thành công",
         description: "Tour đã chuyển sang trạng thái 'Chờ duyệt'.",
       });
@@ -681,7 +683,7 @@ useEffect(() => { fetchTours(); }, []);
       await fetchTours();
     } catch (err: any) {
       console.error("Error submitting tour:", err);
-      toast({
+      showToast({
         title: "Lỗi gửi yêu cầu",
         description: err.response?.data?.message || "Không thể gửi yêu cầu duyệt tour.",
         variant: "destructive",
@@ -694,11 +696,11 @@ useEffect(() => { fetchTours(); }, []);
     if (window.confirm("Bạn có chắc chắn muốn xóa tour này không?")) {
         try {
             await apiClient.delete(`${PARTNER_TOUR_ENDPOINT}/${id}`);
-            toast({ title: "Xóa thành công", description: "Tour đã bị xóa." });
+            showToast({ title: "Xóa thành công", description: "Tour đã bị xóa." });
             setTours((prev) => prev.filter((t) => t.id !== id));
         } catch (err: any) {
             console.error("Error deleting tour:", err);
-            toast({
+            showToast({
                 title: "Lỗi xóa Tour",
                 description: err.response?.data?.message || "Không thể xóa tour.",
                 variant: "destructive",
@@ -839,7 +841,7 @@ useEffect(() => { fetchTours(); }, []);
           setSelectedTour(tourData);
 
       } catch (err: any) {
-          toast({
+          showToast({
               title: "Lỗi",
               description: "Không thể tải chi tiết tour. Vui lòng thử lại.",
               variant: "destructive",
@@ -933,7 +935,7 @@ const handleMoveItinerary = (index: number, delta: number) => {
 
       setFormData({ ...formData, itineraryItems: reIndexedItems });
     } else {
-      toast({
+      showToast({
         title: "Cảnh báo",
         description: "Cần có ít nhất một mục trong hành trình.",
         variant: "destructive",
@@ -971,11 +973,11 @@ const handleMoveItinerary = (index: number, delta: number) => {
     setEditingPromotion(null);
   };
 
-  const handlePromotionSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const handlePromotionSubmit = async (event?: React.FormEvent<HTMLFormElement>) => {
+    event?.preventDefault();
     const numericValue = Number(promotionForm.value);
     if (!Number.isFinite(numericValue) || numericValue <= 0) {
-      toast({
+      showToast({
         title: "Giá trị khuyến mãi chưa hợp lệ",
         description: "Vui lòng nhập số lớn hơn 0.",
         variant: "destructive",
@@ -983,7 +985,7 @@ const handleMoveItinerary = (index: number, delta: number) => {
       return;
     }
     if (!editingPromotion && !promotionTourId) {
-      toast({
+      showToast({
         title: "Chưa chọn tour",
         description: "Hãy chọn tour cần quản lý khuyến mãi trước khi thêm mới.",
         variant: "destructive",
@@ -1005,13 +1007,13 @@ const handleMoveItinerary = (index: number, delta: number) => {
     try {
       if (editingPromotion?.id) {
         await updatePartnerPromotion(editingPromotion.id, payload);
-        toast({
+        showToast({
           title: "Đã cập nhật khuyến mãi",
           description: "Thông tin khuyến mãi đã được lưu.",
         });
       } else if (promotionTourId) {
         await createPartnerPromotion({ ...payload, tour_id: promotionTourId });
-        toast({
+        showToast({
           title: "Đã tạo khuyến mãi",
           description: "Khuyến mãi mới đã được thêm cho tour.",
         });
@@ -1022,7 +1024,7 @@ const handleMoveItinerary = (index: number, delta: number) => {
       }
     } catch (error) {
       console.error("Không thể lưu khuyến mãi:", error);
-      toast({
+      showToast({
         title: "Lỗi lưu khuyến mãi",
         description:
           (error as { response?: { data?: { message?: string } } })?.response?.data?.message ??
@@ -1039,7 +1041,7 @@ const handleMoveItinerary = (index: number, delta: number) => {
     setIsPromotionSaving(true);
     try {
       await deletePartnerPromotion(promotion.id);
-      toast({
+      showToast({
         title: "Đã xoá khuyến mãi",
         description: "Khuyến mãi đã được xoá khỏi tour.",
       });
@@ -1048,7 +1050,7 @@ const handleMoveItinerary = (index: number, delta: number) => {
       }
     } catch (error) {
       console.error("Không thể xoá khuyến mãi:", error);
-      toast({
+      showToast({
         title: "Lỗi xoá khuyến mãi",
         description:
           (error as { response?: { data?: { message?: string } } })?.response?.data?.message ??
@@ -1245,7 +1247,7 @@ const handleMoveItinerary = (index: number, delta: number) => {
     e.preventDefault();
 
     if (formData.itineraryItems.some((item) => !item.title || !item.detail)) {
-      toast({
+      showToast({
         title: "Thiếu thông tin hành trình",
         description: "Giờ/Ngày và mô tả hoạt động trong hành trình không được để trống.",
         variant: "destructive",
@@ -1262,7 +1264,7 @@ const handleMoveItinerary = (index: number, delta: number) => {
           (schedule.min_participants ?? 0) < 1,
       )
     ) {
-      toast({
+      showToast({
         title: "Lịch khởi hành chưa hợp lệ",
         description:
           "Mỗi lịch cần có ngày bắt đầu/kết thúc, tổng số chỗ lớn hơn 0 và số khách tối thiểu tối thiểu là 1.",
@@ -1272,7 +1274,7 @@ const handleMoveItinerary = (index: number, delta: number) => {
     }
 
     if (formData.packages.some((pkg) => !pkg.name || pkg.adult_price <= 0)) {
-      toast({
+      showToast({
         title: "Thiếu thông tin gói dịch vụ",
         description: "Tên gói và giá người lớn phải được nhập và lớn hơn 0.",
         variant: "destructive",
@@ -1579,7 +1581,7 @@ const handleMoveItinerary = (index: number, delta: number) => {
 
                 {promotionTourId ? (
                   <>
-                    <form className="grid gap-4 md:grid-cols-2" onSubmit={handlePromotionSubmit}>
+                    <div className="grid gap-4 md:grid-cols-2">
                       <div className="space-y-2">
                         <Label>Loại giảm giá</Label>
                         <Select
@@ -1675,7 +1677,13 @@ const handleMoveItinerary = (index: number, delta: number) => {
                         </span>
                       </div>
                       <div className="flex items-center gap-2 md:col-span-2">
-                        <Button type="submit" disabled={isPromotionSaving}>
+                        <Button
+                          type="button"
+                          disabled={isPromotionSaving}
+                          onClick={() => {
+                            void handlePromotionSubmit();
+                          }}
+                        >
                           {isPromotionSaving ? (
                             <>
                               <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Đang lưu...
@@ -1697,7 +1705,7 @@ const handleMoveItinerary = (index: number, delta: number) => {
                           </Button>
                         ) : null}
                       </div>
-                    </form>
+                    </div>
                     <div className="space-y-3">
                       {isPromotionLoading ? (
                         <Skeleton className="h-24 w-full rounded-xl" />
