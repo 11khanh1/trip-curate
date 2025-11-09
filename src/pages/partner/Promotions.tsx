@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import type { CheckedState } from "@radix-ui/react-checkbox";
 import {
   Card,
   CardContent,
@@ -41,6 +42,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Gift,
   Plus,
@@ -65,6 +67,7 @@ import {
   type PromotionStatusFilter,
   type PromotionTypeFilter,
   type PromotionFormState,
+  type PromotionFilters,
   defaultPromotionFilters,
 } from "@/hooks/usePartnerPromotions";
 import type { PartnerPromotion } from "@/services/partnerApi";
@@ -81,6 +84,12 @@ const typeOptions: Array<{ label: string; value: PromotionTypeFilter }> = [
   { label: "Mọi loại giảm", value: "all" },
   { label: "Giảm theo %", value: "percent" },
   { label: "Giảm cố định", value: "fixed" },
+];
+
+const promotionKindOptions: Array<{ label: string; value: "all" | "auto" | "voucher" }> = [
+  { label: "Mọi hình thức", value: "all" },
+  { label: "Giảm trực tiếp", value: "auto" },
+  { label: "Voucher tặng", value: "voucher" },
 ];
 
 export default function PartnerPromotionsPage() {
@@ -145,8 +154,6 @@ export default function PartnerPromotionsPage() {
     };
   }, [promotions]);
 
-  const hasSelectedTour = selectedTourId !== null && selectedTourId !== undefined;
-
   const updateFilters = (payload: Partial<typeof filters>) => {
     setFilters((prev) => ({ ...prev, ...payload }));
   };
@@ -179,7 +186,10 @@ export default function PartnerPromotionsPage() {
   };
 
   const handleOpenCreate = () => {
-    resetForm();
+    resetForm({
+      tour_ids:
+        selectedTourId !== null && selectedTourId !== undefined ? [String(selectedTourId)] : [],
+    });
     setIsFormOpen(true);
   };
 
@@ -209,11 +219,21 @@ export default function PartnerPromotionsPage() {
   };
 
   const handleRefresh = async () => {
-    if (!hasSelectedTour) return;
-    await loadPromotions(selectedTourId, { skipCache: true });
+    await loadPromotions();
   };
 
-  const selectedTourValue = hasSelectedTour ? String(selectedTourId) : "";
+  const selectedTourValue =
+    selectedTourId !== null && selectedTourId !== undefined ? String(selectedTourId) : "all";
+
+  const handleTourCheckboxChange = (tourId: string, checked: CheckedState) => {
+    const isChecked = checked === true;
+    handleFormChange(
+      "tour_ids",
+      isChecked
+        ? Array.from(new Set([...formState.tour_ids, tourId]))
+        : formState.tour_ids.filter((id) => id !== tourId),
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -229,7 +249,7 @@ export default function PartnerPromotionsPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handleRefresh} disabled={!hasSelectedTour || isListLoading}>
+          <Button variant="outline" onClick={handleRefresh} disabled={isListLoading}>
             {isListLoading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -242,7 +262,7 @@ export default function PartnerPromotionsPage() {
               </>
             )}
           </Button>
-          <Button onClick={handleOpenCreate} disabled={!hasSelectedTour}>
+          <Button onClick={handleOpenCreate} disabled={tours.length === 0}>
             <Plus className="mr-2 h-4 w-4" />
             Tạo khuyến mãi
           </Button>
@@ -306,11 +326,16 @@ export default function PartnerPromotionsPage() {
           <div className="grid gap-4 md:grid-cols-3">
             <div className="space-y-2">
               <Label>Tour</Label>
-              <Select value={selectedTourValue} onValueChange={(value) => selectTour(value)} disabled={isToursLoading}>
+              <Select
+                value={selectedTourValue}
+                onValueChange={(value) => selectTour(value === "all" ? null : value)}
+                disabled={isToursLoading}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder={isToursLoading ? "Đang tải tour..." : "Chọn tour cần quản lý"} />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="all">Tất cả tour</SelectItem>
                   {tours.map((tour) => (
                     <SelectItem key={tour.id} value={String(tour.id)}>
                       {tour.title}
@@ -347,7 +372,27 @@ export default function PartnerPromotionsPage() {
               </Select>
             </div>
           </div>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-4">
+            <div className="space-y-2">
+              <Label>Hình thức ưu đãi</Label>
+              <Select
+                value={filters.promotionType}
+                onValueChange={(value) =>
+                  updateFilters({ promotionType: value as PromotionFilters["promotionType"] })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {promotionKindOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-2">
               <Label>Loại giảm giá</Label>
               <Select
@@ -385,7 +430,9 @@ export default function PartnerPromotionsPage() {
           </div>
           <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
             <div>
-              {selectedTour ? (
+              {selectedTourId === null ? (
+                "Đang xem ưu đãi của tất cả tour."
+              ) : selectedTour ? (
                 <>
                   Đang xem ưu đãi của <span className="font-medium text-foreground">{selectedTour.title}</span>
                 </>
@@ -407,128 +454,147 @@ export default function PartnerPromotionsPage() {
             Danh sách khuyến mãi
           </CardTitle>
           <CardDescription>Quản lý nhanh trạng thái, chỉnh sửa hoặc nhân bản khuyến mãi.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {hasSelectedTour ? (
-            isListLoading ? (
-              <div className="flex items-center justify-center py-12 text-muted-foreground">
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                Đang tải khuyến mãi...
-              </div>
-            ) : filteredPromotions.length === 0 ? (
-              <div className="rounded-lg border border-dashed p-10 text-center">
-                <p className="font-medium text-foreground">Chưa có khuyến mãi nào phù hợp bộ lọc.</p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Thử xoá bộ lọc hoặc tạo khuyến mãi mới cho tour này.
-                </p>
-                <Button className="mt-4" onClick={handleOpenCreate}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Tạo khuyến mãi đầu tiên
-                </Button>
-              </div>
-            ) : (
-              <ScrollArea className="w-full">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Khuyến mãi</TableHead>
-                      <TableHead>Loại giảm</TableHead>
-                      <TableHead>Thời gian</TableHead>
-                      <TableHead>Số lượt dùng</TableHead>
-                      <TableHead>Trạng thái</TableHead>
-                      <TableHead className="text-right">Thao tác</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredPromotions.map((promotion) => (
-                      <TableRow key={promotion.id}>
-                        <TableCell>
-                          <div className="font-medium">{promotion.code ?? "Tự động"}</div>
-                          <p className="text-xs text-muted-foreground">
-                            {promotion.description && promotion.description.trim().length > 0
-                              ? promotion.description
-                              : "Chưa có mô tả."}
-                          </p>
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-sm font-semibold">
-                            {resolvePromotionValueText(promotion)}
-                          </div>
-                          <Badge variant="outline">{resolvePromotionTypeText(promotion.discount_type)}</Badge>
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {formatPromotionDate(promotion.valid_from)} – {formatPromotionDate(promotion.valid_to)}
-                        </TableCell>
-                        <TableCell className="text-sm font-medium">
-                          {promotion.usage_count ?? 0}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Switch
-                              checked={Boolean(promotion.is_active)}
-                              onCheckedChange={(checked) => {
-                                void togglePromotion(promotion, checked);
-                              }}
-                              disabled={isSaving}
-                              aria-label="Bật/tắt khuyến mãi"
-                            />
-                            <Badge variant={promotion.is_active ? "default" : "secondary"}>
-                              {promotion.is_active ? "Đang bật" : "Tạm tắt"}
-                            </Badge>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center justify-end gap-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleHistory(promotion)}
-                              aria-label="Xem lịch sử áp dụng"
-                            >
-                              <History className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleClone(promotion)}
-                              aria-label="Nhân bản khuyến mãi"
-                            >
-                              <Copy className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleEdit(promotion)}
-                              aria-label="Chỉnh sửa khuyến mãi"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="text-destructive"
-                              onClick={() => void handleDelete(promotion)}
-                              aria-label="Xoá khuyến mãi"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </ScrollArea>
-            )
-          ) : (
-            <div className="rounded-lg border border-dashed p-10 text-center">
-              <p className="font-medium text-foreground">Chưa có tour nào được chọn.</p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Chọn tour ở phía trên để xem danh sách khuyến mãi tương ứng.
-              </p>
-            </div>
-          )}
-        </CardContent>
+      </CardHeader>
+      <CardContent>
+        {tours.length === 0 ? (
+          <div className="rounded-lg border border-dashed p-10 text-center">
+            <p className="font-medium text-foreground">Chưa có tour nào để áp dụng khuyến mãi.</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Tạo tour mới trước khi cấu hình ưu đãi cho khách hàng.
+            </p>
+          </div>
+        ) : isListLoading ? (
+          <div className="flex items-center justify-center py-12 text-muted-foreground">
+            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+            Đang tải khuyến mãi...
+          </div>
+        ) : filteredPromotions.length === 0 ? (
+          <div className="rounded-lg border border-dashed p-10 text-center">
+            <p className="font-medium text-foreground">Chưa có khuyến mãi nào phù hợp bộ lọc.</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Thử xoá bộ lọc hoặc tạo khuyến mãi mới cho các tour đã chọn.
+            </p>
+            <Button className="mt-4" onClick={handleOpenCreate} disabled={tours.length === 0}>
+              <Plus className="mr-2 h-4 w-4" />
+              Tạo khuyến mãi đầu tiên
+            </Button>
+          </div>
+        ) : (
+          <ScrollArea className="w-full">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Khuyến mãi</TableHead>
+                  <TableHead>Hình thức</TableHead>
+                  <TableHead>Áp dụng cho tour</TableHead>
+                  <TableHead>Loại giảm</TableHead>
+                  <TableHead>Thời gian</TableHead>
+                  <TableHead>Số lượt dùng</TableHead>
+                  <TableHead>Trạng thái</TableHead>
+                  <TableHead className="text-right">Thao tác</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredPromotions.map((promotion) => (
+                  <TableRow key={promotion.id}>
+                    <TableCell>
+                      <div className="font-medium">{promotion.code ?? "Tự động"}</div>
+                      <p className="text-xs text-muted-foreground">
+                        {promotion.description && promotion.description.trim().length > 0
+                          ? promotion.description
+                          : "Chưa có mô tả."}
+                      </p>
+                    </TableCell>
+                    <TableCell className="space-y-1 text-sm">
+                      <Badge variant="outline">
+                        {(promotion.type ?? "auto") === "voucher" ? "Voucher tặng" : "Giảm trực tiếp"}
+                      </Badge>
+                      {promotion.auto_issue_on_cancel && (
+                        <p className="text-xs text-orange-600">Tự phát voucher khi tour bị huỷ</p>
+                      )}
+                    </TableCell>
+                    <TableCell className="space-y-1 text-sm">
+                      {Array.isArray(promotion.tours) && promotion.tours.length > 0 ? (
+                        promotion.tours.map((tour) => (
+                          <Badge key={tour.id} variant="secondary" className="mr-1">
+                            {tour.title ?? `Tour #${tour.id}`}
+                          </Badge>
+                        ))
+                      ) : selectedTour ? (
+                        <Badge variant="secondary">{selectedTour.title}</Badge>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Đang cập nhật</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm font-semibold">
+                        {resolvePromotionValueText(promotion)}
+                      </div>
+                      <Badge variant="outline">{resolvePromotionTypeText(promotion.discount_type)}</Badge>
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {formatPromotionDate(promotion.valid_from)} – {formatPromotionDate(promotion.valid_to)}
+                    </TableCell>
+                    <TableCell className="text-sm font-medium">{promotion.usage_count ?? 0}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={Boolean(promotion.is_active)}
+                          onCheckedChange={(checked) => {
+                            void togglePromotion(promotion, checked);
+                          }}
+                          disabled={isSaving}
+                          aria-label="Bật/tắt khuyến mãi"
+                        />
+                        <Badge variant={promotion.is_active ? "default" : "secondary"}>
+                          {promotion.is_active ? "Đang bật" : "Tạm tắt"}
+                        </Badge>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleHistory(promotion)}
+                          aria-label="Xem lịch sử áp dụng"
+                        >
+                          <History className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleClone(promotion)}
+                          aria-label="Nhân bản khuyến mãi"
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleEdit(promotion)}
+                          aria-label="Chỉnh sửa khuyến mãi"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive"
+                          onClick={() => void handleDelete(promotion)}
+                          aria-label="Xoá khuyến mãi"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </ScrollArea>
+        )}
+      </CardContent>
       </Card>
 
       <Sheet
@@ -536,7 +602,10 @@ export default function PartnerPromotionsPage() {
         onOpenChange={(open) => {
           setIsFormOpen(open);
           if (!open) {
-            resetForm();
+            resetForm({
+              tour_ids:
+                selectedTourId !== null && selectedTourId !== undefined ? [String(selectedTourId)] : [],
+            });
           }
         }}
       >
@@ -545,14 +614,39 @@ export default function PartnerPromotionsPage() {
             <SheetTitle>
               {editingPromotion ? "Cập nhật khuyến mãi" : "Tạo khuyến mãi mới"}
             </SheetTitle>
-            <SheetDescription>
-              {selectedTour
-                ? `Áp dụng cho tour: ${selectedTour.title}`
-                : "Chọn tour trước khi tạo khuyến mãi mới."}
-            </SheetDescription>
+            <SheetDescription>Chọn ít nhất một tour để áp dụng khuyến mãi. Bạn có thể áp dụng cho nhiều tour cùng lúc.</SheetDescription>
           </SheetHeader>
           <div className="mt-6">
             <form className="space-y-4" onSubmit={handleSubmit}>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Hình thức khuyến mãi</Label>
+                  <Select
+                    value={formState.type}
+                    onValueChange={(value) =>
+                      handleFormChange("type", value as PromotionFormState["type"])
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto">Giảm trực tiếp trên tour</SelectItem>
+                      <SelectItem value="voucher">Voucher tặng khách</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Trạng thái</Label>
+                  <div className="flex items-center gap-2 rounded-md border px-3 py-2">
+                    <Switch
+                      checked={formState.is_active}
+                      onCheckedChange={(checked) => handleFormChange("is_active", checked)}
+                    />
+                    <span className="text-sm">{formState.is_active ? "Đang bật" : "Tạm tắt"}</span>
+                  </div>
+                </div>
+              </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Loại giảm giá</Label>
@@ -595,15 +689,44 @@ export default function PartnerPromotionsPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Trạng thái</Label>
+                  <Label>Tự phát voucher khi huỷ</Label>
                   <div className="flex items-center gap-2 rounded-md border px-3 py-2">
                     <Switch
-                      checked={formState.is_active}
-                      onCheckedChange={(checked) => handleFormChange("is_active", checked)}
+                      checked={formState.auto_issue_on_cancel}
+                      onCheckedChange={(checked) =>
+                        handleFormChange("auto_issue_on_cancel", checked === true)
+                      }
+                      disabled={formState.type !== "voucher"}
                     />
-                    <span className="text-sm">{formState.is_active ? "Đang bật" : "Tạm tắt"}</span>
+                    <span className="text-sm">
+                      {formState.type === "voucher"
+                        ? "Bật để gửi voucher khi tour bị huỷ"
+                        : "Chỉ áp dụng cho voucher"}
+                    </span>
                   </div>
                 </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Tour áp dụng</Label>
+                <ScrollArea className="h-48 rounded-md border">
+                  <div className="space-y-2 p-3">
+                    {tours.map((tour) => (
+                      <label key={tour.id} className="flex items-center gap-2 text-sm font-medium">
+                        <Checkbox
+                          checked={formState.tour_ids.includes(String(tour.id))}
+                          onCheckedChange={(checked) => handleTourCheckboxChange(String(tour.id), checked)}
+                        />
+                        <span>{tour.title}</span>
+                      </label>
+                    ))}
+                    {tours.length === 0 && (
+                      <p className="text-xs text-muted-foreground">Chưa có tour khả dụng.</p>
+                    )}
+                  </div>
+                </ScrollArea>
+                <p className="text-xs text-muted-foreground">
+                  Bắt buộc chọn ít nhất một tour. Bạn có thể áp dụng cho nhiều tour cùng lúc.
+                </p>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
@@ -632,14 +755,19 @@ export default function PartnerPromotionsPage() {
                 />
               </div>
               <div className="flex items-center gap-2 pt-2">
-                <Button type="submit" disabled={isSaving || (!hasSelectedTour && !editingPromotion)}>
+                <Button type="submit" disabled={isSaving || formState.tour_ids.length === 0}>
                   {isSaving ? "Đang lưu..." : editingPromotion ? "Lưu thay đổi" : "Tạo khuyến mãi"}
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => {
-                    resetForm();
+                    resetForm({
+                      tour_ids:
+                        selectedTourId !== null && selectedTourId !== undefined
+                          ? [String(selectedTourId)]
+                          : [],
+                    });
                     setIsFormOpen(false);
                   }}
                 >

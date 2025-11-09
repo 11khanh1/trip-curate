@@ -138,8 +138,8 @@ const SepayGateway = () => {
   }, [paymentUrl, qrImage]);
 
   const amount = useMemo(() => {
-    if (typeof booking?.total_amount === "number") return booking.total_amount;
     if (typeof booking?.total_price === "number") return booking.total_price;
+    if (typeof booking?.total_amount === "number") return booking.total_amount;
     if (typeof paymentStatus?.payment?.amount === "number") return paymentStatus.payment.amount;
     return null;
   }, [booking?.total_amount, booking?.total_price, paymentStatus?.payment?.amount]);

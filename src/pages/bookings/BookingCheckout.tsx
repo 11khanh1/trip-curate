@@ -419,9 +419,30 @@ const BookingCheckout = () => {
       return { total: 0, original: null, discountAmount: null, discountPercent: null, promotionLabel: null };
     }
     const autoPromotion = tourPriceInfo?.autoPromotion ?? null;
+    const hasGlobalDiscount =
+      typeof tourPriceInfo?.originalPrice === "number" &&
+      typeof tourPriceInfo?.price === "number" &&
+      tourPriceInfo.originalPrice > 0 &&
+      tourPriceInfo.price > 0 &&
+      tourPriceInfo.price < tourPriceInfo.originalPrice;
+    const globalDiscountRatio = hasGlobalDiscount
+      ? Math.max(0, Math.min(1, tourPriceInfo!.price / tourPriceInfo!.originalPrice))
+      : null;
     let total = baseSubtotal;
     let original: number | null = null;
-    if (autoPromotion) {
+
+    let promotionLabel: string | null = null;
+
+    if (globalDiscountRatio !== null) {
+      total = baseSubtotal * globalDiscountRatio;
+      original = baseSubtotal;
+      promotionLabel =
+        (tourPriceInfo?.autoPromotion?.description &&
+        tourPriceInfo.autoPromotion.description.trim().length > 0
+          ? tourPriceInfo.autoPromotion.description.trim()
+          : null) ??
+        (tourPriceInfo?.discountPercent ? `Giảm ${tourPriceInfo.discountPercent}%` : null);
+    } else if (autoPromotion) {
       const applied = applyAutoPromotionToPrice(baseSubtotal, autoPromotion);
       if (typeof applied.finalPrice === "number" && applied.finalPrice < total) {
         total = applied.finalPrice;
@@ -429,6 +450,10 @@ const BookingCheckout = () => {
       } else if (typeof applied.originalPrice === "number" && applied.originalPrice > total) {
         original = applied.originalPrice;
       }
+      promotionLabel =
+        (autoPromotion.description && autoPromotion.description.trim().length > 0
+          ? autoPromotion.description.trim()
+          : null) ?? null;
     }
     if (!original && baseSubtotal > total) {
       original = baseSubtotal;
@@ -441,18 +466,12 @@ const BookingCheckout = () => {
       normalizedOriginal !== null && normalizedOriginal > 0 && discountAmount
         ? Math.round((discountAmount / normalizedOriginal) * 100)
         : null;
-    const promotionLabel =
-      (tourPriceInfo?.autoPromotion?.description &&
-        tourPriceInfo.autoPromotion.description.trim().length > 0
-        ? tourPriceInfo.autoPromotion.description.trim()
-        : null) ??
-      (discountPercent ? `Giảm ${discountPercent}%` : null);
     return {
       total: normalizedTotal,
       original: normalizedOriginal,
       discountAmount,
       discountPercent,
-      promotionLabel: promotionLabel ?? null,
+      promotionLabel: promotionLabel ?? (discountPercent ? `Giảm ${discountPercent}%` : null),
     };
   }, [adults, children, selectedPackage, tour?.base_price, tourPriceInfo]);
   const totalPrice = priceSummary.total;
@@ -487,10 +506,10 @@ const BookingCheckout = () => {
               booking_code: bookingCode,
               payment_method: payload.payment_method,
               total_amount:
-                typeof bookingEntity?.total_amount === "number"
-                  ? bookingEntity.total_amount
-                  : typeof bookingEntity?.total_price === "number"
+                typeof bookingEntity?.total_price === "number"
                   ? bookingEntity.total_price
+                  : typeof bookingEntity?.total_amount === "number"
+                  ? bookingEntity.total_amount
                   : totalPrice,
             },
             context: {
@@ -568,10 +587,10 @@ const BookingCheckout = () => {
             bookingCode ??
             (response.payment_id ? String(response.payment_id) : undefined);
           const amountFromResponse =
-            typeof bookingEntity?.total_amount === "number"
-              ? bookingEntity.total_amount
-              : typeof bookingEntity?.total_price === "number"
+            typeof bookingEntity?.total_price === "number"
               ? bookingEntity.total_price
+              : typeof bookingEntity?.total_amount === "number"
+              ? bookingEntity.total_amount
               : totalPrice;
           const currencyFromResponse =
             (bookingEntity?.currency && String(bookingEntity.currency).trim()) || displayCurrency;
@@ -595,10 +614,10 @@ const BookingCheckout = () => {
 
         if (resolvedQrImage && bookingIdentifier) {
           const amountFromResponse =
-            typeof bookingEntity?.total_amount === "number"
-              ? bookingEntity.total_amount
-              : typeof bookingEntity?.total_price === "number"
+            typeof bookingEntity?.total_price === "number"
               ? bookingEntity.total_price
+              : typeof bookingEntity?.total_amount === "number"
+              ? bookingEntity.total_amount
               : totalPrice;
           const currencyFromResponse =
             (bookingEntity?.currency && String(bookingEntity.currency).trim()) || displayCurrency;

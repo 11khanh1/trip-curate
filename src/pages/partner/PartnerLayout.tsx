@@ -1,5 +1,15 @@
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, MapPin, Calendar, DollarSign, Settings, BarChart3, Search, Gift } from "lucide-react";
+import {
+  LayoutDashboard,
+  MapPin,
+  Calendar,
+  DollarSign,
+  Settings,
+  BarChart3,
+  Search,
+  Gift,
+  RefreshCcw,
+} from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -25,6 +35,7 @@ const menuItems = [
   { title: "Tổng quan", url: "/partner", icon: LayoutDashboard, exact: true },
   { title: "Hoạt động của tôi", url: "/partner/activities", icon: MapPin },
   { title: "Khuyến mãi", url: "/partner/promotions", icon: Gift },
+  { title: "Yêu cầu hoàn tiền", url: "/partner/refund-requests", icon: RefreshCcw },
   { title: "Đơn đặt", url: "/partner/bookings", icon: Calendar },
   { title: "Doanh thu", url: "/partner/revenue", icon: DollarSign },
   { title: "Thống kê", url: "/partner/analytics", icon: BarChart3 },
@@ -129,6 +140,10 @@ export default function PartnerLayout() {
     "/partner/activities": { title: "Hoạt động của tôi", desc: "Quản lý và cập nhật tour" },
     "/partner/bookings": { title: "Đơn đặt", desc: "Danh sách đơn hàng của khách" },
     "/partner/promotions": { title: "Khuyến mãi", desc: "Quản lý ưu đãi tự động cho tour" },
+    "/partner/refund-requests": {
+      title: "Yêu cầu hoàn tiền",
+      desc: "Xử lý hoàn tiền và cập nhật chứng từ",
+    },
     "/partner/revenue": { title: "Doanh thu", desc: "Thống kê thu nhập và thanh toán" },
     "/partner/analytics": { title: "Thống kê", desc: "Phân tích hiệu suất hoạt động" },
     "/partner/settings": { title: "Cài đặt", desc: "Cấu hình tài khoản đối tác" },

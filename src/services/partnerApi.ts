@@ -22,10 +22,22 @@ export interface PartnerBookingListResponse {
   raw?: unknown;
 }
 
+export type PartnerPromotionType = "auto" | "voucher";
+
+export interface PartnerPromotionTourSummary {
+  id: string | number;
+  title?: string | null;
+  destination?: string | null;
+  code?: string | number | null;
+}
+
 export interface PartnerPromotion {
   id: string | number;
   code?: string | null;
+  type: PartnerPromotionType;
   tour_id?: string | number | null;
+  tour_ids?: Array<string | number>;
+  tours?: PartnerPromotionTourSummary[] | null;
   discount_type: PromotionDiscountType;
   value: number;
   max_usage?: number | null;
@@ -35,18 +47,22 @@ export interface PartnerPromotion {
   description?: string | null;
   is_active?: boolean | null;
   auto_apply?: boolean | null;
+  auto_issue_on_cancel?: boolean | null;
   discount_amount?: number | null;
   [key: string]: unknown;
 }
 
 export interface PartnerPromotionPayload {
+  type: PartnerPromotionType;
   discount_type: PromotionDiscountType;
   value: number;
+  tour_ids: Array<string | number>;
   max_usage?: number | null;
   valid_from?: string | null;
   valid_to?: string | null;
   description?: string | null;
   is_active?: boolean | null;
+  auto_issue_on_cancel?: boolean | null;
 }
 
 const normalizePartnerBooking = (payload: unknown): PartnerBooking | null => {
@@ -154,13 +170,29 @@ const normalizePromotionList = (payload: unknown): PartnerPromotion[] => {
   return [];
 };
 
-export async function fetchPartnerPromotions(tourId: string | number): Promise<PartnerPromotion[]> {
-  const res = await apiClient.get("/partner/promotions", { params: { tour_id: tourId } });
+export interface PartnerPromotionListQuery {
+  type?: PartnerPromotionType | "all";
+  tour_id?: string | number;
+}
+
+export async function fetchPartnerPromotions(
+  query: PartnerPromotionListQuery = {},
+): Promise<PartnerPromotion[]> {
+  const params: Record<string, string | number> = {};
+  if (query.type && query.type !== "all") {
+    params.type = query.type;
+  }
+  if (query.tour_id) {
+    params.tour_id = query.tour_id;
+  }
+  const res = await apiClient.get("/partner/promotions", {
+    params: Object.keys(params).length > 0 ? params : undefined,
+  });
   return normalizePromotionList(res.data);
 }
 
 export async function createPartnerPromotion(
-  payload: PartnerPromotionPayload & { tour_id: string | number },
+  payload: PartnerPromotionPayload,
 ): Promise<PartnerPromotion> {
   const res = await apiClient.post("/partner/promotions", payload);
   if (res.data && typeof res.data === "object" && "promotion" in res.data) {
@@ -182,4 +214,87 @@ export async function updatePartnerPromotion(
 
 export async function deletePartnerPromotion(id: string | number): Promise<void> {
   await apiClient.delete(`/partner/promotions/${id}`);
+}
+
+export type RefundRequestStatus =
+  | "pending"
+  | "await_partner"
+  | "await_customer_confirm"
+  | "completed"
+  | "rejected"
+  | string;
+
+export interface RefundProof {
+  id?: string | number;
+  url?: string;
+  filename?: string | null;
+  mime_type?: string | null;
+}
+
+export interface PartnerRefundRequest {
+  id: string | number;
+  booking_id: string | number;
+  booking_code?: string | null;
+  tour_title?: string | null;
+  customer_name?: string | null;
+  amount?: number | null;
+  currency?: string | null;
+  bank_account_name?: string | null;
+  bank_account_number?: string | null;
+  bank_name?: string | null;
+  reason?: string | null;
+  status?: RefundRequestStatus;
+  note?: string | null;
+  proofs?: RefundProof[] | null;
+  submitted_at?: string | null;
+  updated_at?: string | null;
+  [key: string]: unknown;
+}
+
+const normalizePartnerRefundRequests = (payload: unknown): PartnerRefundRequest[] => {
+  if (Array.isArray(payload)) {
+    return payload as PartnerRefundRequest[];
+  }
+  if (payload && typeof payload === "object") {
+    const candidate = payload as Record<string, unknown>;
+    if (Array.isArray(candidate.data)) {
+      return candidate.data as PartnerRefundRequest[];
+    }
+    if (Array.isArray(candidate.requests)) {
+      return candidate.requests as PartnerRefundRequest[];
+    }
+  }
+  return [];
+};
+
+export async function fetchPartnerRefundRequests(): Promise<PartnerRefundRequest[]> {
+  const res = await apiClient.get("/partner/refund-requests");
+  return normalizePartnerRefundRequests(res.data);
+}
+
+export interface PartnerRefundRequestStatusPayload {
+  status: "await_customer_confirm" | "rejected";
+  note?: string;
+  proof?: File | Blob | null;
+}
+
+export async function updatePartnerRefundRequestStatus(
+  id: string | number,
+  payload: PartnerRefundRequestStatusPayload,
+): Promise<PartnerRefundRequest> {
+  const formData = new FormData();
+  formData.append("status", payload.status);
+  if (payload.note) {
+    formData.append("note", payload.note);
+  }
+  if (payload.proof) {
+    formData.append("proof", payload.proof);
+  }
+  const res = await apiClient.post(`/partner/refund-requests/${id}/status`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  if (res.data && typeof res.data === "object" && "refund_request" in res.data) {
+    return (res.data as { refund_request: PartnerRefundRequest }).refund_request;
+  }
+  return res.data as PartnerRefundRequest;
 }

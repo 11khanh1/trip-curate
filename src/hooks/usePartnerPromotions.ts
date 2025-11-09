@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 
 import {
   createPartnerPromotion,
@@ -7,6 +7,9 @@ import {
   updatePartnerPromotion,
   type PartnerPromotion,
   type PartnerPromotionPayload,
+  type PartnerPromotionType,
+  type PartnerPromotionTourSummary,
+  type PartnerPromotionListQuery,
 } from "@/services/partnerApi";
 import { apiClient } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
@@ -16,6 +19,7 @@ const PARTNER_TOUR_ENDPOINT = "/partner/tours";
 export type PromotionDiscountType = "percent" | "percentage" | "fixed";
 
 export interface PromotionFormState {
+  type: PartnerPromotionType;
   discount_type: PromotionDiscountType;
   value: string;
   max_usage: string;
@@ -23,6 +27,8 @@ export interface PromotionFormState {
   valid_to: string;
   description: string;
   is_active: boolean;
+  tour_ids: string[];
+  auto_issue_on_cancel: boolean;
 }
 
 export interface PromotionDateRange {
@@ -38,6 +44,7 @@ export interface PromotionFilters {
   search: string;
   status: PromotionStatusFilter;
   discountType: PromotionTypeFilter;
+  promotionType: "all" | PartnerPromotionType;
   dateRange: PromotionDateRange | null;
 }
 
@@ -54,6 +61,7 @@ export interface PartnerTourSummary {
 }
 
 export const createInitialPromotionForm = (): PromotionFormState => ({
+  type: "auto",
   discount_type: "percent",
   value: "",
   max_usage: "",
@@ -61,12 +69,15 @@ export const createInitialPromotionForm = (): PromotionFormState => ({
   valid_to: "",
   description: "",
   is_active: true,
+  tour_ids: [],
+  auto_issue_on_cancel: false,
 });
 
 export const defaultPromotionFilters: PromotionFilters = {
   search: "",
   status: "all",
   discountType: "all",
+  promotionType: "all",
   dateRange: null,
 };
 
@@ -117,7 +128,34 @@ const normalizeTourSummary = (record: unknown): PartnerTourSummary | null => {
   };
 };
 
+const normalizePromotionType = (type?: unknown): PartnerPromotionType => {
+  return type === "voucher" ? "voucher" : "auto";
+};
+
+const extractTourIds = (promotion: PartnerPromotion): string[] => {
+  const ids = new Set<string>();
+  if (Array.isArray(promotion.tour_ids)) {
+    promotion.tour_ids.forEach((id) => {
+      if (id !== undefined && id !== null) {
+        ids.add(String(id));
+      }
+    });
+  }
+  if (promotion.tour_id !== undefined && promotion.tour_id !== null) {
+    ids.add(String(promotion.tour_id));
+  }
+  if (Array.isArray(promotion.tours)) {
+    (promotion.tours as PartnerPromotionTourSummary[]).forEach((tour) => {
+      if (tour?.id !== undefined && tour.id !== null) {
+        ids.add(String(tour.id));
+      }
+    });
+  }
+  return Array.from(ids);
+};
+
 const toFormState = (promotion: PartnerPromotion): PromotionFormState => ({
+  type: normalizePromotionType(promotion.type),
   discount_type:
     (promotion.discount_type as PromotionDiscountType) && promotion.discount_type !== "percentage"
       ? (promotion.discount_type as PromotionDiscountType)
@@ -132,26 +170,41 @@ const toFormState = (promotion: PartnerPromotion): PromotionFormState => ({
   valid_to: promotion.valid_to ? promotion.valid_to.slice(0, 10) : "",
   description: promotion.description ?? "",
   is_active: promotion.is_active ?? true,
+  tour_ids: extractTourIds(promotion),
+  auto_issue_on_cancel: Boolean(promotion.auto_issue_on_cancel),
 });
 
 const buildPayloadFromForm = (
   form: PromotionFormState,
   value: number,
-): PartnerPromotionPayload => ({
-  discount_type: form.discount_type === "percentage" ? "percent" : form.discount_type,
-  value,
-  max_usage: form.max_usage ? Number(form.max_usage) || 0 : undefined,
-  valid_from: form.valid_from || undefined,
-  valid_to: form.valid_to || undefined,
-  description: form.description?.trim() || undefined,
-  is_active: form.is_active,
-});
+): PartnerPromotionPayload => {
+  const tourIds = (form.tour_ids ?? []).map((id) => {
+    if (id === null || id === undefined) return null;
+    const numeric = Number(id);
+    if (Number.isFinite(numeric)) return numeric;
+    return id;
+  });
+  const sanitizedTourIds = tourIds.filter((value): value is string | number => value !== null);
+
+  return {
+    type: form.type,
+    discount_type: form.discount_type === "percentage" ? "percent" : form.discount_type,
+    value,
+    tour_ids: sanitizedTourIds,
+    max_usage: form.max_usage ? Number(form.max_usage) || 0 : undefined,
+    valid_from: form.valid_from || undefined,
+    valid_to: form.valid_to || undefined,
+    description: form.description?.trim() || undefined,
+    is_active: form.is_active,
+    auto_issue_on_cancel: form.auto_issue_on_cancel,
+  };
+};
 
 const promotionMatchesFilters = (
   promotion: PartnerPromotion,
   filters: PromotionFilters,
 ): boolean => {
-  const { search, status, discountType, dateRange } = filters;
+  const { search, status, discountType, dateRange, promotionType } = filters;
   const normalizedSearch = search.trim().toLowerCase();
 
   if (normalizedSearch) {
@@ -164,6 +217,13 @@ const promotionMatchesFilters = (
       .join(" ")
       .toLowerCase();
     if (!haystack.includes(normalizedSearch)) {
+      return false;
+    }
+  }
+
+  if (promotionType !== "all") {
+    const normalizedPromotionType = normalizePromotionType(promotion.type);
+    if (normalizedPromotionType !== promotionType) {
       return false;
     }
   }
@@ -240,7 +300,6 @@ export const usePartnerPromotions = (
     initialTourId ?? null,
   );
   const [promotions, setPromotions] = useState<PartnerPromotion[]>([]);
-  const promotionCacheRef = useRef<Record<string, PartnerPromotion[]>>({});
   const [isListLoading, setIsListLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editingPromotion, setEditingPromotion] = useState<PartnerPromotion | null>(null);
@@ -259,8 +318,8 @@ export const usePartnerPromotions = (
     setFilters((prev) => ({ ...prev }));
   }, []);
 
-  const resetForm = useCallback(() => {
-    setFormState(createInitialPromotionForm());
+  const resetForm = useCallback((defaults?: Partial<PromotionFormState>) => {
+    setFormState({ ...createInitialPromotionForm(), ...(defaults ?? {}) });
     setEditingPromotion(null);
   }, []);
 
@@ -280,12 +339,6 @@ export const usePartnerPromotions = (
         .map(normalizeTourSummary)
         .filter((tour): tour is PartnerTourSummary => Boolean(tour));
       setTours(normalized);
-      setSelectedTourId((prev) => {
-        if (prev !== null && prev !== undefined) {
-          return prev;
-        }
-        return normalized.length > 0 ? normalized[0].id : prev;
-      });
     } catch (error) {
       console.error("Không thể tải danh sách tour:", error);
       toast({
@@ -299,22 +352,24 @@ export const usePartnerPromotions = (
   }, [toast]);
 
   const loadPromotions = useCallback(
-    async (tourId?: string | number | null, opts: { skipCache?: boolean } = {}) => {
-      const id = tourId ?? selectedTourId;
-      if (!id) {
-        setPromotions([]);
-        return;
+    async (overrideQuery?: PartnerPromotionListQuery) => {
+      const query: PartnerPromotionListQuery = {};
+      const resolvedType =
+        overrideQuery?.type ??
+        (filters.promotionType !== "all" ? filters.promotionType : undefined);
+      if (resolvedType) {
+        query.type = resolvedType;
       }
-      const cacheKey = String(id);
-      const cached = promotionCacheRef.current[cacheKey];
-      if (!opts.skipCache && cached) {
-        setPromotions(cached);
+      const resolvedTourId =
+        overrideQuery?.tour_id ?? (selectedTourId !== null ? selectedTourId : undefined);
+      if (resolvedTourId !== undefined && resolvedTourId !== null) {
+        query.tour_id = resolvedTourId;
       }
+
       setIsListLoading(true);
       try {
-        const data = await fetchPartnerPromotions(id);
+        const data = await fetchPartnerPromotions(query);
         setPromotions(data);
-        promotionCacheRef.current = { ...promotionCacheRef.current, [cacheKey]: data };
       } catch (error) {
         console.error("Không thể tải khuyến mãi:", error);
         toast({
@@ -326,7 +381,7 @@ export const usePartnerPromotions = (
         setIsListLoading(false);
       }
     },
-    [selectedTourId, toast],
+    [filters.promotionType, selectedTourId, toast],
   );
 
   useEffect(() => {
@@ -336,14 +391,10 @@ export const usePartnerPromotions = (
   }, [autoFetch, loadTours]);
 
   useEffect(() => {
-    if (!selectedTourId) {
-      setPromotions([]);
-      return;
-    }
     if (autoFetch) {
-      void loadPromotions(selectedTourId);
+      void loadPromotions();
     }
-  }, [selectedTourId, autoFetch, loadPromotions]);
+  }, [autoFetch, loadPromotions]);
 
   const startEditPromotion = useCallback((promotion: PartnerPromotion) => {
     setEditingPromotion(promotion);
@@ -355,61 +406,63 @@ export const usePartnerPromotions = (
     setFormState(toFormState(promotion));
   }, []);
 
-  const savePromotion = useCallback(
-    async (overrideTourId?: string | number | null) => {
-      const tourId = overrideTourId ?? selectedTourId;
-      const numericValue = Number(formState.value);
-      if (!Number.isFinite(numericValue) || numericValue <= 0) {
-        toast({
-          title: "Giá trị khuyến mãi chưa hợp lệ",
-          description: "Vui lòng nhập số lớn hơn 0.",
-          variant: "destructive",
-        });
-        throw new Error("Invalid promotion value");
-      }
-      if (!editingPromotion && !tourId) {
-        toast({
-          title: "Chưa chọn tour",
-          description: "Vui lòng chọn tour trước khi tạo khuyến mãi.",
-          variant: "destructive",
-        });
-        throw new Error("Missing tour id");
-      }
+  const savePromotion = useCallback(async () => {
+    const numericValue = Number(formState.value);
+    if (!Number.isFinite(numericValue) || numericValue <= 0) {
+      toast({
+        title: "Giá trị khuyến mãi chưa hợp lệ",
+        description: "Vui lòng nhập số lớn hơn 0.",
+        variant: "destructive",
+      });
+      throw new Error("Invalid promotion value");
+    }
 
-      const payload = buildPayloadFromForm(formState, numericValue);
-      setIsSaving(true);
-      try {
-        if (editingPromotion?.id) {
-          await updatePartnerPromotion(editingPromotion.id, payload);
-          toast({
-            title: "Đã cập nhật khuyến mãi",
-            description: "Thông tin khuyến mãi đã được lưu.",
-          });
-        } else if (tourId) {
-          await createPartnerPromotion({ ...payload, tour_id: tourId });
-          toast({
-            title: "Đã tạo khuyến mãi",
-            description: "Khuyến mãi mới đã được thêm.",
-          });
-        }
-        resetForm();
-        if (tourId) {
-          await loadPromotions(tourId, { skipCache: true });
-        }
-      } catch (error) {
-        console.error("Không thể lưu khuyến mãi:", error);
+    const effectiveTourIds =
+      formState.tour_ids.length > 0
+        ? formState.tour_ids
+        : selectedTourId !== null && selectedTourId !== undefined
+        ? [String(selectedTourId)]
+        : [];
+
+    if (effectiveTourIds.length === 0) {
+      toast({
+        title: "Chưa chọn tour áp dụng",
+        description: "Vui lòng chọn ít nhất một tour để áp dụng khuyến mãi.",
+        variant: "destructive",
+      });
+      throw new Error("Missing tour ids");
+    }
+
+    const payload = buildPayloadFromForm({ ...formState, tour_ids: effectiveTourIds }, numericValue);
+    setIsSaving(true);
+    try {
+      if (editingPromotion?.id) {
+        await updatePartnerPromotion(editingPromotion.id, payload);
         toast({
-          title: "Lỗi lưu khuyến mãi",
-          description: "Vui lòng thử lại sau.",
-          variant: "destructive",
+          title: "Đã cập nhật khuyến mãi",
+          description: "Thông tin khuyến mãi đã được lưu.",
         });
-        throw error;
-      } finally {
-        setIsSaving(false);
+      } else {
+        await createPartnerPromotion(payload);
+        toast({
+          title: "Đã tạo khuyến mãi",
+          description: "Khuyến mãi mới đã được thêm.",
+        });
       }
-    },
-    [editingPromotion, formState, selectedTourId, toast, resetForm, loadPromotions],
-  );
+      resetForm({ tour_ids: effectiveTourIds });
+      await loadPromotions();
+    } catch (error) {
+      console.error("Không thể lưu khuyến mãi:", error);
+      toast({
+        title: "Lỗi lưu khuyến mãi",
+        description: "Vui lòng thử lại sau.",
+        variant: "destructive",
+      });
+      throw error;
+    } finally {
+      setIsSaving(false);
+    }
+  }, [editingPromotion, formState, selectedTourId, toast, resetForm, loadPromotions]);
 
   const removePromotion = useCallback(
     async (promotion: PartnerPromotion) => {
@@ -421,9 +474,7 @@ export const usePartnerPromotions = (
           title: "Đã xoá khuyến mãi",
           description: "Khuyến mãi đã được xoá.",
         });
-        if (selectedTourId) {
-          await loadPromotions(selectedTourId, { skipCache: true });
-        }
+        await loadPromotions();
       } catch (error) {
         console.error("Không thể xoá khuyến mãi:", error);
         toast({
@@ -436,7 +487,7 @@ export const usePartnerPromotions = (
         setIsSaving(false);
       }
     },
-    [selectedTourId, toast, loadPromotions],
+    [toast, loadPromotions],
   );
 
   const togglePromotion = useCallback(
@@ -444,22 +495,27 @@ export const usePartnerPromotions = (
       if (!promotion?.id) return;
       setIsSaving(true);
       try {
+        const currentTourIds = extractTourIds(promotion);
+        if (currentTourIds.length === 0 && selectedTourId !== null && selectedTourId !== undefined) {
+          currentTourIds.push(String(selectedTourId));
+        }
         await updatePartnerPromotion(promotion.id, {
+          type: normalizePromotionType(promotion.type),
           discount_type:
             (promotion.discount_type as PromotionDiscountType) === "fixed" ? "fixed" : "percent",
           value: promotion.value ?? 0,
+          tour_ids: currentTourIds,
           max_usage: promotion.max_usage,
           valid_from: promotion.valid_from ?? undefined,
           valid_to: promotion.valid_to ?? undefined,
           description: promotion.description ?? undefined,
           is_active: nextState,
+          auto_issue_on_cancel: Boolean(promotion.auto_issue_on_cancel),
         });
         toast({
           title: nextState ? "Đã bật khuyến mãi" : "Đã tắt khuyến mãi",
         });
-        if (selectedTourId) {
-          await loadPromotions(selectedTourId, { skipCache: true });
-        }
+        await loadPromotions();
       } catch (error) {
         console.error("Không thể cập nhật trạng thái khuyến mãi:", error);
         toast({

@@ -1,4 +1,5 @@
 import { useNavigate, useParams } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import {
@@ -6,10 +7,14 @@ import {
   CheckCircle,
   Clock,
   CreditCard,
+  Download,
   FileText,
   Info,
+  Loader2,
   MapPin,
   Phone,
+  RefreshCcw,
+  Receipt,
   Shield,
   Ticket,
   User,
@@ -23,19 +28,29 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
 
 import {
   cancelBooking,
+  confirmRefundRequest,
+  createRefundRequest,
   fetchBookingDetail,
   initiateBookingPayment,
+  requestInvoice,
+  downloadBookingInvoice,
   type Booking,
   type BookingContact,
   type BookingPassenger,
   type BookingPayment,
   type BookingPaymentIntentResponse,
+  type BookingRefundRequest,
+  type BookingInvoice,
+  type CreateRefundRequestPayload,
 } from "@/services/bookingApi";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -84,6 +99,47 @@ const statusLabel = (status?: string) => {
       return "Thất bại";
     default:
       return status ?? "Đang cập nhật";
+  }
+};
+
+const refundStatusLabel = (status?: string) => {
+  switch (status) {
+    case "pending":
+    case "await_partner":
+      return "Chờ xử lý";
+    case "await_customer_confirm":
+      return "Chờ bạn xác nhận";
+    case "completed":
+      return "Đã hoàn tất";
+    case "rejected":
+      return "Đã từ chối";
+    default:
+      return status ?? "Đang cập nhật";
+  }
+};
+
+const refundStatusVariant = (status?: string) => {
+  switch (status) {
+    case "completed":
+      return "default";
+    case "await_customer_confirm":
+      return "secondary";
+    case "rejected":
+      return "destructive";
+    case "pending":
+    case "await_partner":
+    default:
+      return "outline";
+  }
+};
+
+const deliveryMethodLabel = (method?: string) => {
+  switch (method) {
+    case "email":
+      return "Gửi qua email";
+    case "download":
+    default:
+      return "Tải về";
   }
 };
 
@@ -213,6 +269,19 @@ const BookingDetailPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [refundForm, setRefundForm] = useState({
+    bank_account_name: "",
+    bank_account_number: "",
+    bank_name: "",
+    reason: "",
+  });
+  const [invoiceForm, setInvoiceForm] = useState({
+    customer_name: "",
+    customer_tax_code: "",
+    customer_address: "",
+    customer_email: "",
+    delivery_method: "download" as "download" | "email",
+  });
 
   const {
     data: booking,
@@ -331,6 +400,114 @@ const BookingDetailPage = () => {
     },
   });
 
+  const refundRequestMutation = useMutation({
+    mutationFn: (payload: CreateRefundRequestPayload) => {
+      if (!id) {
+        return Promise.reject(new Error("Thiếu mã booking"));
+      }
+      return createRefundRequest(String(id), payload);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Đã gửi yêu cầu hoàn tiền",
+        description: "Chúng tôi sẽ liên hệ sau khi xử lý.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["booking-detail", id] });
+      queryClient.invalidateQueries({ queryKey: ["refund-requests"] });
+      setRefundForm((prev) => ({
+        ...prev,
+        bank_account_number: "",
+        bank_name: "",
+        reason: "",
+      }));
+    },
+    onError: (error: unknown) => {
+      console.error("Không thể gửi yêu cầu hoàn tiền:", error);
+      toast({
+        title: "Gửi yêu cầu thất bại",
+        description: "Vui lòng kiểm tra thông tin và thử lại.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const refundConfirmMutation = useMutation({
+    mutationFn: (requestId: string | number) => confirmRefundRequest(requestId),
+    onSuccess: () => {
+      toast({
+        title: "Đã xác nhận nhận tiền",
+        description: "Cảm ơn bạn đã xác nhận hoàn tiền.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["booking-detail", id] });
+      queryClient.invalidateQueries({ queryKey: ["refund-requests"] });
+    },
+    onError: (error: unknown) => {
+      console.error("Không thể xác nhận hoàn tiền:", error);
+      toast({
+        title: "Không thể xác nhận",
+        description: "Vui lòng thử lại hoặc liên hệ hỗ trợ.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const invoiceRequestMutation = useMutation({
+    mutationFn: () => {
+      if (!id) {
+        return Promise.reject(new Error("Thiếu mã booking"));
+      }
+      if (invoiceForm.delivery_method === "email" && !invoiceForm.customer_email.trim()) {
+        return Promise.reject(new Error("Vui lòng nhập email để nhận hóa đơn."));
+      }
+      return requestInvoice(String(id), invoiceForm);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Đã gửi yêu cầu xuất hóa đơn",
+        description:
+          invoiceForm.delivery_method === "email"
+            ? "Chúng tôi sẽ gửi hóa đơn qua email sau khi hoàn tất."
+            : "Bạn có thể tải hóa đơn sau vài phút.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["booking-detail", id] });
+    },
+    onError: (error: unknown) => {
+      console.error("Không thể yêu cầu hóa đơn:", error);
+      toast({
+        title: "Yêu cầu hóa đơn thất bại",
+        description: "Vui lòng kiểm tra thông tin và thử lại.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const invoiceDownloadMutation = useMutation({
+    mutationFn: () => {
+      if (!id) {
+        return Promise.reject(new Error("Thiếu mã booking"));
+      }
+      return downloadBookingInvoice(String(id));
+    },
+    onSuccess: (blob) => {
+      const fileUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = fileUrl;
+      link.download = `hoa-don-${booking?.code ?? booking?.id ?? "booking"}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(fileUrl);
+    },
+    onError: (error: unknown) => {
+      console.error("Không thể tải hóa đơn:", error);
+      toast({
+        title: "Tải hóa đơn thất bại",
+        description: "Vui lòng thử lại sau.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleInitiatePayment = () => {
     if (!id || paymentMutation.isPending) return;
     paymentMutation.mutate();
@@ -372,6 +549,37 @@ const BookingDetailPage = () => {
     };
   })();
 
+  const handleRefundFormChange = <K extends keyof typeof refundForm>(field: K, value: string) => {
+    setRefundForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleInvoiceFormChange = <K extends keyof typeof invoiceForm>(field: K, value: string) => {
+    setInvoiceForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSubmitRefundRequest = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    refundRequestMutation.mutate({
+      bank_account_name: refundForm.bank_account_name.trim(),
+      bank_account_number: refundForm.bank_account_number.trim(),
+      bank_name: refundForm.bank_name.trim(),
+      reason: refundForm.reason.trim(),
+    });
+  };
+
+  const handleSubmitInvoiceRequest = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    invoiceRequestMutation.mutate();
+  };
+
+  const handleDownloadInvoice = () => {
+    if (invoice?.file_url) {
+      window.open(invoice.file_url, "_blank", "noopener,noreferrer");
+      return;
+    }
+    invoiceDownloadMutation.mutate();
+  };
+
   const contactRecord =
     booking?.contact && typeof booking.contact === "object" && !Array.isArray(booking.contact)
       ? (booking.contact as BookingContact)
@@ -387,6 +595,28 @@ const BookingDetailPage = () => {
       (booking as { company_name?: string | null } | undefined)?.company_name ?? undefined,
     ) ?? null;
 
+  useEffect(() => {
+    if (contactName && contactName !== "—") {
+      setRefundForm((prev) => ({
+        ...prev,
+        bank_account_name: prev.bank_account_name || contactName,
+      }));
+      setInvoiceForm((prev) => ({
+        ...prev,
+        customer_name: prev.customer_name || contactName,
+      }));
+    }
+  }, [contactName]);
+
+  useEffect(() => {
+    if (contactEmail && contactEmail !== "—") {
+      setInvoiceForm((prev) => ({
+        ...prev,
+        customer_email: prev.customer_email || contactEmail,
+      }));
+    }
+  }, [contactEmail]);
+
   const tourTypeRaw = coalesceString(
     (booking?.tour as { type?: string } | undefined)?.type ?? undefined,
     booking?.tour?.type ?? undefined,
@@ -394,18 +624,23 @@ const BookingDetailPage = () => {
   const tourTypeLabel =
     resolveTourTypeLabel(tourTypeRaw) ??
     coalesceString(
-      booking?.tour?.categories && booking.tour.categories.length > 0
-        ? (booking.tour.categories[0]?.name as string | undefined)
+      Array.isArray(booking?.tour?.categories) && booking?.tour?.categories.length > 0
+        ? (booking?.tour?.categories[0]?.name as string | undefined)
         : undefined,
     ) ??
     "Đang cập nhật";
   const childAgeLimitValue =
     coerceNumber(booking?.tour?.child_age_limit) ??
     coerceNumber((booking?.tour as Record<string, unknown> | undefined)?.childAgeLimit);
-  const documentRequirementLabel = summarizeDocumentRequirements(
-    booking?.tour?.requires_passport ?? (booking?.tour as Record<string, unknown> | undefined)?.requiresPassport,
-    booking?.tour?.requires_visa ?? (booking?.tour as Record<string, unknown> | undefined)?.requiresVisa,
-  );
+  const tourRequiresPassport =
+    coerceBoolean(booking?.tour?.requires_passport) ??
+    coerceBoolean((booking?.tour as Record<string, unknown> | undefined)?.requiresPassport) ??
+    null;
+  const tourRequiresVisa =
+    coerceBoolean(booking?.tour?.requires_visa) ??
+    coerceBoolean((booking?.tour as Record<string, unknown> | undefined)?.requiresVisa) ??
+    null;
+  const documentRequirementLabel = summarizeDocumentRequirements(tourRequiresPassport, tourRequiresVisa);
   const childAgeRequirementLabel = formatChildAgeLimit(childAgeLimitValue ?? null);
   const cancellationPoliciesArray = Array.isArray(booking?.tour?.cancellation_policies)
     ? (booking?.tour?.cancellation_policies as Array<Record<string, unknown>>)
@@ -413,7 +648,7 @@ const BookingDetailPage = () => {
     ? ((booking?.tour as Record<string, unknown> | undefined)?.cancellationPolicies as Array<Record<string, unknown>>)
     : [];
   const cancellationSummaryLabel = formatCancellationSummary(cancellationPoliciesArray);
-  const scheduleRecord = booking.schedule as Record<string, unknown> | undefined;
+  const scheduleRecord = booking?.schedule as Record<string, unknown> | undefined;
   const scheduleMinParticipantsValue = coerceNumber(
     booking?.schedule?.min_participants ??
       scheduleRecord?.["min_participants"] ??
@@ -439,11 +674,41 @@ const BookingDetailPage = () => {
     typeof scheduleSeatsTotalValue === "number" ? Math.max(0, Math.trunc(scheduleSeatsTotalValue)) : null;
   const tourEntityId =
     booking?.tour?.uuid != null
-      ? String(booking.tour.uuid)
+      ? String(booking?.tour?.uuid)
       : booking?.tour?.id != null
-      ? String(booking.tour.id)
+      ? String(booking?.tour?.id)
       : null;
   const bookingRecord = booking as Record<string, unknown>;
+  const discountValue =
+    typeof booking?.discount_total === "number" && Number.isFinite(booking.discount_total)
+      ? booking.discount_total
+      : null;
+  const hasDiscount = discountValue !== null && discountValue > 0;
+  const promotionCodes =
+    Array.isArray(booking?.promotions) && booking.promotions.length > 0
+      ? booking.promotions
+          .map((promotion) => promotion?.code)
+          .filter((code): code is string => Boolean(code && code.trim()))
+      : [];
+  const refundRequests = Array.isArray(booking?.refund_requests)
+    ? (booking?.refund_requests as BookingRefundRequest[])
+    : [];
+  const invoiceRecord = (bookingRecord?.["invoice"] as BookingInvoice | null) ?? null;
+  const invoice = booking?.invoice ?? invoiceRecord;
+  const canRequestRefund = Boolean(booking?.status === "cancelled" && isPaid);
+  const canRequestInvoice = Boolean(
+    booking?.status === "completed" && isPaid && !invoice && !invoiceRequestMutation.isPending,
+  );
+  const isRefundFormValid =
+    refundForm.bank_account_name.trim().length > 0 &&
+    refundForm.bank_account_number.trim().length > 0 &&
+    refundForm.bank_name.trim().length > 0 &&
+    refundForm.reason.trim().length > 0;
+  const isInvoiceFormValid =
+    invoiceForm.customer_name.trim().length > 0 &&
+    invoiceForm.customer_tax_code.trim().length > 0 &&
+    invoiceForm.customer_address.trim().length > 0 &&
+    (invoiceForm.delivery_method === "email" ? invoiceForm.customer_email.trim().length > 0 : true);
   const cancellationReasonText = coalesceString(
     bookingRecord?.["cancel_reason"] as string | undefined,
     bookingRecord?.["cancellation_reason"] as string | undefined,
@@ -578,10 +843,19 @@ const BookingDetailPage = () => {
                     <div>
                       <p className="font-medium text-foreground">Tổng tiền</p>
                       <p className="text-base font-semibold text-foreground">
-                        {formatCurrency(booking.total_amount, booking.currency ?? "VND")}
+                        {formatCurrency(
+                          booking.total_price ?? booking.total_amount,
+                          booking.currency ?? "VND",
+                        )}
                       </p>
                       {booking.payment_method && (
                         <p>Phương thức: {booking.payment_method === "sepay" ? "Thanh toán Sepay" : "Thanh toán tại quầy"}</p>
+                      )}
+                      {hasDiscount && (
+                        <p className="text-sm font-medium text-green-600">
+                          Đã giảm {formatCurrency(discountValue, booking?.currency ?? "VND")}
+                          {promotionCodes.length > 0 ? ` (${promotionCodes.join(", ")})` : ""}
+                        </p>
                       )}
                     </div>
                   </div>
@@ -632,9 +906,9 @@ const BookingDetailPage = () => {
                   <Button
                     variant="destructive"
                     onClick={() => cancelMutation.mutate()}
-                    disabled={cancelMutation.isLoading}
+                    disabled={cancelMutation.isPending}
                   >
-                    {cancelMutation.isLoading ? "Đang hủy..." : "Hủy booking"}
+                    {cancelMutation.isPending ? "Đang hủy..." : "Hủy booking"}
                   </Button>
                 )}
               </CardFooter>
@@ -875,6 +1149,265 @@ const BookingDetailPage = () => {
                 )}
               </CardContent>
             </Card>
+
+            <div className="grid gap-6 lg:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <RefreshCcw className="h-5 w-5 text-primary" />
+                    Hoàn tiền & voucher bù
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4 text-sm text-muted-foreground">
+                  {refundRequests.length > 0 ? (
+                    <div className="space-y-3">
+                      {refundRequests.map((request) => (
+                        <div key={request.id} className="rounded-lg border p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <p className="text-base font-semibold text-foreground">
+                                {formatCurrency(request.amount, booking.currency ?? "VND")}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Gửi lúc {formatDateTime(request.submitted_at)}
+                              </p>
+                            </div>
+                            <Badge variant={refundStatusVariant(request.status)}>
+                              {refundStatusLabel(request.status)}
+                            </Badge>
+                          </div>
+                          <div className="mt-2 grid gap-1 text-xs">
+                            <span>{request.bank_account_name}</span>
+                            <span>
+                              {request.bank_account_number} · {request.bank_name}
+                            </span>
+                          </div>
+                          {request.reason && (
+                            <p className="mt-2 text-sm text-muted-foreground">Lý do: {request.reason}</p>
+                          )}
+                          {request.status === "await_customer_confirm" && (
+                            <Button
+                              size="sm"
+                              className="mt-3"
+                              onClick={() => refundConfirmMutation.mutate(String(request.id))}
+                              disabled={refundConfirmMutation.isPending}
+                            >
+                              {refundConfirmMutation.isPending ? (
+                                <>
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  Đang xác nhận...
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle className="mr-2 h-4 w-4" />
+                                  Tôi đã nhận tiền
+                                </>
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p>Chưa có yêu cầu hoàn tiền nào.</p>
+                  )}
+
+                  {canRequestRefund ? (
+                    <form className="space-y-3 text-sm" onSubmit={handleSubmitRefundRequest}>
+                      <div className="grid gap-2">
+                        <label className="text-xs font-medium text-foreground">Tên chủ tài khoản</label>
+                        <Input
+                          value={refundForm.bank_account_name}
+                          onChange={(event) => handleRefundFormChange("bank_account_name", event.target.value)}
+                          placeholder="Nguyễn Văn A"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <label className="text-xs font-medium text-foreground">Số tài khoản</label>
+                        <Input
+                          value={refundForm.bank_account_number}
+                          onChange={(event) => handleRefundFormChange("bank_account_number", event.target.value)}
+                          placeholder="0123456789"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <label className="text-xs font-medium text-foreground">Ngân hàng</label>
+                        <Input
+                          value={refundForm.bank_name}
+                          onChange={(event) => handleRefundFormChange("bank_name", event.target.value)}
+                          placeholder="Vietcombank, Techcombank..."
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <label className="text-xs font-medium text-foreground">Lý do hoàn tiền</label>
+                        <Textarea
+                          rows={3}
+                          value={refundForm.reason}
+                          onChange={(event) => handleRefundFormChange("reason", event.target.value)}
+                          placeholder="Ví dụ: Tour bị hủy do thiếu khách..."
+                        />
+                      </div>
+                      <Button
+                        type="submit"
+                        className="w-full"
+                        disabled={refundRequestMutation.isPending || !isRefundFormValid}
+                      >
+                        {refundRequestMutation.isPending ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Đang gửi...
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCcw className="mr-2 h-4 w-4" />
+                            Gửi yêu cầu hoàn tiền
+                          </>
+                        )}
+                      </Button>
+                    </form>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Yêu cầu hoàn tiền khả dụng khi booking bị hủy và đã thanh toán đủ.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Receipt className="h-5 w-5 text-primary" />
+                    Hóa đơn điện tử
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4 text-sm text-muted-foreground">
+                  {invoice ? (
+                    <div className="space-y-3 text-sm">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">Số hóa đơn</p>
+                          <p>{invoice.number ?? "Đang cập nhật"}</p>
+                        </div>
+                        <Badge variant="secondary">{deliveryMethodLabel(invoice.delivery_method)}</Badge>
+                      </div>
+                      <p>
+                        Tổng tiền:{" "}
+                        <span className="font-medium text-foreground">
+                          {formatCurrency(
+                            invoice.total_amount ?? booking.total_price ?? booking.total_amount,
+                            booking.currency ?? "VND",
+                          )}
+                        </span>
+                      </p>
+                      {invoice.emailed_at && (
+                        <p>Đã gửi email lúc {formatDateTime(invoice.emailed_at)}</p>
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          onClick={handleDownloadInvoice}
+                          disabled={invoiceDownloadMutation.isPending}
+                        >
+                          {invoiceDownloadMutation.isPending ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Đang tải...
+                            </>
+                          ) : (
+                            <>
+                              <Download className="mr-2 h-4 w-4" />
+                              Tải hóa đơn
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                      {invoice.delivery_method === "email" && (
+                        <p className="text-xs text-muted-foreground">
+                          Hóa đơn đã/ sẽ được gửi qua email: {invoiceForm.customer_email || contactEmail}.
+                        </p>
+                      )}
+                    </div>
+                  ) : canRequestInvoice ? (
+                    <form className="space-y-3" onSubmit={handleSubmitInvoiceRequest}>
+                      <div className="grid gap-2">
+                        <label className="text-xs font-medium text-foreground">Tên đơn vị/Khách hàng</label>
+                        <Input
+                          value={invoiceForm.customer_name}
+                          onChange={(event) => handleInvoiceFormChange("customer_name", event.target.value)}
+                          placeholder="Công ty TNHH ABC"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <label className="text-xs font-medium text-foreground">Mã số thuế</label>
+                        <Input
+                          value={invoiceForm.customer_tax_code}
+                          onChange={(event) => handleInvoiceFormChange("customer_tax_code", event.target.value)}
+                          placeholder="0101234567"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <label className="text-xs font-medium text-foreground">Địa chỉ</label>
+                        <Textarea
+                          rows={2}
+                          value={invoiceForm.customer_address}
+                          onChange={(event) => handleInvoiceFormChange("customer_address", event.target.value)}
+                          placeholder="Số 1 Tràng Tiền, Hoàn Kiếm, Hà Nội"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <label className="text-xs font-medium text-foreground">Phương thức nhận hóa đơn</label>
+                        <Select
+                          value={invoiceForm.delivery_method}
+                          onValueChange={(value) =>
+                            handleInvoiceFormChange("delivery_method", value as "download" | "email")
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="download">Tải về trong hệ thống</SelectItem>
+                            <SelectItem value="email">Gửi qua email</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {invoiceForm.delivery_method === "email" && (
+                        <div className="grid gap-2">
+                          <label className="text-xs font-medium text-foreground">Email nhận hóa đơn</label>
+                          <Input
+                            type="email"
+                            value={invoiceForm.customer_email}
+                            onChange={(event) => handleInvoiceFormChange("customer_email", event.target.value)}
+                            placeholder="ke-toan@congtyabc.com"
+                          />
+                        </div>
+                      )}
+                      <Button
+                        type="submit"
+                        className="w-full"
+                        disabled={invoiceRequestMutation.isPending || !isInvoiceFormValid}
+                      >
+                        {invoiceRequestMutation.isPending ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Đang gửi...
+                          </>
+                        ) : (
+                          <>
+                            <Receipt className="mr-2 h-4 w-4" />
+                            Yêu cầu xuất hóa đơn
+                          </>
+                        )}
+                      </Button>
+                    </form>
+                  ) : (
+                    <p>
+                      Hóa đơn sẽ khả dụng sau khi tour hoàn tất và bạn đã thanh toán đầy đủ.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
 
             {booking.status === "cancelled" && booking.cancelled_at && (
               <Alert variant="destructive">

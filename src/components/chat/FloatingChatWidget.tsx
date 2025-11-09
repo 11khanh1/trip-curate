@@ -139,8 +139,8 @@ const FloatingChatWidget = () => {
           <div className="flex h-[560px] w-[360px] max-h-[80vh] flex-col overflow-hidden rounded-[28px] bg-white shadow-2xl shadow-orange-500/25 sm:h-[620px]">
             <div className="flex items-center justify-between bg-gradient-to-r from-[#f97316] to-[#fb923c] px-4 py-3 text-white">
               <div>
-                <p className="text-base font-semibold leading-tight">Phương Nam 24h</p>
-                <p className="text-xs text-white/80">VietTravel Assistant</p>
+                <p className="text-base font-semibold leading-tight">VietTravel</p>
+                <p className="text-xs text-white/80">Assistant</p>
               </div>
               <Button
                 variant="ghost"
@@ -294,4 +294,3 @@ const FloatingChatWidget = () => {
 };
 
 export default FloatingChatWidget;
-

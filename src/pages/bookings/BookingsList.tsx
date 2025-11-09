@@ -598,7 +598,7 @@ const BookingsList = () => {
                 booking.schedule?.title ??
                 (booking.schedule?.start_date ? `Lịch ${formatDate(booking.schedule.start_date)}` : undefined);
               const packageName = booking.package?.name ?? "Gói tiêu chuẩn";
-              const bookingTotal = booking.total_amount ?? booking.total_price ?? null;
+              const bookingTotal = booking.total_price ?? booking.total_amount ?? null;
               const appliedPromotions = Array.isArray(booking.promotions) ? booking.promotions : [];
               const discountTotal =
                 typeof booking.discount_total === "number"

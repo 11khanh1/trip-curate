@@ -208,8 +208,8 @@ const resolveGuestCount = (booking: PartnerBooking) => {
 
 const resolveTotalAmount = (booking: PartnerBooking) => {
   return (
-    toNumber(booking.total_amount) ??
     toNumber(booking.total_price) ??
+    toNumber(booking.total_amount) ??
     toNumber((booking as Record<string, unknown>)?.["amount"]) ??
     null
   );

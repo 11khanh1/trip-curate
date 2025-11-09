@@ -61,10 +61,10 @@ const SepayReturn = () => {
     bookingDetail?.code?.toString().trim().length && bookingDetail?.code ? String(bookingDetail.code) : orderCode;
   const bookingCurrency = bookingDetail?.currency ?? "VND";
   const totalAmount =
-    typeof bookingDetail?.total_amount === "number"
-      ? bookingDetail.total_amount
-      : typeof bookingDetail?.total_price === "number"
-        ? bookingDetail.total_price
+    typeof bookingDetail?.total_price === "number"
+      ? bookingDetail.total_price
+      : typeof bookingDetail?.total_amount === "number"
+        ? bookingDetail.total_amount
         : null;
   const formattedAmount =
     typeof totalAmount === "number"

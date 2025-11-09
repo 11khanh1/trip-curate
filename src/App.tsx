@@ -52,6 +52,7 @@ import PartnerRevenue from "./pages/partner/Revenue";
 import PartnerAnalytics from "./pages/partner/Analytics";
 import PartnerSettings from "./pages/partner/Settings";
 import PartnerPromotions from "./pages/partner/Promotions";
+import PartnerRefundRequests from "./pages/partner/RefundRequests";
 import AuthCallback from "./pages/AuthCallback";
 import ResultSearch from "./pages/ResultSearch";
 import ScrollToTop from "@/components/ScrollToTop";
@@ -122,15 +123,16 @@ const App = () => (
               <Route path="settings" element={<Settings />} />
               <Route path="admins" element={<AdminAdmins />} />
             </Route>
-            <Route path="/partner" element={<PartnerLayout />}>
-              <Route index element={<PartnerDashboard />} />
-              <Route path="activities" element={<PartnerActivities />} />
-              <Route path="promotions" element={<PartnerPromotions />} />
-              <Route path="bookings" element={<PartnerBookings />} />
-              <Route path="revenue" element={<PartnerRevenue />} />
-              <Route path="analytics" element={<PartnerAnalytics />} />
-              <Route path="settings" element={<PartnerSettings />} />
-            </Route>
+        <Route path="/partner" element={<PartnerLayout />}>
+          <Route index element={<PartnerDashboard />} />
+          <Route path="activities" element={<PartnerActivities />} />
+          <Route path="promotions" element={<PartnerPromotions />} />
+          <Route path="refund-requests" element={<PartnerRefundRequests />} />
+          <Route path="bookings" element={<PartnerBookings />} />
+          <Route path="revenue" element={<PartnerRevenue />} />
+          <Route path="analytics" element={<PartnerAnalytics />} />
+          <Route path="settings" element={<PartnerSettings />} />
+        </Route>
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

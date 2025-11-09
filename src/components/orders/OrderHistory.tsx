@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Calendar, Clock, CreditCard, ExternalLink, MapPin, RefreshCw, Wallet } from "lucide-react";
+import { Calendar, Clock, CreditCard, ExternalLink, FileText, MapPin, RefreshCw, Wallet } from "lucide-react";
 
 import { useOrderHistory } from "@/hooks/useOrderHistory";
 import { useUser } from "@/context/UserContext";
@@ -58,6 +58,22 @@ const paymentStatusLabel = (status?: string) => {
       return "Đang chờ";
     case "failed":
       return "Thất bại";
+    default:
+      return status ?? "Đang cập nhật";
+  }
+};
+
+const refundStatusLabel = (status?: string) => {
+  switch (status) {
+    case "await_customer_confirm":
+      return "Chờ xác nhận";
+    case "completed":
+      return "Đã hoàn tất";
+    case "rejected":
+      return "Đã từ chối";
+    case "pending":
+    case "await_partner":
+      return "Đang xử lý";
     default:
       return status ?? "Đang cập nhật";
   }
@@ -222,11 +238,16 @@ const OrderHistory = ({ title = "Đơn hàng gần đây", limit = 5, emptyMessa
                       {booking.tour.destination}
                     </p>
                   )}
-                  {booking.total_amount != null && (
+                  {(booking.total_price ?? booking.total_amount) != null && (
                     <p className="flex items-center gap-2 text-foreground">
                       <Clock className="h-4 w-4 text-primary" />
                       Tổng tiền:{" "}
-                      <span className="font-medium">{formatCurrency(booking.total_amount ?? booking.total_price, currency)}</span>
+                      <span className="font-medium">
+                        {formatCurrency(
+                          booking.total_price ?? booking.total_amount ?? 0,
+                          currency,
+                        )}
+                      </span>
                     </p>
                   )}
                   {booking.payment_method && (
@@ -243,6 +264,35 @@ const OrderHistory = ({ title = "Đơn hàng gần đây", limit = 5, emptyMessa
                       <CreditCard className="h-4 w-4 text-primary" />
                       Trạng thái thanh toán:{" "}
                       <span className="font-medium text-foreground">{paymentStatusLabel(booking.payment_status)}</span>
+                    </p>
+                  )}
+                  {Array.isArray(booking.refund_requests) && booking.refund_requests.length > 0 && (
+                    <p className="flex items-center gap-2">
+                      <RefreshCw className="h-4 w-4 text-primary" />
+                      Hoàn tiền:{" "}
+                      <span className="font-medium text-foreground">
+                        {refundStatusLabel(
+                          booking.refund_requests[booking.refund_requests.length - 1]?.status,
+                        )}
+                      </span>
+                    </p>
+                  )}
+                  {booking.invoice && (
+                    <p className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-primary" />
+                      <Button
+                        asChild
+                        variant="link"
+                        className="px-0 text-sm font-medium"
+                      >
+                        <a
+                          href={booking.invoice.file_url ?? `/bookings/${booking.id}`}
+                          target={booking.invoice.file_url ? "_blank" : "_self"}
+                          rel="noreferrer"
+                        >
+                          {booking.invoice.file_url ? "Tải hóa đơn" : "Xem hóa đơn"}
+                        </a>
+                      </Button>
                     </p>
                   )}
                   {showPaymentHistory && (

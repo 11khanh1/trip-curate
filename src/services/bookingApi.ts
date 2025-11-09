@@ -69,6 +69,51 @@ export interface BookingPromotion {
   [key: string]: unknown;
 }
 
+export type RefundRequestStatus =
+  | "pending"
+  | "await_partner"
+  | "await_customer_confirm"
+  | "completed"
+  | "rejected"
+  | string;
+
+export interface RefundProofFile {
+  id?: string | number;
+  url?: string;
+  filename?: string | null;
+  mime_type?: string | null;
+}
+
+export interface BookingRefundRequest {
+  id: string | number;
+  booking_id: string | number;
+  amount?: number | null;
+  currency?: string | null;
+  reason?: string | null;
+  status?: RefundRequestStatus;
+  note?: string | null;
+  bank_account_name?: string | null;
+  bank_account_number?: string | null;
+  bank_name?: string | null;
+  proofs?: RefundProofFile[] | null;
+  submitted_at?: string | null;
+  updated_at?: string | null;
+  [key: string]: unknown;
+}
+
+export interface BookingInvoice {
+  id?: string | number;
+  number?: string | null;
+  total_amount?: number | null;
+  currency?: string | null;
+  delivery_method?: "download" | "email" | string | null;
+  file_url?: string | null;
+  emailed_at?: string | null;
+  issued_at?: string | null;
+  status?: string | null;
+  [key: string]: unknown;
+}
+
 export interface Booking {
   id: string | number;
   code?: string;
@@ -108,6 +153,8 @@ export interface Booking {
   review?: BookingReviewSummary | null;
   discount_total?: number | null;
   promotions?: BookingPromotion[] | null;
+  refund_requests?: BookingRefundRequest[] | null;
+  invoice?: BookingInvoice | null;
   [key: string]: unknown;
 }
 
@@ -275,4 +322,83 @@ export async function fetchBookingPaymentStatus(
 ): Promise<BookingPaymentStatusResponse> {
   const res = await apiClient.get(`/bookings/${id}/payment-status`);
   return res.data as BookingPaymentStatusResponse;
+}
+
+export interface CreateRefundRequestPayload {
+  bank_account_name: string;
+  bank_account_number: string;
+  bank_name: string;
+  reason: string;
+}
+
+export async function createRefundRequest(
+  bookingId: string | number,
+  payload: CreateRefundRequestPayload,
+): Promise<BookingRefundRequest> {
+  const res = await apiClient.post(`/bookings/${bookingId}/refund-request`, payload);
+  if (res.data && typeof res.data === "object" && "refund_request" in res.data) {
+    return (res.data as { refund_request: BookingRefundRequest }).refund_request;
+  }
+  return res.data as BookingRefundRequest;
+}
+
+const normalizeRefundRequestList = (payload: unknown): BookingRefundRequest[] => {
+  if (Array.isArray(payload)) return payload as BookingRefundRequest[];
+  if (payload && typeof payload === "object") {
+    const candidate = payload as Record<string, unknown>;
+    if (Array.isArray(candidate.data)) {
+      return candidate.data as BookingRefundRequest[];
+    }
+    if (Array.isArray(candidate.requests)) {
+      return candidate.requests as BookingRefundRequest[];
+    }
+  }
+  return [];
+};
+
+export async function fetchRefundRequests(): Promise<BookingRefundRequest[]> {
+  const res = await apiClient.get("/refund-requests");
+  return normalizeRefundRequestList(res.data);
+}
+
+export async function confirmRefundRequest(id: string | number): Promise<BookingRefundRequest> {
+  const res = await apiClient.post(`/refund-requests/${id}/confirm`);
+  if (res.data && typeof res.data === "object" && "refund_request" in res.data) {
+    return (res.data as { refund_request: BookingRefundRequest }).refund_request;
+  }
+  return res.data as BookingRefundRequest;
+}
+
+export interface InvoiceRequestPayload {
+  customer_name: string;
+  customer_tax_code: string;
+  customer_address: string;
+  customer_email?: string;
+  delivery_method: "download" | "email";
+}
+
+export async function requestInvoice(
+  bookingId: string | number,
+  payload: InvoiceRequestPayload,
+): Promise<BookingInvoice> {
+  const res = await apiClient.post(`/bookings/${bookingId}/invoice-request`, payload);
+  if (res.data && typeof res.data === "object" && "invoice" in res.data) {
+    return (res.data as { invoice: BookingInvoice }).invoice;
+  }
+  return res.data as BookingInvoice;
+}
+
+export async function fetchBookingInvoice(bookingId: string | number): Promise<BookingInvoice | null> {
+  const res = await apiClient.get(`/bookings/${bookingId}/invoice`);
+  if (res.data && typeof res.data === "object" && "invoice" in res.data) {
+    return (res.data as { invoice: BookingInvoice }).invoice;
+  }
+  return (res.data as BookingInvoice) ?? null;
+}
+
+export async function downloadBookingInvoice(bookingId: string | number): Promise<Blob> {
+  const res = await apiClient.get(`/bookings/${bookingId}/invoice/download`, {
+    responseType: "blob",
+  });
+  return res.data as Blob;
 }
