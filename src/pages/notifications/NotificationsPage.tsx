@@ -21,19 +21,9 @@ import { Loader2, BellRing, BellOff, ArrowRight, Inbox, CheckCircle } from "luci
 import { formatDistanceToNow } from "date-fns";
 import { vi } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { getNotificationCopy, getNotificationTypeLabel } from "@/lib/notification-utils";
 
 const PER_PAGE = 20;
-
-const notificationTypeLabel = (type?: string | null) => {
-  if (!type) return "Khác";
-  const normalized = type.toLowerCase();
-  if (normalized === "voucher") return "Voucher";
-  if (normalized === "refund_request") return "Yêu cầu hoàn tiền";
-  if (normalized === "refund_update") return "Cập nhật hoàn tiền";
-  if (normalized === "invoice") return "Hóa đơn";
-  if (normalized === "chatbot") return "Chatbot";
-  return type.replace(/_/g, " ");
-};
 
 const renderRelativeTime = (value?: string | null) => {
   if (!value) return "Vừa cập nhật";
@@ -255,14 +245,7 @@ const NotificationsPage = () => {
                 ) : (
                   <div className="divide-y">
                     {notifications.map((notification) => {
-                      const title =
-                        (notification.data?.["title"] as string | undefined) ??
-                        (notification.type === "voucher"
-                          ? "Bạn được tặng voucher mới"
-                          : "Thông báo mới");
-                      const message =
-                        (notification.data?.["message"] as string | undefined) ??
-                        "Nhấn để xem chi tiết.";
+                      const { title, message } = getNotificationCopy(notification);
                       const bookingId =
                         (notification.data?.["booking_id"] ??
                           notification.data?.["bookingId"]) as string | undefined;
@@ -278,7 +261,7 @@ const NotificationsPage = () => {
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
                               <Badge variant={isRead ? "secondary" : "default"}>
-                                {notificationTypeLabel(notification.type)}
+                                {getNotificationTypeLabel(notification.type)}
                               </Badge>
                               {!isRead && (
                                 <span className="text-xs font-medium text-primary">Mới</span>

@@ -17,11 +17,11 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
+import { getNotificationCopy } from "@/lib/notification-utils";
 
 const MAX_ITEMS = 8;
 
@@ -142,14 +142,7 @@ const NotificationDropdown = () => {
           ) : (
             <ul className="divide-y">
               {notifications.map((notification) => {
-                const title =
-                  (notification.data?.["title"] as string | undefined) ??
-                  (notification.type === "voucher"
-                    ? "Có voucher mới dành cho bạn"
-                    : "Thông báo mới");
-                const message =
-                  (notification.data?.["message"] as string | undefined) ??
-                  "Xem chi tiết để biết thêm thông tin.";
+                const { title, message } = getNotificationCopy(notification);
                 const isRead = Boolean(notification.read_at);
                 return (
                   <li

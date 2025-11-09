@@ -837,12 +837,17 @@ const BookingsList = () => {
                   ? String(booking.tour.id)
                   : null;
 
+              const isAwaitingConfirmation =
+                PAYMENT_SUCCESS_STATUSES.has(paymentStatusNormalized) || hasPaidTransaction;
+              const headerStatusLabel = isAwaitingConfirmation ? "Chờ xác nhận" : statusLabel(booking.status);
+              const headerStatusVariant = isAwaitingConfirmation ? "default" : statusVariant(booking.status);
+
               return (
                 <Card key={booking.id}>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-base font-semibold">{tourName}</CardTitle>
                     <div className="flex items-center gap-2">
-                      <Badge variant={statusVariant(booking.status)}>{statusLabel(booking.status)}</Badge>
+                      <Badge variant={headerStatusVariant}>{headerStatusLabel}</Badge>
                       {canCancel && (
                         <Badge variant="outline" className="border-emerald-200 text-emerald-600">
                           Có thể hủy
