@@ -552,6 +552,17 @@ const CartPage = () => {
                         item.childCount > 0
                           ? `${item.adultCount} người lớn · ${item.childCount} trẻ em`
                           : `${item.adultCount} người lớn`;
+                      const minParticipants =
+                        typeof item.minParticipants === "number" && Number.isFinite(item.minParticipants)
+                          ? Math.max(1, Math.trunc(item.minParticipants))
+                          : null;
+                      const slotsAvailable =
+                        typeof item.slotsAvailable === "number" && Number.isFinite(item.slotsAvailable)
+                          ? Math.max(0, Math.trunc(item.slotsAvailable))
+                          : null;
+                      const totalGuests = item.adultCount + item.childCount;
+                      const lacksMinimum = minParticipants !== null && totalGuests < minParticipants;
+                      const exceedsSeatCapacity = slotsAvailable !== null && totalGuests > slotsAvailable;
 
                       return (
                         <div

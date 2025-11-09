@@ -86,7 +86,7 @@ const RecentTours = () => {
               <div className="flex flex-1 flex-col justify-between gap-2">
                 <div className="space-y-1">
                   <Link
-                    to={`/activities/${tour.id ?? tour.uuid ?? ""}`}
+                    to={`/activity/${tour.id ?? tour.uuid ?? ""}`}
                     className="line-clamp-2 font-semibold text-foreground hover:text-primary"
                   >
                     {tour.title ?? tour.name ?? "Tour chưa có tiêu đề"}
@@ -125,7 +125,7 @@ const RecentTours = () => {
                     {formatCurrency(tour.base_price ?? tour.price ?? null)}
                   </span>
                   <Button asChild size="sm" variant="outline">
-                    <Link to={`/activities/${tour.id ?? tour.uuid ?? ""}`}>Xem lại tour</Link>
+                    <Link to={`/activity/${tour.id ?? tour.uuid ?? ""}`}>Xem lại tour</Link>
                   </Button>
                 </div>
               </div>
