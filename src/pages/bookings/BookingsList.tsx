@@ -660,6 +660,11 @@ const BookingsList = () => {
   });
 
   const bookings = data?.data ?? [];
+  const bookingsToRender = useMemo(() => {
+    if (status === "all") return bookings;
+    const filterStatus = status.toLowerCase();
+    return bookings.filter((booking) => normalizeStatus(booking.status) === filterStatus);
+  }, [bookings, status]);
   const meta = (data?.meta ?? {}) as Record<string, unknown>;
   const currentPage = typeof meta.current_page === "number" ? meta.current_page : page;
   const lastPage = typeof meta.last_page === "number" ? meta.last_page : undefined;
@@ -740,11 +745,11 @@ const BookingsList = () => {
 
         {isLoading ? (
           <BookingsSkeleton />
-        ) : bookings.length === 0 ? (
+        ) : bookingsToRender.length === 0 ? (
           <EmptyState />
         ) : (
           <div className="space-y-4">
-            {bookings.map((booking: Booking) => {
+            {bookingsToRender.map((booking: Booking) => {
               const tourName = booking.tour?.title ?? booking.tour?.name ?? "Tour không tên";
               const scheduleTitle =
                 booking.schedule?.title ??
@@ -838,7 +843,8 @@ const BookingsList = () => {
                   : null;
 
               const isAwaitingConfirmation =
-                PAYMENT_SUCCESS_STATUSES.has(paymentStatusNormalized) || hasPaidTransaction;
+                booking.status !== "cancelled" &&
+                (PAYMENT_SUCCESS_STATUSES.has(paymentStatusNormalized) || hasPaidTransaction);
               const headerStatusLabel = isAwaitingConfirmation ? "Chờ xác nhận" : statusLabel(booking.status);
               const headerStatusVariant = isAwaitingConfirmation ? "default" : statusVariant(booking.status);
 

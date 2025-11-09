@@ -422,6 +422,28 @@ const BookingDetailPage = () => {
     ) ?? (booking?.status ?? "");
   const paymentStatusNormalized = normalizeStatus(resolvedPaymentStatus);
   const hasResolvedPaymentStatus = resolvedPaymentStatus.toString().trim().length > 0;
+  const passengerList = Array.isArray(booking?.passengers)
+    ? (booking?.passengers as BookingPassenger[])
+    : [];
+  const passengerAdultCount = passengerList.filter(
+    (passenger) => (passenger?.type ?? "adult").toLowerCase() !== "child",
+  ).length;
+  const passengerChildCount = passengerList.filter(
+    (passenger) => (passenger?.type ?? "").toLowerCase() === "child",
+  ).length;
+  const resolvedAdultCount =
+    typeof booking?.total_adults === "number" && Number.isFinite(booking.total_adults)
+      ? booking.total_adults
+      : typeof booking?.adults === "number" && Number.isFinite(booking.adults)
+      ? booking.adults
+      : passengerAdultCount;
+  const resolvedChildCount =
+    typeof booking?.total_children === "number" && Number.isFinite(booking.total_children)
+      ? booking.total_children
+      : typeof booking?.children === "number" && Number.isFinite(booking.children)
+      ? booking.children
+      : passengerChildCount;
+
   const hasPaidTransaction =
     Array.isArray(booking?.payments) && booking.payments.some((payment) => didPaymentSucceed(payment));
   const hasRefundedTransaction =
@@ -434,11 +456,17 @@ const BookingDetailPage = () => {
     paymentStatusNormalized === "paid" ||
     paymentStatusNormalized === "success" ||
     paymentStatusNormalized === "completed";
-  const canPayOnline =
-    paymentMethod === "sepay" &&
-    typeof bookingPaymentUrl === "string" &&
-    bookingPaymentUrl.length > 0 &&
-    !isPaid;
+  const isOfflinePayment = paymentMethod === "offline";
+  const isAwaitingPayment =
+    !isPaid &&
+    booking?.status !== "cancelled" &&
+    (paymentStatusNormalized === "pending" ||
+      paymentStatusNormalized === "unpaid" ||
+      (!booking?.payment_status && !hasPaidTransaction));
+  const canAttemptOnlinePayment = !isOfflinePayment && isAwaitingPayment;
+  const hasPaymentLink =
+    typeof bookingPaymentUrl === "string" && bookingPaymentUrl.length > 0 && !isOfflinePayment;
+  const canPayOnline = canAttemptOnlinePayment;
   const paymentMutation = useMutation({
     mutationFn: () =>
       initiateBookingPayment(String(id), {
@@ -599,6 +627,13 @@ const BookingDetailPage = () => {
         onClick: handleInitiatePayment,
       };
     }
+    if (hasPaymentLink && !isPaid) {
+      return {
+        label: "Mở liên kết thanh toán",
+        disabled: false,
+        onClick: () => window.open(bookingPaymentUrl!, "_blank", "noopener,noreferrer"),
+      };
+    }
     if (isPaid) {
       return {
         label: "Đã thanh toán",
@@ -611,13 +646,6 @@ const BookingDetailPage = () => {
         label: "Thanh toán trực tiếp",
         disabled: true,
         onClick: undefined,
-      };
-    }
-    if (bookingPaymentUrl) {
-      return {
-        label: "Mở liên kết thanh toán",
-        disabled: false,
-        onClick: () => window.open(bookingPaymentUrl, "_blank", "noopener,noreferrer"),
       };
     }
     return {
@@ -848,12 +876,15 @@ const BookingDetailPage = () => {
     }
     return "Chưa đủ điều kiện để tạo yêu cầu hoàn tiền.";
   })();
-  const paymentStatusDisplayLabel =
-    booking?.status === "cancelled" && !hasPaidTransaction
-      ? "Chờ thanh toán"
-      : statusLabel(resolvedPaymentStatus);
-  const paymentStatusBadgeVariant =
-    booking?.status === "cancelled" && !hasPaidTransaction ? "outline" : statusVariant(resolvedPaymentStatus);
+  const paymentStatusDisplayLabel = isAwaitingPayment ? "Chờ thanh toán" : statusLabel(resolvedPaymentStatus);
+  const paymentStatusBadgeVariant = isAwaitingPayment ? "outline" : statusVariant(resolvedPaymentStatus);
+  const bookingStatusLabel = statusLabel(booking?.status);
+  const bookingStatusVariant = statusVariant(booking?.status);
+  const isAwaitingConfirmation =
+    booking?.status !== "cancelled" &&
+    (PAYMENT_SUCCESS_STATUSES.has(paymentStatusNormalized) || hasPaidTransaction);
+  const headerStatusLabel = isAwaitingConfirmation ? "Chờ xác nhận" : bookingStatusLabel;
+  const headerStatusVariant = isAwaitingConfirmation ? "default" : bookingStatusVariant;
   const shouldShowSepayReminder =
     paymentMethod === "sepay" && !isPaid && paymentStatusNormalized === "pending" && typeof bookingPaymentUrl === "string" && bookingPaymentUrl.length > 0;
   const canRequestInvoice = Boolean(
@@ -932,7 +963,7 @@ const BookingDetailPage = () => {
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant={statusVariant(booking.status)}>{statusLabel(booking.status)}</Badge>
+                <Badge variant={headerStatusVariant}>{headerStatusLabel}</Badge>
                 {hasResolvedPaymentStatus && (
                   <Badge variant={paymentStatusBadgeVariant}>Thanh toán: {paymentStatusDisplayLabel}</Badge>
                 )}
@@ -992,10 +1023,8 @@ const BookingDetailPage = () => {
                     <div>
                       <p className="font-medium text-foreground">Số lượng khách</p>
                       <p>
-                        {booking.adults ?? 0} người lớn
-                        {typeof booking.children === "number" && booking.children > 0
-                          ? ` • ${booking.children} trẻ em`
-                          : ""}
+                        {resolvedAdultCount ?? 0} người lớn
+                        {resolvedChildCount > 0 ? ` • ${resolvedChildCount} trẻ em` : ""}
                       </p>
                     </div>
                   </div>
@@ -1554,13 +1583,13 @@ const BookingDetailPage = () => {
                                       </Button>
                                     );
                                   }
-                                  if (bookingPaymentUrl && paymentMethod !== "offline") {
+                                  if (hasPaymentLink) {
                                     return (
                                       <Button
                                         size="sm"
                                         variant="outline"
                                         onClick={() =>
-                                          window.open(bookingPaymentUrl, "_blank", "noopener,noreferrer")
+                                          window.open(bookingPaymentUrl!, "_blank", "noopener,noreferrer")
                                         }
                                       >
                                         Mở liên kết
