@@ -3,6 +3,8 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AnalyticsProvider } from "@/context/AnalyticsContext";
+import { ChatWidgetProvider } from "@/context/ChatWidgetContext";
+import FloatingChatWidget from "@/components/chat/FloatingChatWidget";
 import Index from "./pages/Index";
 import AllActivities from "./pages/AllActivities";
 import ActivityDetail from "./pages/ActivityDetail";
@@ -65,73 +67,76 @@ import RecentToursPage from "./pages/recent/RecentToursPage";
 const App = () => (
   <TooltipProvider>
     <AnalyticsProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <ScrollToTop />
-        <Routes>
-        <Route path="/" element={<Index />} />
-        <Route path="/activities" element={<AllActivities />} />
-        <Route path="/recent" element={<RecentToursPage />} />
-        <Route path="/activity/:id" element={<ActivityDetail />} />
-        <Route path="/regions/vietnam" element={<Vietnam />} />
-        <Route path="/regions/japan" element={<Japan />} />
-        <Route path="/regions/singapore" element={<Singapore />} />
-        <Route path="/regions/thailand" element={<Thailand />} />
-        <Route path="/regions/china" element={<China />} />
-        <Route path="/regions/south-korea" element={<SouthKorea />} />
-        <Route path="/regions/australia" element={<Australia />} />
-        <Route path="/regions/uk" element={<UK />} />
-        <Route path="/regions/switzerland" element={<Switzerland />} />
-        <Route path="/regions/usa" element={<USA />} />
-        <Route path="/regions/malaysia" element={<Malaysia />} />
-        <Route path="/regions/indonesia" element={<Indonesia />} />
-        <Route path="/deals" element={<Deals />} />
-        <Route path="/resultsearch" element={<ResultSearch />} />
-        <Route path="/bookings" element={<BookingsList />} />
-        <Route path="/bookings/new" element={<BookingCheckout />} />
-        <Route path="/bookings/:id" element={<BookingDetail />} />
-        <Route path="/payments/sepay/gateway" element={<SepayGateway />} />
-        <Route path="/payments/sepay/return" element={<SepayReturn />} />
-        <Route path="/cart" element={<CartPage />} />
-        <Route path="/wishlist" element={<Wishlist />} />
-        <Route path="/account-settings" element={<AccountSettings />} />
-        <Route path="/auth/callback" element={<AuthCallback />} />
-        <Route path="/about/our-story" element={<OurStory />} />
-        <Route path="/about/careers" element={<Careers />} />
-        <Route path="/about/press" element={<Press />} />
-        <Route path="/about/partnership" element={<Partnership />} />
-        <Route path="/about/affiliate" element={<Affiliate />} />
-        <Route path="/support/help-center" element={<HelpCenter />} />
-        <Route path="/support/contact" element={<ContactUs />} />
-        <Route path="/support/cancellation-policy" element={<CancellationPolicy />} />
-        <Route path="/support/privacy-policy" element={<PrivacyPolicy />} />
-        <Route path="/support/terms-of-service" element={<TermsOfService />} />
-        <Route path="/admin" element={<AdminLayout />}>
-          <Route index element={<Dashboard />} />
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="users" element={<AdminUsers />} />
-            <Route path="partners" element={<AdminPartners />} />
-            <Route path="tours" element={<AdminTours />} />
-          <Route path="categories" element={<AdminCategories />} />
-          <Route path="promotions" element={<Promotions />} />
-          <Route path="reports" element={<AdminReports />} />
-          <Route path="settings" element={<Settings />} />
-          <Route path="admins" element={<AdminAdmins />} />
-        </Route>
-        <Route path="/partner" element={<PartnerLayout />}>
-          <Route index element={<PartnerDashboard />} />
-          <Route path="activities" element={<PartnerActivities />} />
-          <Route path="promotions" element={<PartnerPromotions />} />
-          <Route path="bookings" element={<PartnerBookings />} />
-          <Route path="revenue" element={<PartnerRevenue />} />
-          <Route path="analytics" element={<PartnerAnalytics />} />
-          <Route path="settings" element={<PartnerSettings />} />
-        </Route>
-        {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-      </BrowserRouter>
+      <ChatWidgetProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <ScrollToTop />
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/activities" element={<AllActivities />} />
+            <Route path="/recent" element={<RecentToursPage />} />
+            <Route path="/activity/:id" element={<ActivityDetail />} />
+            <Route path="/regions/vietnam" element={<Vietnam />} />
+            <Route path="/regions/japan" element={<Japan />} />
+            <Route path="/regions/singapore" element={<Singapore />} />
+            <Route path="/regions/thailand" element={<Thailand />} />
+            <Route path="/regions/china" element={<China />} />
+            <Route path="/regions/south-korea" element={<SouthKorea />} />
+            <Route path="/regions/australia" element={<Australia />} />
+            <Route path="/regions/uk" element={<UK />} />
+            <Route path="/regions/switzerland" element={<Switzerland />} />
+            <Route path="/regions/usa" element={<USA />} />
+            <Route path="/regions/malaysia" element={<Malaysia />} />
+            <Route path="/regions/indonesia" element={<Indonesia />} />
+            <Route path="/deals" element={<Deals />} />
+            <Route path="/resultsearch" element={<ResultSearch />} />
+            <Route path="/bookings" element={<BookingsList />} />
+            <Route path="/bookings/new" element={<BookingCheckout />} />
+            <Route path="/bookings/:id" element={<BookingDetail />} />
+            <Route path="/payments/sepay/gateway" element={<SepayGateway />} />
+            <Route path="/payments/sepay/return" element={<SepayReturn />} />
+            <Route path="/cart" element={<CartPage />} />
+            <Route path="/wishlist" element={<Wishlist />} />
+            <Route path="/account-settings" element={<AccountSettings />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
+            <Route path="/about/our-story" element={<OurStory />} />
+            <Route path="/about/careers" element={<Careers />} />
+            <Route path="/about/press" element={<Press />} />
+            <Route path="/about/partnership" element={<Partnership />} />
+            <Route path="/about/affiliate" element={<Affiliate />} />
+            <Route path="/support/help-center" element={<HelpCenter />} />
+            <Route path="/support/contact" element={<ContactUs />} />
+            <Route path="/support/cancellation-policy" element={<CancellationPolicy />} />
+            <Route path="/support/privacy-policy" element={<PrivacyPolicy />} />
+            <Route path="/support/terms-of-service" element={<TermsOfService />} />
+            <Route path="/admin" element={<AdminLayout />}>
+              <Route index element={<Dashboard />} />
+              <Route path="dashboard" element={<Dashboard />} />
+              <Route path="users" element={<AdminUsers />} />
+              <Route path="partners" element={<AdminPartners />} />
+              <Route path="tours" element={<AdminTours />} />
+              <Route path="categories" element={<AdminCategories />} />
+              <Route path="promotions" element={<Promotions />} />
+              <Route path="reports" element={<AdminReports />} />
+              <Route path="settings" element={<Settings />} />
+              <Route path="admins" element={<AdminAdmins />} />
+            </Route>
+            <Route path="/partner" element={<PartnerLayout />}>
+              <Route index element={<PartnerDashboard />} />
+              <Route path="activities" element={<PartnerActivities />} />
+              <Route path="promotions" element={<PartnerPromotions />} />
+              <Route path="bookings" element={<PartnerBookings />} />
+              <Route path="revenue" element={<PartnerRevenue />} />
+              <Route path="analytics" element={<PartnerAnalytics />} />
+              <Route path="settings" element={<PartnerSettings />} />
+            </Route>
+            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+        <FloatingChatWidget />
+      </ChatWidgetProvider>
     </AnalyticsProvider>
   </TooltipProvider>
 );

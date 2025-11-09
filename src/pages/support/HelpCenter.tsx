@@ -3,9 +3,20 @@ import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Search, BookOpen, CreditCard, MapPin, Phone, Mail, MessageCircle } from "lucide-react";
+import {
+  Search,
+  BookOpen,
+  CreditCard,
+  MapPin,
+  Phone,
+  Mail,
+  MessageCircle,
+} from "lucide-react";
+import { useChatWidget } from "@/context/ChatWidgetContext";
 
 const HelpCenter = () => {
+  const { openChat } = useChatWidget();
+
   const categories = [
     {
       icon: <BookOpen className="w-8 h-8" />,
@@ -137,7 +148,9 @@ const HelpCenter = () => {
                   <p className="text-sm text-muted-foreground mb-4">
                     Trò chuyện trực tiếp với đội ngũ hỗ trợ
                   </p>
-                  <Button variant="outline">Bắt đầu chat</Button>
+                  <Button variant="outline" onClick={openChat}>
+                    Bắt đầu chat
+                  </Button>
                 </CardContent>
               </Card>
 
