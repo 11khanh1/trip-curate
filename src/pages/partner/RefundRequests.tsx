@@ -30,6 +30,7 @@ const MAX_PROOF_SIZE = 5 * 1024 * 1024; // 5MB
 
 const statusLabels: Record<string, string> = {
   pending: "Chờ xử lý",
+  pending_partner: "Chờ đối tác xử lý",
   await_partner: "Chờ đối tác",
   await_customer_confirm: "Chờ khách xác nhận",
   completed: "Đã hoàn tất",
@@ -38,6 +39,7 @@ const statusLabels: Record<string, string> = {
 
 const statusVariants: Record<string, "default" | "outline" | "secondary" | "destructive"> = {
   pending: "outline",
+  pending_partner: "outline",
   await_partner: "outline",
   await_customer_confirm: "secondary",
   completed: "default",
@@ -47,6 +49,7 @@ const statusVariants: Record<string, "default" | "outline" | "secondary" | "dest
 const statusFilters = [
   { value: "all", label: "Tất cả" },
   { value: "pending", label: "Chờ xử lý" },
+  { value: "pending_partner", label: "Chờ đối tác xử lý" },
   { value: "await_partner", label: "Chờ đối tác" },
   { value: "await_customer_confirm", label: "Chờ khách xác nhận" },
   { value: "completed", label: "Đã hoàn tất" },
@@ -88,6 +91,7 @@ const PARTNER_REFUND_TIMELINE: Array<{ key: string; label: string }> = [
 const getPartnerTimelineIndex = (status?: string): number => {
   switch (status) {
     case "pending":
+    case "pending_partner":
     case "await_partner":
       return 0;
     case "await_customer_confirm":

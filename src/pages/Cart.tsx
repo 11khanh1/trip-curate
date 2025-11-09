@@ -7,7 +7,6 @@ import TravelHeader from "@/components/TravelHeader";
 import Footer from "@/components/Footer";
 // FIXED: Removed the incorrect import of TourCardProps
 import TourCard from "@/components/TourCard";
-import CollectionTourCard from "@/components/CollectionTourCard";
 import PersonalizedRecommendations from "@/components/recommendations/PersonalizedRecommendations";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -546,105 +545,83 @@ const CartPage = () => {
                 ) : (
                   <div className="space-y-4">
                     {items.map((item) => {
-                      const typeLabel = formatTourTypeLabel(item.tourType);
-                      const childLimitLabel =
-                        typeof item.childAgeLimit === "number" && Number.isFinite(item.childAgeLimit)
-                          ? `Giới hạn trẻ em: ≤ ${item.childAgeLimit} tuổi`
-                          : null;
-                      const documentLabel = summarizeDocumentRequirements(item.requiresPassport, item.requiresVisa);
-                      const cancellationLabel = summarizeCancellationPolicies(item.cancellationPolicies);
-                      const minParticipants =
-                        typeof item.minParticipants === "number" && Number.isFinite(item.minParticipants)
-                          ? Math.max(1, Math.trunc(item.minParticipants))
-                          : null;
-                      const slotsAvailable =
-                        typeof item.slotsAvailable === "number" && Number.isFinite(item.slotsAvailable)
-                          ? Math.max(0, Math.trunc(item.slotsAvailable))
-                          : null;
-                      const seatsTotal =
-                        typeof item.seatsTotal === "number" && Number.isFinite(item.seatsTotal)
-                          ? Math.max(0, Math.trunc(item.seatsTotal))
-                          : null;
-                      const totalGuests = item.adultCount + item.childCount;
-                      const lacksMinimum = minParticipants !== null && totalGuests < minParticipants;
-                      const exceedsSeatCapacity = slotsAvailable !== null && totalGuests > slotsAvailable;
-                      const minParticipantsLabel =
-                        minParticipants !== null ? `Tối thiểu ${minParticipants} khách` : null;
-                      const seatsLabel =
-                        slotsAvailable !== null
-                          ? seatsTotal !== null
-                            ? `Còn ${slotsAvailable}/${seatsTotal} chỗ`
-                            : `Còn ${slotsAvailable} chỗ`
-                          : seatsTotal !== null
-                          ? `Sức chứa ${seatsTotal} chỗ`
-                          : null;
-                      const features = [
-                        typeLabel,
-                        item.packageName ? `Gói: ${item.packageName}` : null,
-                        item.scheduleTitle ? `Khởi hành: ${item.scheduleTitle}` : null,
-                        `Người lớn: ${item.adultCount}`,
-                        item.childCount > 0 ? `Trẻ em: ${item.childCount}` : null,
-                        minParticipantsLabel,
-                        seatsLabel,
-                        childLimitLabel,
-                        documentLabel,
-                        cancellationLabel,
-                      ].filter((value): value is string => Boolean(value));
-                      const discountBadges: string[] = [];
-                      if (item.discountAmount && item.discountAmount > 0) {
-                        discountBadges.push(`Tiết kiệm ${formatter.format(item.discountAmount)}`);
-                      }
-                      if (item.promotionLabel) {
-                        discountBadges.push(item.promotionLabel);
-                      } else if (item.discountPercent && item.discountPercent > 0) {
-                        discountBadges.push(`Giảm ${item.discountPercent}%`);
-                      }
-                      const decoratedFeatures = [...discountBadges, ...features];
                       const normalizedTourId = String(item.tourId);
                       const isWishlisted = wishlistTourIds.has(normalizedTourId);
                       const isSavingWishlist = pendingWishlistTourId === normalizedTourId;
+                      const quantityLabel =
+                        item.childCount > 0
+                          ? `${item.adultCount} người lớn · ${item.childCount} trẻ em`
+                          : `${item.adultCount} người lớn`;
 
                       return (
-                        <CollectionTourCard
+                        <div
                           key={item.id}
-                          className="border border-slate-100 transition hover:-translate-y-1 hover:shadow-lg"
-                          href={`/activity/${item.tourId}`}
-                          image={item.thumbnail ?? "https://via.placeholder.com/400x300"}
-                          imageContainerClassName="h-36 sm:w-36 lg:w-40"
-                          title={item.tourTitle}
-                          category={item.packageName ?? "Gói dịch vụ"}
-                          location={item.scheduleTitle ?? "Lịch khởi hành linh hoạt"}
-                          duration={null}
-                          rating={null}
-                          ratingCount={null}
-                          priceLabel={formatter.format(item.totalPrice)}
-                          originalPriceLabel={
-                            item.originalTotalPrice && item.originalTotalPrice > item.totalPrice
-                              ? formatter.format(item.originalTotalPrice)
-                              : undefined
-                          }
-                          features={decoratedFeatures}
-                          topLeftOverlay={
-                            <Checkbox
-                              checked={selectedIds.has(item.id)}
-                              onCheckedChange={() => handleSelect(item.id)}
-                              className="h-5 w-5 rounded-full border-white bg-white shadow-sm data-[state=checked]:border-primary data-[state=checked]:bg-primary"
-                              disabled={isSyncing}
-                            />
-                          }
-                          topRightOverlay={
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="bg-white/80 text-red-500 hover:bg-white"
-                              disabled={isSyncing}
-                              onClick={() => handleRemoveItem(item.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          }
-                          footerContent={
-                            <div className="flex flex-col gap-4">
+                          className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm transition hover:-translate-y-1 hover:shadow-md"
+                        >
+                          <div className="flex flex-col gap-4 md:flex-row">
+                            <div className="flex items-start gap-3">
+                              <Checkbox
+                                checked={selectedIds.has(item.id)}
+                                onCheckedChange={() => handleSelect(item.id)}
+                                className="mt-1 h-5 w-5 rounded-full border-slate-300 data-[state=checked]:border-primary data-[state=checked]:bg-primary"
+                                disabled={isSyncing}
+                              />
+                              <div className="relative h-28 w-28 flex-shrink-0 overflow-hidden rounded-2xl border bg-slate-50">
+                                <img
+                                  src={item.thumbnail ?? "https://via.placeholder.com/200"}
+                                  alt={item.tourTitle}
+                                  className="h-full w-full object-cover"
+                                />
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="absolute right-1 top-1 rounded-full bg-white/90 text-red-500 hover:bg-white"
+                                  disabled={isSyncing}
+                                  onClick={() => handleRemoveItem(item.id)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="flex-1 space-y-4">
+                              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                <div className="space-y-1">
+                                  <Link
+                                    to={`/activity/${item.tourId}`}
+                                    className="text-base font-semibold text-foreground hover:text-primary"
+                                  >
+                                    {item.tourTitle}
+                                  </Link>
+                                  <p className="text-sm text-muted-foreground">
+                                    Ngày khởi hành: {item.scheduleTitle ?? "Chưa chọn lịch"}
+                                  </p>
+                                  <p className="text-sm text-muted-foreground">
+                                    Gói dịch vụ: <span className="font-medium text-foreground">{item.packageName ?? "Tiêu chuẩn"}</span>
+                                  </p>
+                                  <p className="text-sm text-muted-foreground">
+                                    Số lượng: <span className="font-medium text-foreground">{quantityLabel}</span>
+                                  </p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-lg font-semibold text-primary">
+                                    {formatter.format(item.totalPrice)}
+                                  </p>
+                                  {item.originalTotalPrice && item.originalTotalPrice > item.totalPrice ? (
+                                    <p className="text-sm text-muted-foreground line-through">
+                                      {formatter.format(item.originalTotalPrice)}
+                                    </p>
+                                  ) : null}
+                                  {item.promotionLabel ? (
+                                    <p className="text-xs font-medium text-emerald-600">{item.promotionLabel}</p>
+                                  ) : item.discountAmount && item.discountAmount > 0 ? (
+                                    <p className="text-xs font-medium text-emerald-600">
+                                      Tiết kiệm {formatter.format(item.discountAmount)}
+                                    </p>
+                                  ) : null}
+                                </div>
+                              </div>
+
+                            <div className="flex flex-col gap-4 mt-4">
                               <div className="grid gap-3 sm:grid-cols-2">
                                 <div className="flex items-center justify-between rounded-lg border px-3 py-2">
                                   <span className="text-sm text-muted-foreground">Người lớn</span>
@@ -795,8 +772,9 @@ const CartPage = () => {
                                 </Button>
                               </div>
                             </div>
-                          }
-                        />
+                            </div>
+                          </div>
+                        </div>
                       );
                     })}
                   </div>

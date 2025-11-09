@@ -1,5 +1,5 @@
 import { apiClient } from "@/lib/api-client";
-import type { Booking } from "@/services/bookingApi";
+import type { Booking, BookingStatus } from "@/services/bookingApi";
 import type { PromotionDiscountType } from "@/services/publicApi";
 
 export type PartnerBookingStatus = "pending" | "confirmed" | "cancelled" | "completed";
@@ -316,4 +316,67 @@ export async function updatePartnerRefundRequestStatus(
     return (res.data as { refund_request: PartnerRefundRequest }).refund_request;
   }
   return res.data as PartnerRefundRequest;
+}
+
+export interface PartnerDashboardResponse {
+  range_days?: number;
+  totals?: {
+    tours?: {
+      total?: number;
+      approved?: number;
+      pending?: number;
+      rejected?: number;
+    };
+    active_promotions?: number;
+    bookings?: number;
+  };
+  bookings?: {
+    by_status?: Record<string, number>;
+    range?: {
+      bookings?: number;
+      paid_bookings?: number;
+      revenue?: number;
+    };
+  };
+  revenue?: {
+    overall?: number;
+    range?: number;
+    daily?: Array<{
+      date: string;
+      revenue: number;
+      bookings: number;
+    }>;
+  };
+  upcoming_departures?: Array<{
+    id: string | number;
+    tour_title?: string | null;
+    start_date?: string | null;
+    seats_total?: number | null;
+    seats_available?: number | null;
+    booked_passengers?: number | null;
+  }>;
+  recent_bookings?: Array<{
+    id: string | number;
+    status?: string | null;
+    payment_status?: string | null;
+    total_price?: number | null;
+    booking_date?: string | null;
+    customer_name?: string | null;
+    tour?: {
+      title?: string | null;
+      name?: string | null;
+      destination?: string | null;
+    } | null;
+  }>;
+}
+
+export async function fetchPartnerDashboard(range = 30): Promise<PartnerDashboardResponse> {
+  const normalizedRange = Math.max(1, Math.min(180, range));
+  const res = await apiClient.get("/partner/dashboard", {
+    params: { range: normalizedRange },
+  });
+  if (res.data && typeof res.data === "object" && "data" in res.data) {
+    return (res.data as { data: PartnerDashboardResponse }).data;
+  }
+  return res.data as PartnerDashboardResponse;
 }

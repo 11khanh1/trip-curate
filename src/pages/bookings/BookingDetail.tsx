@@ -238,27 +238,6 @@ const resolveBookingAmount = (booking?: Booking | Record<string, unknown> | null
   );
 };
 
-const parseCurrencyInput = (raw: string): number | null => {
-  if (typeof raw !== "string") return null;
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-  const numericPart = trimmed.replace(/[^0-9.,]/g, "");
-  if (!numericPart) return null;
-  const lastComma = numericPart.lastIndexOf(",");
-  const lastDot = numericPart.lastIndexOf(".");
-  let normalized = numericPart;
-  if (lastComma > lastDot) {
-    normalized = numericPart.replace(/\./g, "").replace(",", ".");
-  } else {
-    normalized = numericPart.replace(/,/g, "");
-  }
-  const parsed = Number(normalized);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return null;
-  }
-  return parsed;
-};
-
 const didPaymentSucceed = (payment?: BookingPayment | null) => {
   if (!payment) return false;
   const normalized = normalizeStatus(payment.status);
@@ -789,11 +768,8 @@ const BookingDetailPage = () => {
       : typeof bookingRecord?.["currency"] === "string" && String(bookingRecord["currency"]).trim().length > 0
       ? String(bookingRecord["currency"]).trim()
       : "") || "VND";
-  const parsedRefundAmount = useMemo(() => parseCurrencyInput(refundForm.amount), [refundForm.amount]);
-  const effectiveRefundAmount = parsedRefundAmount ?? bookingTotalAmount ?? null;
+  const effectiveRefundAmount = bookingTotalAmount ?? null;
   const refundCurrency = (refundForm.currency.trim() || bookingCurrencyCandidate || "VND").toUpperCase();
-  const refundAmountError =
-    refundForm.amount.trim().length > 0 && !parsedRefundAmount ? "Số tiền hoàn không hợp lệ" : null;
   const normalizedContactName =
     contactName && contactName !== "—" ? contactName.replace(/\s+/g, " ").trim().toLowerCase() : "";
   const normalizedAccountName = refundForm.bank_account_name.replace(/\s+/g, " ").trim().toLowerCase();
@@ -807,13 +783,8 @@ const BookingDetailPage = () => {
     setRefundForm((prev) => ({
       ...prev,
       currency: prev.currency || bookingCurrencyCandidate,
-      amount:
-        prev.amount ||
-        (typeof bookingTotalAmount === "number" && bookingTotalAmount > 0
-          ? String(bookingTotalAmount)
-          : ""),
     }));
-  }, [bookingCurrencyCandidate, bookingTotalAmount]);
+  }, [bookingCurrencyCandidate]);
   const discountValue =
     coerceNumber(booking?.discount_total) ??
     coerceNumber(bookingRecord?.discountTotal) ??
@@ -895,7 +866,6 @@ const BookingDetailPage = () => {
     refundForm.bank_branch.trim().length > 0 &&
     refundForm.customer_message.trim().length > 0 &&
     refundCurrency.trim().length > 0 &&
-    !refundAmountError &&
     isAccountNameMatching;
   const isInvoiceFormValid =
     invoiceForm.customer_name.trim().length > 0 &&
@@ -1232,16 +1202,11 @@ const BookingDetailPage = () => {
                         />
                       </div>
                       <div className="grid gap-2">
-                        <label className="text-xs font-medium text-foreground">Số tiền đề nghị</label>
-                        <Input
-                          value={refundForm.amount}
-                          onChange={(event) => handleRefundFormChange("amount", event.target.value)}
-                          placeholder={bookingTotalAmount ? `${bookingTotalAmount}` : "3.600.000"}
-                        />
+                        <label className="text-xs font-medium text-foreground">Số tiền hoàn</label>
+                        <Input value={refundAmountLabel} readOnly disabled className="bg-slate-50" />
                         <p className="text-xs text-muted-foreground">
-                          Bỏ trống để hoàn toàn bộ số tiền đã thanh toán ({refundAmountLabel}).
+                          Hệ thống sẽ hoàn toàn bộ số tiền bạn đã thanh toán cho booking này.
                         </p>
-                        {refundAmountError && <p className="text-xs text-destructive">{refundAmountError}</p>}
                       </div>
                       <div className="grid gap-2">
                         <label className="text-xs font-medium text-foreground">Tiền tệ</label>
