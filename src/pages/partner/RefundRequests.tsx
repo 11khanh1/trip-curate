@@ -79,19 +79,45 @@ const formatDateTime = (value?: string | null) => {
   });
 };
 
+const PARTNER_REFUND_TIMELINE: Array<{ key: string; label: string }> = [
+  { key: "pending", label: "Tiếp nhận" },
+  { key: "await_customer_confirm", label: "Đã chuyển khoản" },
+  { key: "completed", label: "Khách xác nhận" },
+];
+
+const getPartnerTimelineIndex = (status?: string): number => {
+  switch (status) {
+    case "pending":
+    case "await_partner":
+      return 0;
+    case "await_customer_confirm":
+      return 1;
+    case "completed":
+    case "rejected":
+      return 2;
+    default:
+      return -1;
+  }
+};
+
 const PartnerRefundRequestsPage = () => {
   const { toast } = useToast();
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [tourFilter, setTourFilter] = useState("");
   const [dialogAction, setDialogAction] = useState<{
     request: PartnerRefundRequest | null;
     status: PartnerRefundRequestStatusPayload["status"] | null;
   }>({ request: null, status: null });
-  const [note, setNote] = useState("");
+  const [partnerMessage, setPartnerMessage] = useState("");
   const [proofFile, setProofFile] = useState<File | null>(null);
 
   const { data, isLoading, refetch, isFetching } = useQuery({
-    queryKey: ["partner-refund-requests"],
-    queryFn: fetchPartnerRefundRequests,
+    queryKey: ["partner-refund-requests", statusFilter, tourFilter],
+    queryFn: () =>
+      fetchPartnerRefundRequests({
+        status: statusFilter !== "all" ? statusFilter : undefined,
+        tour_id: tourFilter.trim() ? tourFilter.trim() : undefined,
+      }),
   });
 
   const mutation = useMutation({
@@ -119,24 +145,20 @@ const PartnerRefundRequestsPage = () => {
     },
   });
 
-  const filteredRequests = useMemo(() => {
-    if (!data) return [];
-    if (statusFilter === "all") return data;
-    return data.filter((request) => request.status === statusFilter);
-  }, [data, statusFilter]);
+  const filteredRequests = useMemo(() => data ?? [], [data]);
 
   const handleOpenAction = (
     request: PartnerRefundRequest,
     status: PartnerRefundRequestStatusPayload["status"],
   ) => {
     setDialogAction({ request, status });
-    setNote("");
+    setPartnerMessage("");
     setProofFile(null);
   };
 
   const closeDialog = () => {
     setDialogAction({ request: null, status: null });
-    setNote("");
+    setPartnerMessage("");
     setProofFile(null);
   };
 
@@ -157,10 +179,18 @@ const PartnerRefundRequestsPage = () => {
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!dialogAction.request || !dialogAction.status) return;
-    if (dialogAction.status === "rejected" && note.trim().length === 0) {
+    if (dialogAction.status === "rejected" && partnerMessage.trim().length === 0) {
       toast({
         title: "Chưa nhập lý do",
         description: "Vui lòng ghi chú lý do từ chối.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (dialogAction.status === "await_customer_confirm" && !proofFile) {
+      toast({
+        title: "Thiếu chứng từ",
+        description: "Vui lòng tải lên chứng từ chuyển khoản trước khi xác nhận đã hoàn.",
         variant: "destructive",
       });
       return;
@@ -170,7 +200,7 @@ const PartnerRefundRequestsPage = () => {
       id: dialogAction.request.id,
       payload: {
         status: dialogAction.status,
-        note: note.trim() || undefined,
+        partner_message: partnerMessage.trim() || undefined,
         proof: proofFile ?? undefined,
       },
     });
@@ -255,23 +285,40 @@ const PartnerRefundRequestsPage = () => {
       </div>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-4">
+        <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <CardTitle className="text-base">Danh sách yêu cầu</CardTitle>
-            <CardDescription>Chọn trạng thái để lọc các yêu cầu tương ứng.</CardDescription>
+            <CardDescription>Lọc theo trạng thái hoặc tour để xử lý chính xác.</CardDescription>
           </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder="Chọn trạng thái" />
-            </SelectTrigger>
-            <SelectContent>
-              {statusFilters.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Chọn trạng thái" />
+              </SelectTrigger>
+              <SelectContent>
+                {statusFilters.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input
+              value={tourFilter}
+              onChange={(event) => setTourFilter(event.target.value)}
+              placeholder="Tour ID"
+              className="w-[140px]"
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => refetch()}
+              disabled={isFetching}
+            >
+              <RefreshCcw className="mr-2 h-4 w-4" />
+              Làm mới
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -293,6 +340,7 @@ const PartnerRefundRequestsPage = () => {
                     <TableHead>Số tiền</TableHead>
                     <TableHead>Ngân hàng</TableHead>
                     <TableHead>Trạng thái</TableHead>
+                    <TableHead>Tiến trình</TableHead>
                     <TableHead>Ngày gửi</TableHead>
                     <TableHead className="text-right">Thao tác</TableHead>
                   </TableRow>
@@ -304,6 +352,11 @@ const PartnerRefundRequestsPage = () => {
                         <div className="font-medium">{request.booking_code ?? `#${request.booking_id}`}</div>
                         {request.reason && (
                           <p className="text-xs text-muted-foreground line-clamp-2">{request.reason}</p>
+                        )}
+                        {request.customer_message && (
+                          <p className="text-xs text-muted-foreground line-clamp-2">
+                            KH: {request.customer_message}
+                          </p>
                         )}
                       </TableCell>
                       <TableCell>
@@ -317,11 +370,38 @@ const PartnerRefundRequestsPage = () => {
                         <div className="font-medium text-foreground">{request.bank_account_name}</div>
                         <div>{request.bank_account_number}</div>
                         <div>{request.bank_name}</div>
+                        {request.bank_branch && <div>{request.bank_branch}</div>}
                       </TableCell>
                       <TableCell>
                         <Badge variant={statusVariants[request.status ?? "pending"] ?? "secondary"}>
                           {statusLabels[request.status ?? "pending"] ?? request.status}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {PARTNER_REFUND_TIMELINE.map((step, index) => {
+                            const baseClass = "rounded-full px-2 py-1 text-[11px]";
+                            const timelineIndex = getPartnerTimelineIndex(request.status);
+                            const isRejected = request.status === "rejected";
+                            const isRejectedStep =
+                              isRejected && index === PARTNER_REFUND_TIMELINE.length - 1;
+                            const isDone = timelineIndex > index && !isRejected;
+                            const isCurrent = timelineIndex === index && !isRejected;
+                            let chipClass = `${baseClass} bg-muted text-muted-foreground`;
+                            if (isRejectedStep) {
+                              chipClass = `${baseClass} bg-destructive/10 text-destructive`;
+                            } else if (isDone) {
+                              chipClass = `${baseClass} bg-emerald-100 text-emerald-700`;
+                            } else if (isCurrent) {
+                              chipClass = `${baseClass} bg-primary/10 text-primary`;
+                            }
+                            return (
+                              <span key={step.key} className={chipClass}>
+                                {isRejectedStep ? "Đã từ chối" : step.label}
+                              </span>
+                            );
+                          })}
+                        </div>
                       </TableCell>
                       <TableCell>{formatDateTime(request.submitted_at)}</TableCell>
                       <TableCell className="text-right space-y-2">
@@ -329,7 +409,11 @@ const PartnerRefundRequestsPage = () => {
                           size="sm"
                           variant="outline"
                           onClick={() => handleOpenAction(request, "await_customer_confirm")}
-                          disabled={request.status === "completed"}
+                          disabled={
+                            request.status === "completed" ||
+                            request.status === "await_customer_confirm" ||
+                            request.status === "rejected"
+                          }
                         >
                           <CheckCircle className="mr-2 h-4 w-4" />
                           Đã hoàn tiền
@@ -378,7 +462,7 @@ const PartnerRefundRequestsPage = () => {
               </div>
 
               <div className="space-y-2">
-                <LabelElement label={dialogAction.status === "rejected" ? "Lý do từ chối" : "Ghi chú"} />
+                <LabelElement label={dialogAction.status === "rejected" ? "Lý do từ chối" : "Ghi chú chuyển khoản"} />
                 <Textarea
                   rows={4}
                   placeholder={
@@ -386,13 +470,19 @@ const PartnerRefundRequestsPage = () => {
                       ? "Giải thích lý do từ chối hoàn tiền..."
                       : "Ghi chú thông tin chuyển khoản, số tham chiếu..."
                   }
-                  value={note}
-                  onChange={(event) => setNote(event.target.value)}
+                  value={partnerMessage}
+                  onChange={(event) => setPartnerMessage(event.target.value)}
                 />
               </div>
 
               <div className="space-y-2">
-                <LabelElement label="Chứng từ chuyển khoản (tùy chọn)" />
+                <LabelElement
+                  label={
+                    dialogAction.status === "await_customer_confirm"
+                      ? "Chứng từ chuyển khoản (bắt buộc)"
+                      : "Chứng từ chuyển khoản (tùy chọn)"
+                  }
+                />
                 <Input type="file" accept=".jpg,.jpeg,.png,.pdf" onChange={handleFileChange} />
                 <p className="text-xs text-muted-foreground">
                   Định dạng JPG/PNG/PDF, dung lượng tối đa 5MB.

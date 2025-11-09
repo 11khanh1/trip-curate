@@ -227,6 +227,24 @@ const formatDate = (value?: string | null) => {
   });
 };
 
+const resolveBookingTotal = (booking: Booking | Record<string, unknown>) => {
+  const record = booking as Record<string, unknown>;
+  return (
+    (typeof booking.total_price === "number" && Number.isFinite(booking.total_price)
+      ? booking.total_price
+      : null) ??
+    (typeof record.totalPrice === "number" && Number.isFinite(record.totalPrice)
+      ? (record.totalPrice as number)
+      : null) ??
+    (typeof booking.total_amount === "number" && Number.isFinite(booking.total_amount)
+      ? booking.total_amount
+      : null) ??
+    (typeof record.totalAmount === "number" && Number.isFinite(record.totalAmount)
+      ? (record.totalAmount as number)
+      : null)
+  );
+};
+
 const STAR_VALUES = [1, 2, 3, 4, 5] as const;
 const REVIEW_COMMENT_MAX_LENGTH = 500;
 
@@ -598,16 +616,20 @@ const BookingsList = () => {
                 booking.schedule?.title ??
                 (booking.schedule?.start_date ? `Lịch ${formatDate(booking.schedule.start_date)}` : undefined);
               const packageName = booking.package?.name ?? "Gói tiêu chuẩn";
-              const bookingTotal = booking.total_price ?? booking.total_amount ?? null;
+              const bookingTotal = resolveBookingTotal(booking);
               const appliedPromotions = Array.isArray(booking.promotions) ? booking.promotions : [];
               const discountTotal =
-                typeof booking.discount_total === "number"
+                (typeof booking.discount_total === "number" && Number.isFinite(booking.discount_total)
                   ? booking.discount_total
-                  : appliedPromotions.reduce(
-                      (sum, promo) =>
-                        typeof promo?.discount_amount === "number" ? sum + promo.discount_amount : sum,
-                      0,
-                    );
+                  : typeof (booking as Record<string, unknown>).discountTotal === "number" &&
+                      Number.isFinite((booking as Record<string, unknown>).discountTotal)
+                  ? ((booking as Record<string, unknown>).discountTotal as number)
+                  : null) ??
+                appliedPromotions.reduce(
+                  (sum, promo) =>
+                    typeof promo?.discount_amount === "number" ? sum + promo.discount_amount : sum,
+                  0,
+                );
               const bookingDate = booking.booking_date ?? booking.booked_at ?? booking.created_at ?? null;
               const totalAdults = booking.total_adults ?? booking.adults ?? 0;
               const totalChildren = booking.total_children ?? booking.children ?? 0;

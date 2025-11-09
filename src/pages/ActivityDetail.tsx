@@ -724,6 +724,8 @@ const seasonPriceValue = parseFloatOrNull(tour.season_price);
       ? `Giảm ${activityDiscount}%`
       : typeof autoPromotion?.description === "string" && autoPromotion.description.trim().length > 0
       ? autoPromotion.description.trim()
+      : autoPromotion?.code
+      ? `Mã ${autoPromotion.code}`
       : null;
 
   return {

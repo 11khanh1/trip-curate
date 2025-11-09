@@ -66,6 +66,7 @@ interface SepayPanelState {
   bookingCode?: string;
   paymentId?: string;
   amount?: number | null;
+  originalAmount?: number | null;
   currency: string;
   qrImage?: string | null;
   providerName: string;
@@ -159,6 +160,150 @@ const parseScheduleNumber = (...values: Array<unknown>): number | null => {
       if (Number.isFinite(parsed)) {
         return parsed;
       }
+    }
+  }
+  return null;
+};
+
+const parseNumberLike = (raw: string): number | null => {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const numericPart = trimmed.replace(/[^0-9.,-]/g, "");
+  if (!numericPart || /^-?$/.test(numericPart)) return null;
+
+  const lastComma = numericPart.lastIndexOf(",");
+  const lastDot = numericPart.lastIndexOf(".");
+  const lastSepIndex = Math.max(lastComma, lastDot);
+
+  const removeSeparators = (value: string) => value.replace(/[.,]/g, "");
+
+  if (lastSepIndex === -1) {
+    const parsed = Number(numericPart);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  const decimals = numericPart.length - lastSepIndex - 1;
+  const hasBothSeparators = lastComma !== -1 && lastDot !== -1;
+
+  let normalized: string;
+  if (decimals === 0 || (decimals === 3 && !hasBothSeparators)) {
+    normalized = removeSeparators(numericPart);
+  } else {
+    const before = numericPart.slice(0, lastSepIndex).replace(/[.,]/g, "");
+    const after = numericPart.slice(lastSepIndex + 1).replace(/[.,]/g, "");
+    normalized = `${before}.${after}`;
+  }
+
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const resolveNumericValue = (...values: Array<unknown>): number | null => {
+  for (const value of values) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+    if (typeof value === "string") {
+      const parsed = parseNumberLike(value);
+      if (parsed !== null) return parsed;
+    }
+  }
+  return null;
+};
+
+const FINAL_AMOUNT_KEYS = [
+  "total_amount",
+  "totalAmount",
+  "total_after_discount",
+  "totalAfterDiscount",
+  "price_after_discount",
+  "priceAfterDiscount",
+  "final_price",
+  "finalPrice",
+  "final_total",
+  "finalTotal",
+  "amount_due",
+  "amountDue",
+  "payable_amount",
+  "payableAmount",
+  "amount_payable",
+  "amountPayable",
+  "final_amount",
+  "finalAmount",
+  "grand_total",
+  "grandTotal",
+  "net_amount",
+  "netAmount",
+  "discounted_total",
+  "discountedTotal",
+  "amount_after_discount",
+  "amountAfterDiscount",
+  "balance_due",
+  "balanceDue",
+  "amount",
+  "total",
+  "value",
+];
+
+const ORIGINAL_AMOUNT_KEYS = [
+  "original_total",
+  "originalTotal",
+  "subtotal",
+  "subTotal",
+  "sub_total",
+  "listed_price",
+  "listedPrice",
+  "base_price",
+  "basePrice",
+  "total_price",
+  "totalPrice",
+  "price_before_discount",
+  "priceBeforeDiscount",
+  "gross_amount",
+  "grossAmount",
+  "list_price",
+  "listPrice",
+];
+
+const collectRecordCandidates = (...sources: Array<unknown>): Record<string, unknown>[] => {
+  const records: Record<string, unknown>[] = [];
+  const visit = (value: unknown) => {
+    if (!value) return;
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+    if (typeof value === "object") {
+      records.push(value as Record<string, unknown>);
+    }
+  };
+  sources.forEach(visit);
+  return records;
+};
+
+const resolveAmountFromRecord = (
+  record: Record<string, unknown> | null | undefined,
+  keys: string[],
+): number | null => {
+  if (!record) return null;
+  for (const key of keys) {
+    if (!(key in record)) continue;
+    const parsed = resolveNumericValue(record[key]);
+    if (typeof parsed === "number") {
+      return parsed;
+    }
+  }
+  return null;
+};
+
+const resolveAmountFromSources = (
+  sources: Array<Record<string, unknown> | null | undefined>,
+  keys: string[],
+): number | null => {
+  for (const source of sources) {
+    const value = resolveAmountFromRecord(source, keys);
+    if (typeof value === "number") {
+      return value;
     }
   }
   return null;
@@ -488,6 +633,104 @@ const BookingCheckout = () => {
       });
 
       const bookingEntity = response?.booking ?? null;
+      const bookingEntityRecord =
+        bookingEntity && typeof bookingEntity === "object"
+          ? ((bookingEntity as unknown) as Record<string, unknown>)
+          : null;
+      const responseUnknown: unknown = response;
+      const responseRecord =
+        responseUnknown && typeof responseUnknown === "object"
+          ? (responseUnknown as Record<string, unknown>)
+          : null;
+      const nestedPaymentRecords = collectRecordCandidates(
+        bookingEntity?.payments,
+        responseRecord?.payment,
+        responseRecord?.payments,
+        responseRecord?.payment_intent,
+        responseRecord?.paymentIntent,
+        responseRecord?.payment_info,
+        responseRecord?.paymentInfo,
+      );
+      const amountSourceRecords: Array<Record<string, unknown> | null | undefined> = [
+        bookingEntityRecord,
+        responseRecord,
+        ...nestedPaymentRecords,
+      ];
+      const rawFinalAmount = resolveAmountFromSources(amountSourceRecords, FINAL_AMOUNT_KEYS);
+      const rawPriceFieldAmount = resolveNumericValue(
+        bookingEntity?.total_price,
+        bookingEntityRecord?.totalPrice,
+        responseRecord?.["total_price"],
+        responseRecord?.["totalPrice"],
+      );
+      const preferredFinalAmount =
+        typeof rawFinalAmount === "number" && Number.isFinite(rawFinalAmount) ? rawFinalAmount : null;
+      const fallbackPriceAmount =
+        typeof rawPriceFieldAmount === "number" && Number.isFinite(rawPriceFieldAmount) ? rawPriceFieldAmount : null;
+      let normalizedTotalAmount = Math.max(0, preferredFinalAmount ?? fallbackPriceAmount ?? totalPrice);
+      const bookingPromotions =
+        bookingEntity?.promotions ??
+        (Array.isArray(response?.promotions) ? response.promotions : null);
+      const promotionsDiscountTotal =
+        Array.isArray(bookingPromotions)
+          ? bookingPromotions.reduce((sum, promo) => {
+              const value = resolveNumericValue(
+                promo?.discount_amount,
+                (promo as Record<string, unknown> | undefined)?.["discount_amount"],
+                (promo as Record<string, unknown> | undefined)?.["discountAmount"],
+              );
+              return typeof value === "number" ? sum + value : sum;
+            }, 0)
+          : null;
+      const explicitDiscountTotal = resolveNumericValue(
+        bookingEntity?.discount_total,
+        bookingEntityRecord?.discountTotal,
+        bookingEntityRecord?.["discount_amount"],
+        bookingEntityRecord?.["discountAmount"],
+        bookingEntityRecord?.["promotion_discount"],
+        bookingEntityRecord?.["promotionDiscount"],
+        response?.discount_total,
+        responseRecord?.discountTotal,
+        responseRecord?.["discount_amount"],
+        responseRecord?.["discountAmount"],
+        responseRecord?.["promotion_discount"],
+        responseRecord?.["promotionDiscount"],
+      );
+      const effectiveDiscountTotal =
+        typeof explicitDiscountTotal === "number" ? explicitDiscountTotal : promotionsDiscountTotal;
+      const sourcedOriginalAmount = resolveAmountFromSources(amountSourceRecords, ORIGINAL_AMOUNT_KEYS);
+      const preferredOriginalAmount =
+        typeof sourcedOriginalAmount === "number" && Number.isFinite(sourcedOriginalAmount)
+          ? sourcedOriginalAmount
+          : null;
+      const derivedOriginalAmount =
+        preferredOriginalAmount ??
+        fallbackPriceAmount ??
+        (typeof normalizedTotalAmount === "number" &&
+        typeof effectiveDiscountTotal === "number" &&
+        effectiveDiscountTotal > 0
+          ? normalizedTotalAmount + effectiveDiscountTotal
+          : null);
+      const normalizedOriginalBase =
+        typeof derivedOriginalAmount === "number" && derivedOriginalAmount > 0 ? derivedOriginalAmount : null;
+      const normalizedOriginalAmount =
+        normalizedOriginalBase !== null && normalizedOriginalBase > normalizedTotalAmount
+          ? normalizedOriginalBase
+          : null;
+      const discountOverrideEligible =
+        typeof normalizedOriginalBase === "number" &&
+        typeof effectiveDiscountTotal === "number" &&
+        effectiveDiscountTotal > 0;
+      if (
+        discountOverrideEligible &&
+        (!preferredFinalAmount ||
+          Math.round(normalizedTotalAmount) >= Math.round(normalizedOriginalBase))
+      ) {
+        const recalculated = normalizedOriginalBase - effectiveDiscountTotal;
+        if (recalculated >= 0) {
+          normalizedTotalAmount = recalculated;
+        }
+      }
       const bookingIdentifier =
         bookingEntity?.id ??
         bookingEntity?.uuid ??
@@ -505,12 +748,7 @@ const BookingCheckout = () => {
               booking_id: bookingIdentifier ?? undefined,
               booking_code: bookingCode,
               payment_method: payload.payment_method,
-              total_amount:
-                typeof bookingEntity?.total_price === "number"
-                  ? bookingEntity.total_price
-                  : typeof bookingEntity?.total_amount === "number"
-                  ? bookingEntity.total_amount
-                  : totalPrice,
+              total_amount: normalizedTotalAmount,
             },
             context: {
               adults: payload.adults,
@@ -562,36 +800,14 @@ const BookingCheckout = () => {
           deriveQrFromPaymentUrl(response.payment_url) ??
           deriveQrFromPaymentUrl(response.paymentUrl) ??
           deriveQrFromPaymentUrl(bookingPaymentUrl);
-        const bookingPromotions =
-          response.booking?.promotions ??
-          (Array.isArray(response.promotions) ? response.promotions : null);
-        const bookingDiscountTotal =
-          typeof response.booking?.discount_total === "number"
-            ? response.booking.discount_total
-            : typeof response.discount_total === "number"
-            ? response.discount_total
-            : null;
-        const inferredDiscountTotal =
-          bookingDiscountTotal ??
-          (Array.isArray(bookingPromotions)
-            ? bookingPromotions.reduce(
-                (sum, promo) =>
-                  typeof promo?.discount_amount === "number" ? sum + promo.discount_amount : sum,
-                0,
-              )
-            : null);
+        const inferredDiscountTotal = effectiveDiscountTotal ?? null;
 
         if (bookingIdentifier && directPaymentUrl) {
           const derivedOrderCode =
             extractOrderCode(directPaymentUrl) ??
             bookingCode ??
             (response.payment_id ? String(response.payment_id) : undefined);
-          const amountFromResponse =
-            typeof bookingEntity?.total_price === "number"
-              ? bookingEntity.total_price
-              : typeof bookingEntity?.total_amount === "number"
-              ? bookingEntity.total_amount
-              : totalPrice;
+          const amountFromResponse = normalizedTotalAmount;
           const currencyFromResponse =
             (bookingEntity?.currency && String(bookingEntity.currency).trim()) || displayCurrency;
 
@@ -602,6 +818,7 @@ const BookingCheckout = () => {
             bookingCode,
             paymentId: response.payment_id ? String(response.payment_id) : undefined,
             amount: amountFromResponse,
+            originalAmount: normalizedOriginalAmount ?? null,
             currency: currencyFromResponse,
             qrImage: resolvedQrImage ?? null,
             providerName,
@@ -613,12 +830,7 @@ const BookingCheckout = () => {
         }
 
         if (resolvedQrImage && bookingIdentifier) {
-          const amountFromResponse =
-            typeof bookingEntity?.total_price === "number"
-              ? bookingEntity.total_price
-              : typeof bookingEntity?.total_amount === "number"
-              ? bookingEntity.total_amount
-              : totalPrice;
+          const amountFromResponse = normalizedTotalAmount;
           const currencyFromResponse =
             (bookingEntity?.currency && String(bookingEntity.currency).trim()) || displayCurrency;
 
@@ -630,6 +842,7 @@ const BookingCheckout = () => {
             bookingCode,
             paymentId: response.payment_id ? String(response.payment_id) : undefined,
             amount: amountFromResponse,
+            originalAmount: normalizedOriginalAmount ?? null,
             currency: currencyFromResponse,
             qrImage: resolvedQrImage ?? null,
             providerName,
@@ -752,30 +965,46 @@ const BookingCheckout = () => {
 
   const sepayAmountLabel = sepayPanel ? formatCurrency(sepayPanel.amount, sepayPanel.currency) : "";
   const sepayFeeLabel = sepayPanel ? formatCurrency(0, sepayPanel.currency) : "";
-  const sepayDiscountTotal =
-    typeof sepayPanel?.discountTotal === "number"
-      ? sepayPanel.discountTotal
-      : Array.isArray(sepayPanel?.promotions)
-      ? sepayPanel.promotions.reduce(
-          (sum, promo) =>
-            typeof promo?.discount_amount === "number" ? sum + promo.discount_amount : sum,
-          0,
-        )
+  const sepayAppliedPromotions =
+    sepayPanel?.promotions?.filter((promo): promo is BookingPromotion => Boolean(promo)) ?? [];
+  const sepayPromotionDiscountTotal =
+    sepayAppliedPromotions.length > 0
+      ? sepayAppliedPromotions.reduce((sum, promo) => {
+          const promoRecord =
+            promo && typeof promo === "object" ? (promo as Record<string, unknown>) : null;
+          const value = resolveNumericValue(promo?.discount_amount, promoRecord?.["discountAmount"]);
+          return typeof value === "number" ? sum + value : sum;
+        }, 0)
       : null;
-  const sepayOriginalAmount =
-    typeof sepayPanel?.amount === "number" && typeof sepayDiscountTotal === "number"
+  const explicitSepayDiscount =
+    typeof sepayPanel?.discountTotal === "number" && sepayPanel.discountTotal > 0
+      ? sepayPanel.discountTotal
+      : null;
+  const sepayDiscountTotal =
+    explicitSepayDiscount ??
+    (typeof sepayPromotionDiscountTotal === "number" && sepayPromotionDiscountTotal > 0
+      ? sepayPromotionDiscountTotal
+      : null);
+  const sepayOriginalAmountCandidate =
+    typeof sepayPanel?.originalAmount === "number"
+      ? sepayPanel.originalAmount
+      : typeof sepayPanel?.amount === "number" && typeof sepayDiscountTotal === "number"
       ? sepayPanel.amount + sepayDiscountTotal
       : null;
+  const sepayOriginalAmount =
+    typeof sepayOriginalAmountCandidate === "number" &&
+    typeof sepayPanel?.amount === "number" &&
+    sepayOriginalAmountCandidate > sepayPanel.amount
+      ? sepayOriginalAmountCandidate
+      : null;
   const sepayDiscountLabel =
-    sepayPanel && typeof sepayDiscountTotal === "number"
+    typeof sepayDiscountTotal === "number" && sepayDiscountTotal > 0 && sepayPanel
       ? formatCurrency(sepayDiscountTotal, sepayPanel.currency)
       : "";
   const sepayOriginalLabel =
     sepayPanel && typeof sepayOriginalAmount === "number"
       ? formatCurrency(sepayOriginalAmount, sepayPanel.currency)
       : "";
-  const sepayAppliedPromotions =
-    sepayPanel?.promotions?.filter((promo): promo is BookingPromotion => Boolean(promo)) ?? [];
   const sepayStatusNormalized = normalizeStatus(
     sepayPaymentStatus?.status ?? sepayPaymentStatus?.payment?.status,
   );

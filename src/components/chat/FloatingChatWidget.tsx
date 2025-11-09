@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
-import { sendChatbotMessage, type ChatbotLanguage } from "@/services/chatbotApi";
+import { sendChatbotMessage, type ChatbotLanguage, type ChatbotSource } from "@/services/chatbotApi";
 import { useChatWidget } from "@/context/ChatWidgetContext";
 
 const MAX_CHATBOT_MESSAGE_LENGTH = 2000;
@@ -37,8 +37,32 @@ const FloatingChatWidget = () => {
       answer?: string;
       language: ChatbotLanguage;
       error?: string;
+      sources?: ChatbotSource[];
     }>
   >([]);
+
+  const normalizeSources = (sources?: Array<ChatbotSource | string>): ChatbotSource[] => {
+    if (!Array.isArray(sources)) return [];
+    return sources
+      .map((entry) => {
+        if (typeof entry === "string") {
+          const urlCandidate = entry.startsWith("http") ? entry : undefined;
+          return {
+            title: entry,
+            url: urlCandidate,
+          };
+        }
+        if (entry && typeof entry === "object") {
+          return {
+            title: entry.title ?? entry.url ?? undefined,
+            url: entry.url ?? undefined,
+            snippet: entry.snippet ?? undefined,
+          };
+        }
+        return null;
+      })
+      .filter((item): item is ChatbotSource => Boolean(item));
+  };
 
   const chatbotMutation = useMutation({
     mutationFn: sendChatbotMessage,
@@ -99,8 +123,14 @@ const FloatingChatWidget = () => {
       { message: trimmed, language: turnLanguage },
       {
         onSuccess: (data) => {
+          const normalizedSources = normalizeSources(
+            (data.sources as Array<ChatbotSource | string> | undefined) ?? undefined,
+          );
           setChatHistory((prev) =>
-            prev.map((item) => (item.id === turnId ? { ...item, answer: data.reply, language: data.language } : item)),
+            prev.map((item) =>
+              item.id === turnId
+                ? { ...item, answer: data.reply, language: data.language, sources: normalizedSources }
+                : item),
           );
         },
         onError: (error) => {
@@ -190,10 +220,36 @@ const FloatingChatWidget = () => {
                               </div>
                             </div>
                             {turn.answer ? (
-                              <div className="text-left">
+                              <div className="space-y-2 text-left">
                                 <div className="inline-flex max-w-full rounded-2xl rounded-bl-sm bg-white px-3 py-2 text-xs text-slate-700 shadow-sm">
                                   {turn.answer}
                                 </div>
+                                {turn.sources && turn.sources.length > 0 && (
+                                  <div className="rounded-lg border bg-white/60 px-3 py-2 text-[11px] text-muted-foreground">
+                                    <p className="font-semibold text-foreground">Nguồn tham khảo</p>
+                                    <ul className="mt-1 space-y-1">
+                                      {turn.sources.map((source, index) => (
+                                        <li key={`${source.url ?? source.title ?? index}`} className="leading-relaxed">
+                                          {source.url ? (
+                                            <a
+                                              href={source.url}
+                                              target="_blank"
+                                              rel="noreferrer"
+                                              className="text-primary underline underline-offset-2"
+                                            >
+                                              {source.title ?? source.url}
+                                            </a>
+                                          ) : (
+                                            <span className="text-foreground">{source.title ?? `Nguồn ${index + 1}`}</span>
+                                          )}
+                                          {source.snippet && (
+                                            <p className="text-[11px] text-muted-foreground">{source.snippet}</p>
+                                          )}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
                               </div>
                             ) : turn.error ? (
                               <p className="text-left text-xs text-destructive">{turn.error}</p>

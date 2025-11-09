@@ -92,6 +92,24 @@ const formatCurrency = (value?: number | null, currency = "VND") => {
   }
 };
 
+const resolveBookingTotal = (booking: Booking | Record<string, unknown>) => {
+  const record = booking as Record<string, unknown>;
+  return (
+    (typeof booking.total_price === "number" && Number.isFinite(booking.total_price)
+      ? booking.total_price
+      : null) ??
+    (typeof record.totalPrice === "number" && Number.isFinite(record.totalPrice)
+      ? (record.totalPrice as number)
+      : null) ??
+    (typeof booking.total_amount === "number" && Number.isFinite(booking.total_amount)
+      ? booking.total_amount
+      : null) ??
+    (typeof record.totalAmount === "number" && Number.isFinite(record.totalAmount)
+      ? (record.totalAmount as number)
+      : null)
+  );
+};
+
 const formatDate = (value?: string | null) => {
   if (!value) return "Đang cập nhật";
   const date = new Date(value);
@@ -238,15 +256,12 @@ const OrderHistory = ({ title = "Đơn hàng gần đây", limit = 5, emptyMessa
                       {booking.tour.destination}
                     </p>
                   )}
-                  {(booking.total_price ?? booking.total_amount) != null && (
+                  {resolveBookingTotal(booking) != null && (
                     <p className="flex items-center gap-2 text-foreground">
                       <Clock className="h-4 w-4 text-primary" />
                       Tổng tiền:{" "}
                       <span className="font-medium">
-                        {formatCurrency(
-                          booking.total_price ?? booking.total_amount ?? 0,
-                          currency,
-                        )}
+                        {formatCurrency(resolveBookingTotal(booking), currency)}
                       </span>
                     </p>
                   )}

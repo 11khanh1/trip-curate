@@ -7,9 +7,17 @@ export interface ChatbotRequestPayload {
   language?: ChatbotLanguage;
 }
 
+export interface ChatbotSource {
+  title?: string | null;
+  url?: string | null;
+  snippet?: string | null;
+  [key: string]: unknown;
+}
+
 export interface ChatbotResponse {
   reply: string;
   language: ChatbotLanguage;
+  sources?: ChatbotSource[] | string[];
 }
 
 const MAX_MESSAGE_LENGTH = 2000;

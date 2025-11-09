@@ -1,5 +1,5 @@
 import { useNavigate, useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import {
@@ -40,6 +40,7 @@ import {
   confirmRefundRequest,
   createRefundRequest,
   fetchBookingDetail,
+  fetchRefundRequests,
   initiateBookingPayment,
   requestInvoice,
   downloadBookingInvoice,
@@ -48,9 +49,10 @@ import {
   type BookingPassenger,
   type BookingPayment,
   type BookingPaymentIntentResponse,
-  type BookingRefundRequest,
   type BookingInvoice,
+  type BookingRefundRequest,
   type CreateRefundRequestPayload,
+  type RefundRequestStatus,
 } from "@/services/bookingApi";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -102,6 +104,16 @@ const statusLabel = (status?: string) => {
   }
 };
 
+const deliveryMethodLabel = (method?: string) => {
+  switch (method) {
+    case "email":
+      return "Gửi qua email";
+    case "download":
+    default:
+      return "Tải về";
+  }
+};
+
 const refundStatusLabel = (status?: string) => {
   switch (status) {
     case "pending":
@@ -133,13 +145,24 @@ const refundStatusVariant = (status?: string) => {
   }
 };
 
-const deliveryMethodLabel = (method?: string) => {
-  switch (method) {
-    case "email":
-      return "Gửi qua email";
-    case "download":
+const REFUND_TIMELINE_STEPS: Array<{ key: RefundRequestStatus; label: string }> = [
+  { key: "pending", label: "Tiếp nhận" },
+  { key: "await_customer_confirm", label: "Đã chuyển khoản" },
+  { key: "completed", label: "Khách xác nhận" },
+];
+
+const getRefundStepIndex = (status?: RefundRequestStatus): number => {
+  switch (status) {
+    case "pending":
+    case "await_partner":
+      return 0;
+    case "await_customer_confirm":
+      return 1;
+    case "completed":
+    case "rejected":
+      return 2;
     default:
-      return "Tải về";
+      return -1;
   }
 };
 
@@ -198,6 +221,40 @@ const coerceNumber = (value: unknown): number | undefined => {
   }
   return undefined;
 };
+
+const resolveBookingAmount = (booking?: Booking | Record<string, unknown> | null): number | null => {
+  if (!booking) return null;
+  const record = booking as Record<string, unknown>;
+  return (
+    coerceNumber((booking as Booking).total_price) ??
+    coerceNumber(record?.totalPrice) ??
+    coerceNumber((booking as Booking).total_amount) ??
+    coerceNumber(record?.totalAmount) ??
+    null
+  );
+};
+
+const parseCurrencyInput = (raw: string): number | null => {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const numericPart = trimmed.replace(/[^0-9.,]/g, "");
+  if (!numericPart) return null;
+  const lastComma = numericPart.lastIndexOf(",");
+  const lastDot = numericPart.lastIndexOf(".");
+  let normalized = numericPart;
+  if (lastComma > lastDot) {
+    normalized = numericPart.replace(/\./g, "").replace(",", ".");
+  } else {
+    normalized = numericPart.replace(/,/g, "");
+  }
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+  return parsed;
+};
+
 
 const summarizeDocumentRequirements = (requiresPassport?: boolean | null, requiresVisa?: boolean | null) => {
   const needsPassport = coerceBoolean(requiresPassport) === true;
@@ -273,7 +330,10 @@ const BookingDetailPage = () => {
     bank_account_name: "",
     bank_account_number: "",
     bank_name: "",
-    reason: "",
+    bank_branch: "",
+    amount: "",
+    currency: "VND",
+    customer_message: "",
   });
   const [invoiceForm, setInvoiceForm] = useState({
     customer_name: "",
@@ -282,6 +342,7 @@ const BookingDetailPage = () => {
     customer_email: "",
     delivery_method: "download" as "download" | "email",
   });
+  const refundSectionRef = useRef<HTMLDivElement | null>(null);
 
   const {
     data: booking,
@@ -293,30 +354,26 @@ const BookingDetailPage = () => {
     queryFn: () => fetchBookingDetail(String(id)),
     enabled: Boolean(id),
   });
+  const bookingRecord = (booking ?? null) as Record<string, unknown>;
+  const {
+    data: refundRequestList = [],
+    isFetching: isRefundListLoading,
+    refetch: refetchRefundRequests,
+  } = useQuery<BookingRefundRequest[]>({
+    queryKey: ["refund-requests", id],
+    queryFn: () => fetchRefundRequests(),
+    enabled: Boolean(id),
+  });
 
   const cancelMutation = useMutation({
     mutationFn: () => cancelBooking(String(id)),
     onSuccess: (response) => {
-      const refund = response?.refund ?? null;
       const baseTitle = response?.message ?? "Hủy booking thành công";
-      const refundDetails: string[] = [];
-      if (refund) {
-        if (typeof refund.amount === "number" && Number.isFinite(refund.amount)) {
-          refundDetails.push(`Hoàn ${formatCurrency(refund.amount, booking?.currency ?? "VND")}`);
-        }
-        if (typeof refund.rate === "number") {
-          refundDetails.push(`Tỷ lệ ${formatRefundRateLabel(refund.rate)}`);
-        }
-        if (refund.policy_days_before !== undefined && refund.policy_days_before !== null) {
-          refundDetails.push(`Áp dụng ${formatCancellationWindow(refund.policy_days_before)}`);
-        }
+      let description = "Chúng tôi đã gửi email xác nhận hủy cho bạn.";
+      if (paymentStatusNormalized === "paid") {
+        description =
+          "Đơn đã hủy. Vui lòng sử dụng nút “Yêu cầu hoàn tiền” bên dưới để gửi thông tin ngân hàng.";
       }
-
-      const description =
-        refundDetails.length > 0
-          ? refundDetails.join(" · ")
-          : "Chúng tôi đã gửi email xác nhận hủy cho bạn.";
-
       toast({
         title: baseTitle,
         description,
@@ -351,9 +408,24 @@ const BookingDetailPage = () => {
 
   const bookingPaymentUrl = resolveBookingPaymentUrl(booking);
   const paymentMethod = (booking?.payment_method ?? "").toString().toLowerCase();
-  const paymentStatusNormalized = (booking?.payment_status ?? booking?.status ?? "")
-    .toString()
-    .toLowerCase();
+  const successfulPaymentStatus = (() => {
+    const payments = booking?.payments;
+    if (!Array.isArray(payments)) return undefined;
+    const matched = payments.find((payment) => {
+      const normalized = (payment?.status ?? "").toString().trim().toLowerCase();
+      return normalized === "paid" || normalized === "success" || normalized === "completed";
+    });
+    return matched?.status ? String(matched.status) : undefined;
+  })();
+  const resolvedPaymentStatus =
+    coalesceString(
+      booking?.payment_status,
+      (bookingRecord?.["payment_status"] as string | undefined) ??
+        (bookingRecord?.["paymentStatus"] as string | undefined),
+      successfulPaymentStatus,
+    ) ?? (booking?.status ?? "");
+  const paymentStatusNormalized = resolvedPaymentStatus.toString().trim().toLowerCase();
+  const hasResolvedPaymentStatus = resolvedPaymentStatus.toString().trim().length > 0;
   const isPaid =
     paymentStatusNormalized === "paid" ||
     paymentStatusNormalized === "success" ||
@@ -410,15 +482,17 @@ const BookingDetailPage = () => {
     onSuccess: () => {
       toast({
         title: "Đã gửi yêu cầu hoàn tiền",
-        description: "Chúng tôi sẽ liên hệ sau khi xử lý.",
+        description: "Chúng tôi sẽ liên hệ ngay khi xử lý xong.",
       });
       queryClient.invalidateQueries({ queryKey: ["booking-detail", id] });
-      queryClient.invalidateQueries({ queryKey: ["refund-requests"] });
+      void refetchRefundRequests();
       setRefundForm((prev) => ({
         ...prev,
         bank_account_number: "",
         bank_name: "",
-        reason: "",
+        bank_branch: "",
+        amount: "",
+        customer_message: "",
       }));
     },
     onError: (error: unknown) => {
@@ -439,7 +513,7 @@ const BookingDetailPage = () => {
         description: "Cảm ơn bạn đã xác nhận hoàn tiền.",
       });
       queryClient.invalidateQueries({ queryKey: ["booking-detail", id] });
-      queryClient.invalidateQueries({ queryKey: ["refund-requests"] });
+      void refetchRefundRequests();
     },
     onError: (error: unknown) => {
       console.error("Không thể xác nhận hoàn tiền:", error);
@@ -559,14 +633,19 @@ const BookingDetailPage = () => {
 
   const handleSubmitRefundRequest = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    refundRequestMutation.mutate({
+    const payload: CreateRefundRequestPayload = {
       bank_account_name: refundForm.bank_account_name.trim(),
       bank_account_number: refundForm.bank_account_number.trim(),
       bank_name: refundForm.bank_name.trim(),
-      reason: refundForm.reason.trim(),
-    });
+      bank_branch: refundForm.bank_branch.trim(),
+      customer_message: refundForm.customer_message.trim(),
+      currency: refundCurrency,
+    };
+    if (typeof effectiveRefundAmount === "number" && effectiveRefundAmount > 0) {
+      payload.amount = Math.round(effectiveRefundAmount);
+    }
+    refundRequestMutation.mutate(payload);
   };
-
   const handleSubmitInvoiceRequest = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     invoiceRequestMutation.mutate();
@@ -678,11 +757,42 @@ const BookingDetailPage = () => {
       : booking?.tour?.id != null
       ? String(booking?.tour?.id)
       : null;
-  const bookingRecord = booking as Record<string, unknown>;
+  const bookingTotalAmount = resolveBookingAmount(booking);
+  const bookingCurrencyCandidate =
+    (typeof booking?.currency === "string" && booking.currency.trim().length > 0
+      ? booking.currency.trim()
+      : typeof bookingRecord?.["currency"] === "string" && String(bookingRecord["currency"]).trim().length > 0
+      ? String(bookingRecord["currency"]).trim()
+      : "") || "VND";
+  const parsedRefundAmount = useMemo(() => parseCurrencyInput(refundForm.amount), [refundForm.amount]);
+  const effectiveRefundAmount = parsedRefundAmount ?? bookingTotalAmount ?? null;
+  const refundCurrency = (refundForm.currency.trim() || bookingCurrencyCandidate || "VND").toUpperCase();
+  const refundAmountError =
+    refundForm.amount.trim().length > 0 && !parsedRefundAmount ? "Số tiền hoàn không hợp lệ" : null;
+  const normalizedContactName =
+    contactName && contactName !== "—" ? contactName.replace(/\s+/g, " ").trim().toLowerCase() : "";
+  const normalizedAccountName = refundForm.bank_account_name.replace(/\s+/g, " ").trim().toLowerCase();
+  const isAccountNameMatching =
+    !normalizedContactName || normalizedContactName === normalizedAccountName;
+  const refundAmountLabel =
+    typeof effectiveRefundAmount === "number"
+      ? formatCurrency(effectiveRefundAmount, refundCurrency)
+      : "Sẽ cập nhật sau";
+  useEffect(() => {
+    setRefundForm((prev) => ({
+      ...prev,
+      currency: prev.currency || bookingCurrencyCandidate,
+      amount:
+        prev.amount ||
+        (typeof bookingTotalAmount === "number" && bookingTotalAmount > 0
+          ? String(bookingTotalAmount)
+          : ""),
+    }));
+  }, [bookingCurrencyCandidate, bookingTotalAmount]);
   const discountValue =
-    typeof booking?.discount_total === "number" && Number.isFinite(booking.discount_total)
-      ? booking.discount_total
-      : null;
+    coerceNumber(booking?.discount_total) ??
+    coerceNumber(bookingRecord?.discountTotal) ??
+    null;
   const hasDiscount = discountValue !== null && discountValue > 0;
   const promotionCodes =
     Array.isArray(booking?.promotions) && booking.promotions.length > 0
@@ -690,12 +800,50 @@ const BookingDetailPage = () => {
           .map((promotion) => promotion?.code)
           .filter((code): code is string => Boolean(code && code.trim()))
       : [];
-  const refundRequests = Array.isArray(booking?.refund_requests)
-    ? (booking?.refund_requests as BookingRefundRequest[])
-    : [];
+  const derivedRefundRequests = useMemo<BookingRefundRequest[]>(() => {
+    const list = Array.isArray(refundRequestList) ? (refundRequestList as BookingRefundRequest[]) : [];
+    const fallback = Array.isArray(booking?.refund_requests)
+      ? (booking?.refund_requests as BookingRefundRequest[])
+      : [];
+    const merged = list.length > 0 ? list : fallback;
+    if (!Array.isArray(merged)) return [];
+    return merged.filter((request) => {
+      if (!request) return false;
+      const requestBookingId =
+        request.booking_id ??
+        (request as Record<string, unknown>)?.["bookingId"] ??
+        (request as Record<string, unknown>)?.["bookingID"];
+      if (!requestBookingId) return true;
+      return String(requestBookingId) === String(booking?.id ?? id);
+    });
+  }, [booking?.id, booking?.refund_requests, id, refundRequestList]);
   const invoiceRecord = (bookingRecord?.["invoice"] as BookingInvoice | null) ?? null;
   const invoice = booking?.invoice ?? invoiceRecord;
-  const canRequestRefund = Boolean(booking?.status === "cancelled" && isPaid);
+  const hasRefundInProgress = derivedRefundRequests.some((request) => {
+    const status = (request.status ?? "").toString().trim().toLowerCase();
+    return status === "pending" || status === "await_partner" || status === "await_customer_confirm";
+  });
+  const hasRefundCompleted = derivedRefundRequests.some(
+    (request) => (request.status ?? "").toString().trim().toLowerCase() === "completed",
+  );
+  const canRequestRefund = Boolean(
+    booking?.status === "cancelled" && paymentStatusNormalized === "paid" && !hasRefundInProgress && !hasRefundCompleted,
+  );
+  const refundIneligibleReason = (() => {
+    if (hasRefundInProgress) {
+      return "Bạn đã gửi yêu cầu hoàn tiền. Vui lòng theo dõi tiến trình bên dưới.";
+    }
+    if (hasRefundCompleted || paymentStatusNormalized === "refunded") {
+      return "Đơn này đã hoàn tiền thành công. Xem lịch sử để kiểm tra chi tiết.";
+    }
+    if (booking?.status !== "cancelled") {
+      return "Chỉ hỗ trợ hoàn tiền sau khi bạn hủy booking.";
+    }
+    if (paymentStatusNormalized !== "paid") {
+      return "Hệ thống chỉ mở hoàn tiền cho các booking đã thanh toán thành công.";
+    }
+    return "Chưa đủ điều kiện để tạo yêu cầu hoàn tiền.";
+  })();
   const canRequestInvoice = Boolean(
     booking?.status === "completed" && isPaid && !invoice && !invoiceRequestMutation.isPending,
   );
@@ -703,7 +851,11 @@ const BookingDetailPage = () => {
     refundForm.bank_account_name.trim().length > 0 &&
     refundForm.bank_account_number.trim().length > 0 &&
     refundForm.bank_name.trim().length > 0 &&
-    refundForm.reason.trim().length > 0;
+    refundForm.bank_branch.trim().length > 0 &&
+    refundForm.customer_message.trim().length > 0 &&
+    refundCurrency.trim().length > 0 &&
+    !refundAmountError &&
+    isAccountNameMatching;
   const isInvoiceFormValid =
     invoiceForm.customer_name.trim().length > 0 &&
     invoiceForm.customer_tax_code.trim().length > 0 &&
@@ -770,9 +922,9 @@ const BookingDetailPage = () => {
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant={statusVariant(booking.status)}>{statusLabel(booking.status)}</Badge>
-                {booking.payment_status && (
-                  <Badge variant={statusVariant(booking.payment_status)}>
-                    Thanh toán: {statusLabel(booking.payment_status)}
+                {hasResolvedPaymentStatus && (
+                  <Badge variant={statusVariant(resolvedPaymentStatus)}>
+                    Thanh toán: {statusLabel(resolvedPaymentStatus)}
                   </Badge>
                 )}
               </div>
@@ -843,10 +995,7 @@ const BookingDetailPage = () => {
                     <div>
                       <p className="font-medium text-foreground">Tổng tiền</p>
                       <p className="text-base font-semibold text-foreground">
-                        {formatCurrency(
-                          booking.total_price ?? booking.total_amount,
-                          booking.currency ?? "VND",
-                        )}
+                        {formatCurrency(bookingTotalAmount, booking?.currency ?? "VND")}
                       </p>
                       {booking.payment_method && (
                         <p>Phương thức: {booking.payment_method === "sepay" ? "Thanh toán Sepay" : "Thanh toán tại quầy"}</p>
@@ -903,12 +1052,20 @@ const BookingDetailPage = () => {
                   {paymentButtonState.label}
                 </Button>
                 {canCancel && (
+                <Button
+                  variant="destructive"
+                  onClick={() => cancelMutation.mutate()}
+                  disabled={cancelMutation.isPending}
+                >
+                  {cancelMutation.isPending ? "Đang hủy..." : "Hủy booking"}
+                </Button>
+                )}
+                {canRequestRefund && (
                   <Button
-                    variant="destructive"
-                    onClick={() => cancelMutation.mutate()}
-                    disabled={cancelMutation.isPending}
+                    variant="secondary"
+                    onClick={() => refundSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
                   >
-                    {cancelMutation.isPending ? "Đang hủy..." : "Hủy booking"}
+                    Yêu cầu hoàn tiền
                   </Button>
                 )}
               </CardFooter>
@@ -960,6 +1117,254 @@ const BookingDetailPage = () => {
             )}
 
             <div className="grid gap-6 lg:grid-cols-2">
+              <Card ref={refundSectionRef}>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <RefreshCcw className="h-5 w-5 text-primary" />
+                    Hoàn tiền
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Gửi yêu cầu hoàn tiền hoặc theo dõi tiến trình xử lý. Chỉ áp dụng cho booking đã hủy và đã thanh toán.
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-4 text-sm text-muted-foreground">
+                  {canRequestRefund ? (
+                    <form className="space-y-3 text-sm" onSubmit={handleSubmitRefundRequest}>
+                      <div className="grid gap-2">
+                        <label className="text-xs font-medium text-foreground">Tên chủ tài khoản</label>
+                        <Input
+                          value={refundForm.bank_account_name}
+                          onChange={(event) => handleRefundFormChange("bank_account_name", event.target.value)}
+                          placeholder="Nguyễn Văn A"
+                        />
+                        {!isAccountNameMatching && (
+                          <p className="text-xs text-destructive">
+                            Tên chủ tài khoản phải trùng người liên hệ: {contactName}.
+                          </p>
+                        )}
+                      </div>
+                      <div className="grid gap-2">
+                        <label className="text-xs font-medium text-foreground">Số tài khoản</label>
+                        <Input
+                          value={refundForm.bank_account_number}
+                          onChange={(event) => handleRefundFormChange("bank_account_number", event.target.value)}
+                          placeholder="0123456789"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <label className="text-xs font-medium text-foreground">Ngân hàng</label>
+                        <Input
+                          value={refundForm.bank_name}
+                          onChange={(event) => handleRefundFormChange("bank_name", event.target.value)}
+                          placeholder="Vietcombank, Techcombank..."
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <label className="text-xs font-medium text-foreground">Chi nhánh</label>
+                        <Input
+                          value={refundForm.bank_branch}
+                          onChange={(event) => handleRefundFormChange("bank_branch", event.target.value)}
+                          placeholder="Chi nhánh Quận 1, TP.HCM"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <label className="text-xs font-medium text-foreground">Số tiền đề nghị</label>
+                        <Input
+                          value={refundForm.amount}
+                          onChange={(event) => handleRefundFormChange("amount", event.target.value)}
+                          placeholder={bookingTotalAmount ? `${bookingTotalAmount}` : "3.600.000"}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Bỏ trống để hoàn toàn bộ số tiền đã thanh toán ({refundAmountLabel}).
+                        </p>
+                        {refundAmountError && <p className="text-xs text-destructive">{refundAmountError}</p>}
+                      </div>
+                      <div className="grid gap-2">
+                        <label className="text-xs font-medium text-foreground">Tiền tệ</label>
+                        <Input
+                          value={refundForm.currency}
+                          onChange={(event) =>
+                            handleRefundFormChange("currency", event.target.value.toUpperCase())
+                          }
+                        />
+                      </div>
+                      <div className="rounded-md border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                        Số tiền dự kiến được hoàn:{" "}
+                        <span className="font-semibold text-foreground">{refundAmountLabel}</span>
+                      </div>
+                      <div className="grid gap-2">
+                        <label className="text-xs font-medium text-foreground">Lời nhắn cho đội hỗ trợ</label>
+                        <Textarea
+                          rows={3}
+                          value={refundForm.customer_message}
+                          onChange={(event) => handleRefundFormChange("customer_message", event.target.value)}
+                          placeholder="Ví dụ: Tour bị hủy do thiếu khách, vui lòng hoàn về tài khoản trên."
+                        />
+                      </div>
+                      <Button
+                        type="submit"
+                        className="w-full"
+                        disabled={refundRequestMutation.isPending || !isRefundFormValid}
+                      >
+                        {refundRequestMutation.isPending ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Đang gửi...
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCcw className="mr-2 h-4 w-4" />
+                            Gửi yêu cầu hoàn tiền
+                          </>
+                        )}
+                      </Button>
+                    </form>
+                  ) : (
+                    <Alert>
+                      <AlertTitle>Không thể gửi yêu cầu ngay</AlertTitle>
+                      <AlertDescription>{refundIneligibleReason}</AlertDescription>
+                    </Alert>
+                  )}
+                  <Separator />
+                  <div className="space-y-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Yêu cầu gần đây
+                    </p>
+                    {isRefundListLoading ? (
+                      <p>Đang tải lịch sử hoàn tiền...</p>
+                    ) : derivedRefundRequests.length === 0 ? (
+                      <p>Chưa có yêu cầu hoàn tiền nào.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {derivedRefundRequests.map((request) => {
+                          const requestAmount =
+                            typeof request.amount === "number" && Number.isFinite(request.amount)
+                              ? request.amount
+                              : bookingTotalAmount;
+                          const requestCurrency = request.currency ?? refundCurrency;
+                          const timelineIndex = getRefundStepIndex(request.status);
+                          const isRejectedRequest = request.status === "rejected";
+                          const customerNote = request.customer_message ?? request.reason;
+                          const partnerNote = request.partner_message ?? request.note;
+                          return (
+                            <div key={request.id} className="rounded-lg border p-3">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div>
+                                  <p className="text-base font-semibold text-foreground">
+                                    {formatCurrency(requestAmount, requestCurrency)}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    Gửi lúc {formatDateTime(request.submitted_at)}
+                                  </p>
+                                </div>
+                                <Badge variant={refundStatusVariant(request.status)}>
+                                  {refundStatusLabel(request.status)}
+                                </Badge>
+                              </div>
+                              <dl className="mt-2 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+                                <div>
+                                  <dt>Chủ tài khoản</dt>
+                                  <dd className="font-medium text-foreground">{request.bank_account_name}</dd>
+                                </div>
+                                <div>
+                                  <dt>Số tài khoản</dt>
+                                  <dd className="font-medium text-foreground">
+                                    {request.bank_account_number} · {request.bank_name}
+                                  </dd>
+                                </div>
+                                {request.bank_branch && (
+                                  <div>
+                                    <dt>Chi nhánh</dt>
+                                    <dd className="font-medium text-foreground">{request.bank_branch}</dd>
+                                  </div>
+                                )}
+                                <div>
+                                  <dt>Số tiền</dt>
+                                  <dd className="font-medium text-foreground">
+                                    {formatCurrency(requestAmount, requestCurrency)}
+                                  </dd>
+                                </div>
+                              </dl>
+                              {customerNote && (
+                                <p className="mt-2 text-sm text-muted-foreground">
+                                  Lý do: <span className="text-foreground">{customerNote}</span>
+                                </p>
+                              )}
+                              {partnerNote && (
+                                <p className="text-sm text-muted-foreground">
+                                  Phản hồi đối tác: <span className="text-foreground">{partnerNote}</span>
+                                </p>
+                              )}
+                              {Array.isArray(request.proofs) && request.proofs.length > 0 && (
+                                <div className="mt-2 text-xs">
+                                  <p className="font-medium text-foreground">Chứng từ</p>
+                                  <div className="mt-1 flex flex-wrap gap-2">
+                                    {request.proofs.map((proof) => (
+                                      <a
+                                        key={proof.id ?? proof.url}
+                                        href={proof.url ?? "#"}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-foreground underline-offset-2 hover:underline"
+                                      >
+                                        <FileText className="h-3 w-3" />
+                                        {proof.filename ?? "Xem chứng từ"}
+                                      </a>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              <div className="mt-2 flex flex-wrap gap-1">
+                                {REFUND_TIMELINE_STEPS.map((step, index) => {
+                                  const baseClass = "rounded-full px-3 py-1 text-xs font-medium";
+                                  const isDone = timelineIndex > index && !isRejectedRequest;
+                                  const isCurrent = timelineIndex === index && !isRejectedRequest;
+                                  const isRejectedStep =
+                                    isRejectedRequest && index === REFUND_TIMELINE_STEPS.length - 1;
+                                  let chipClass = `${baseClass} bg-muted text-muted-foreground`;
+                                  if (isRejectedStep) {
+                                    chipClass = `${baseClass} bg-destructive/10 text-destructive`;
+                                  } else if (isDone) {
+                                    chipClass = `${baseClass} bg-emerald-100 text-emerald-700`;
+                                  } else if (isCurrent) {
+                                    chipClass = `${baseClass} bg-primary/10 text-primary`;
+                                  }
+                                  return (
+                                    <span key={step.key} className={chipClass}>
+                                      {isRejectedStep ? "Đã từ chối" : step.label}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                              {request.status === "await_customer_confirm" && (
+                                <Button
+                                  size="sm"
+                                  className="mt-3"
+                                  onClick={() => refundConfirmMutation.mutate(String(request.id))}
+                                  disabled={refundConfirmMutation.isPending}
+                                >
+                                  {refundConfirmMutation.isPending ? (
+                                    <>
+                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                      Đang xác nhận...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <CheckCircle className="mr-2 h-4 w-4" />
+                                      Tôi đã nhận tiền
+                                    </>
+                                  )}
+                                </Button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -1154,128 +1559,6 @@ const BookingDetailPage = () => {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <RefreshCcw className="h-5 w-5 text-primary" />
-                    Hoàn tiền & voucher bù
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4 text-sm text-muted-foreground">
-                  {refundRequests.length > 0 ? (
-                    <div className="space-y-3">
-                      {refundRequests.map((request) => (
-                        <div key={request.id} className="rounded-lg border p-3">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div>
-                              <p className="text-base font-semibold text-foreground">
-                                {formatCurrency(request.amount, booking.currency ?? "VND")}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                Gửi lúc {formatDateTime(request.submitted_at)}
-                              </p>
-                            </div>
-                            <Badge variant={refundStatusVariant(request.status)}>
-                              {refundStatusLabel(request.status)}
-                            </Badge>
-                          </div>
-                          <div className="mt-2 grid gap-1 text-xs">
-                            <span>{request.bank_account_name}</span>
-                            <span>
-                              {request.bank_account_number} · {request.bank_name}
-                            </span>
-                          </div>
-                          {request.reason && (
-                            <p className="mt-2 text-sm text-muted-foreground">Lý do: {request.reason}</p>
-                          )}
-                          {request.status === "await_customer_confirm" && (
-                            <Button
-                              size="sm"
-                              className="mt-3"
-                              onClick={() => refundConfirmMutation.mutate(String(request.id))}
-                              disabled={refundConfirmMutation.isPending}
-                            >
-                              {refundConfirmMutation.isPending ? (
-                                <>
-                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                  Đang xác nhận...
-                                </>
-                              ) : (
-                                <>
-                                  <CheckCircle className="mr-2 h-4 w-4" />
-                                  Tôi đã nhận tiền
-                                </>
-                              )}
-                            </Button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p>Chưa có yêu cầu hoàn tiền nào.</p>
-                  )}
-
-                  {canRequestRefund ? (
-                    <form className="space-y-3 text-sm" onSubmit={handleSubmitRefundRequest}>
-                      <div className="grid gap-2">
-                        <label className="text-xs font-medium text-foreground">Tên chủ tài khoản</label>
-                        <Input
-                          value={refundForm.bank_account_name}
-                          onChange={(event) => handleRefundFormChange("bank_account_name", event.target.value)}
-                          placeholder="Nguyễn Văn A"
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <label className="text-xs font-medium text-foreground">Số tài khoản</label>
-                        <Input
-                          value={refundForm.bank_account_number}
-                          onChange={(event) => handleRefundFormChange("bank_account_number", event.target.value)}
-                          placeholder="0123456789"
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <label className="text-xs font-medium text-foreground">Ngân hàng</label>
-                        <Input
-                          value={refundForm.bank_name}
-                          onChange={(event) => handleRefundFormChange("bank_name", event.target.value)}
-                          placeholder="Vietcombank, Techcombank..."
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <label className="text-xs font-medium text-foreground">Lý do hoàn tiền</label>
-                        <Textarea
-                          rows={3}
-                          value={refundForm.reason}
-                          onChange={(event) => handleRefundFormChange("reason", event.target.value)}
-                          placeholder="Ví dụ: Tour bị hủy do thiếu khách..."
-                        />
-                      </div>
-                      <Button
-                        type="submit"
-                        className="w-full"
-                        disabled={refundRequestMutation.isPending || !isRefundFormValid}
-                      >
-                        {refundRequestMutation.isPending ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Đang gửi...
-                          </>
-                        ) : (
-                          <>
-                            <RefreshCcw className="mr-2 h-4 w-4" />
-                            Gửi yêu cầu hoàn tiền
-                          </>
-                        )}
-                      </Button>
-                    </form>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">
-                      Yêu cầu hoàn tiền khả dụng khi booking bị hủy và đã thanh toán đủ.
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
                     <Receipt className="h-5 w-5 text-primary" />
                     Hóa đơn điện tử
                   </CardTitle>
@@ -1294,8 +1577,8 @@ const BookingDetailPage = () => {
                         Tổng tiền:{" "}
                         <span className="font-medium text-foreground">
                           {formatCurrency(
-                            invoice.total_amount ?? booking.total_price ?? booking.total_amount,
-                            booking.currency ?? "VND",
+                            invoice.total_amount ?? bookingTotalAmount,
+                            booking?.currency ?? "VND",
                           )}
                         </span>
                       </p>

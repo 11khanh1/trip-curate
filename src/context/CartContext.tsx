@@ -322,10 +322,11 @@ const mapCartApiItemToCartItem = (item: CartApiItem): CartItem => {
       ? Math.round((discountAmount / originalTotalPrice) * 100)
       : null;
   const promotionLabel =
+    (typeof discountPercent === "number" && discountPercent > 0 ? `Giảm ${discountPercent}%` : null) ??
     (typeof autoPromotion?.description === "string" && autoPromotion.description.trim().length > 0
       ? autoPromotion.description.trim()
       : null) ??
-    (discountPercent ? `Giảm ${discountPercent}%` : null);
+    (autoPromotion?.code ? `Mã ${autoPromotion.code}` : null);
 
   const thumbnail =
     firstString(item.thumbnail, item.thumbnail_url, tourData?.thumbnail, tourData?.thumbnail_url) ??

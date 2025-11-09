@@ -90,11 +90,14 @@ export interface BookingRefundRequest {
   amount?: number | null;
   currency?: string | null;
   reason?: string | null;
+  customer_message?: string | null;
+  partner_message?: string | null;
   status?: RefundRequestStatus;
   note?: string | null;
   bank_account_name?: string | null;
   bank_account_number?: string | null;
   bank_name?: string | null;
+  bank_branch?: string | null;
   proofs?: RefundProofFile[] | null;
   submitted_at?: string | null;
   updated_at?: string | null;
@@ -328,7 +331,10 @@ export interface CreateRefundRequestPayload {
   bank_account_name: string;
   bank_account_number: string;
   bank_name: string;
-  reason: string;
+  bank_branch: string;
+  customer_message: string;
+  amount?: number;
+  currency?: string;
 }
 
 export async function createRefundRequest(
@@ -356,8 +362,16 @@ const normalizeRefundRequestList = (payload: unknown): BookingRefundRequest[] =>
   return [];
 };
 
-export async function fetchRefundRequests(): Promise<BookingRefundRequest[]> {
-  const res = await apiClient.get("/refund-requests");
+export interface RefundRequestQueryParams {
+  status?: string;
+}
+
+export async function fetchRefundRequests(
+  params: RefundRequestQueryParams = {},
+): Promise<BookingRefundRequest[]> {
+  const query =
+    params.status && params.status !== "all" ? { status: params.status } : undefined;
+  const res = await apiClient.get("/refund-requests", { params: query });
   return normalizeRefundRequestList(res.data);
 }
 

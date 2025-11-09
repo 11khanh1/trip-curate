@@ -33,7 +33,7 @@ import {
   X,
 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
-import { formatCurrency, getTourPriceInfo } from "@/lib/tour-utils";
+import { formatCurrency, getTourPriceInfo, buildPromotionLabel } from "@/lib/tour-utils";
 import { fetchTrendingTours, type PublicTour, type CancellationPolicy, type TourType } from "@/services/publicApi";
 import { Users } from "lucide-react";
 
@@ -349,12 +349,7 @@ const WishlistPage = () => {
         priceInfo?.originalPrice && priceInfo.originalPrice > priceValue
           ? formatCurrency(priceInfo.originalPrice)
           : undefined;
-      const promotionBadge =
-        priceInfo?.autoPromotion?.description ??
-        (priceInfo?.autoPromotion?.code ? `Mã ${priceInfo.autoPromotion.code}` : undefined) ??
-        (priceInfo && typeof priceInfo.discountPercent === "number" && priceInfo.discountPercent > 0
-          ? `Giảm ${Math.round(priceInfo.discountPercent)}%`
-          : undefined);
+      const promotionBadge = buildPromotionLabel(priceInfo);
 
       const firstSchedule = schedules.find((entry) => isRecord(entry) && readRecordString(entry as Record<string, unknown>, "start_date"));
       const firstScheduleStart =
@@ -808,12 +803,7 @@ const WishlistPage = () => {
                           priceInfo.originalPrice && priceInfo.originalPrice > startingPrice
                             ? formatCurrency(priceInfo.originalPrice)
                             : null;
-                        const promotionBadge =
-                          priceInfo.autoPromotion?.description ??
-                          (priceInfo.autoPromotion?.code ? `Mã ${priceInfo.autoPromotion.code}` : undefined) ??
-                          (typeof priceInfo.discountPercent === "number" && priceInfo.discountPercent > 0
-                            ? `Giảm ${Math.round(priceInfo.discountPercent)}%`
-                            : undefined);
+                        const promotionBadge = buildPromotionLabel(priceInfo);
                         const tourRating = normalizeRating(tour);
                         const tourStatus = tour.status ?? "Đang cập nhật";
                         const itinerary =
@@ -1053,12 +1043,7 @@ const WishlistRecommendations = () => {
             priceInfo.originalPrice && priceInfo.originalPrice > priceInfo.price
               ? formatCurrency(priceInfo.originalPrice)
               : undefined;
-          const promotionBadge =
-            priceInfo.autoPromotion?.description ??
-            (priceInfo.autoPromotion?.code ? `Mã ${priceInfo.autoPromotion.code}` : undefined) ??
-            (typeof priceInfo.discountPercent === "number" && priceInfo.discountPercent > 0
-              ? `Giảm ${Math.round(priceInfo.discountPercent)}%`
-              : undefined);
+          const promotionBadge = buildPromotionLabel(priceInfo);
           const features: string[] = [];
           if (tour.requires_passport) features.push("Yêu cầu hộ chiếu");
           if (tour.requires_visa) features.push("Yêu cầu visa");

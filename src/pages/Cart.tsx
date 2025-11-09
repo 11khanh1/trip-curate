@@ -20,7 +20,7 @@ import { useUser } from "@/context/UserContext";
 import { fetchTrendingTours, type PublicTour, type CancellationPolicy } from "@/services/publicApi";
 import { addWishlistItem, type WishlistItem } from "@/services/wishlistApi";
 import { apiClient } from "@/lib/api-client";
-import { getTourPriceInfo } from "@/lib/tour-utils";
+import { getTourPriceInfo, buildPromotionLabel } from "@/lib/tour-utils";
 import { useToast } from "@/hooks/use-toast";
 
 // ====================================================================================
@@ -145,12 +145,7 @@ const mapTourToCard = (tour: PublicTour): TourCardProps => {
     originalPrice: priceInfo.originalPrice,
     discount:
       typeof priceInfo.discountPercent === "number" ? Math.round(priceInfo.discountPercent) : undefined,
-    promotionLabel:
-      priceInfo.autoPromotion?.description ??
-      (priceInfo.autoPromotion?.code ? `Mã ${priceInfo.autoPromotion.code}` : undefined) ??
-      (typeof priceInfo.discountPercent === "number" && priceInfo.discountPercent > 0
-        ? `Giảm ${Math.round(priceInfo.discountPercent)}%`
-        : undefined),
+    promotionLabel: buildPromotionLabel(priceInfo),
     duration: normalizeDuration(tour.duration),
     category,
     features,

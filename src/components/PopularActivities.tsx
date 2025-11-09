@@ -6,7 +6,7 @@ import TourCard from "./TourCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchTrendingTours, type PublicTour } from "@/services/publicApi";
 import { apiClient } from "@/lib/api-client";
-import { getTourPriceInfo } from "@/lib/tour-utils";
+import { getTourPriceInfo, buildPromotionLabel } from "@/lib/tour-utils";
 
 interface PopularActivitiesProps {
   tours?: PublicTour[];
@@ -187,12 +187,7 @@ const mapTourToCard = (tour: PublicTour) => {
     originalPrice: priceInfo.originalPrice,
     discount:
       typeof priceInfo.discountPercent === "number" ? Math.round(priceInfo.discountPercent) : undefined,
-    promotionLabel:
-      priceInfo.autoPromotion?.description ??
-      (priceInfo.autoPromotion?.code ? `Mã ${priceInfo.autoPromotion.code}` : undefined) ??
-      (typeof priceInfo.discountPercent === "number" && priceInfo.discountPercent > 0
-        ? `Giảm ${Math.round(priceInfo.discountPercent)}%`
-        : undefined),
+    promotionLabel: buildPromotionLabel(priceInfo),
     duration: normalizeDuration(tour.duration),
     category,
     features,

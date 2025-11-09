@@ -242,7 +242,10 @@ export interface PartnerRefundRequest {
   bank_account_name?: string | null;
   bank_account_number?: string | null;
   bank_name?: string | null;
+  bank_branch?: string | null;
   reason?: string | null;
+  customer_message?: string | null;
+  partner_message?: string | null;
   status?: RefundRequestStatus;
   note?: string | null;
   proofs?: RefundProof[] | null;
@@ -267,14 +270,30 @@ const normalizePartnerRefundRequests = (payload: unknown): PartnerRefundRequest[
   return [];
 };
 
-export async function fetchPartnerRefundRequests(): Promise<PartnerRefundRequest[]> {
-  const res = await apiClient.get("/partner/refund-requests");
+export interface PartnerRefundRequestQuery {
+  status?: string;
+  tour_id?: string | number;
+}
+
+export async function fetchPartnerRefundRequests(
+  query: PartnerRefundRequestQuery = {},
+): Promise<PartnerRefundRequest[]> {
+  const params: Record<string, string> = {};
+  if (query.status && query.status !== "all") {
+    params.status = String(query.status);
+  }
+  if (query.tour_id) {
+    params.tour_id = String(query.tour_id);
+  }
+  const res = await apiClient.get("/partner/refund-requests", {
+    params: Object.keys(params).length > 0 ? params : undefined,
+  });
   return normalizePartnerRefundRequests(res.data);
 }
 
 export interface PartnerRefundRequestStatusPayload {
   status: "await_customer_confirm" | "rejected";
-  note?: string;
+  partner_message?: string;
   proof?: File | Blob | null;
 }
 
@@ -284,8 +303,8 @@ export async function updatePartnerRefundRequestStatus(
 ): Promise<PartnerRefundRequest> {
   const formData = new FormData();
   formData.append("status", payload.status);
-  if (payload.note) {
-    formData.append("note", payload.note);
+  if (payload.partner_message) {
+    formData.append("partner_message", payload.partner_message);
   }
   if (payload.proof) {
     formData.append("proof", payload.proof);

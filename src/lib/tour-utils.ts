@@ -314,3 +314,22 @@ export const formatCurrency = (value: number | null | undefined, options?: Intl.
   }
   return "Liên hệ";
 };
+
+export const buildPromotionLabel = (info?: TourPriceInfo | null): string | null => {
+  if (!info) return null;
+  const percent =
+    typeof info.discountPercent === "number" && Number.isFinite(info.discountPercent) && info.discountPercent > 0
+      ? Math.round(info.discountPercent)
+      : null;
+  if (percent) {
+    return `Giảm ${percent}%`;
+  }
+  const description = info.autoPromotion?.description?.trim();
+  if (description) {
+    return description;
+  }
+  if (info.autoPromotion?.code) {
+    return `Mã ${info.autoPromotion.code}`;
+  }
+  return null;
+};

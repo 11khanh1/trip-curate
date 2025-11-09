@@ -22,7 +22,7 @@ import {
   type PublicTour,
 } from "@/services/publicApi";
 import { apiClient } from "@/lib/api-client";
-import { getTourPriceInfo } from "@/lib/tour-utils";
+import { getTourPriceInfo, buildPromotionLabel } from "@/lib/tour-utils";
 
 const PER_PAGE = 50;
 
@@ -194,12 +194,7 @@ const mapTourToCard = (tour: PublicTour) => {
   const rating = resolveTourRating(tour);
   const reviewCount = resolveReviewCount(tour);
   const bookingsCount = resolveBookingCount(tour);
-  const promotionLabel =
-    priceInfo.autoPromotion?.description ??
-    (priceInfo.autoPromotion?.code ? `Mã ${priceInfo.autoPromotion.code}` : undefined) ??
-    (typeof priceInfo.discountPercent === "number" && priceInfo.discountPercent > 0
-      ? `Giảm ${Math.round(priceInfo.discountPercent)}%`
-      : undefined);
+  const promotionLabel = buildPromotionLabel(priceInfo);
 
   return {
     id: String(tour.id ?? tour.uuid ?? fallbackId),
