@@ -64,6 +64,7 @@ import SepayReturn from "./pages/payments/SepayReturn";
 import CartPage from "./pages/Cart";
 import Wishlist from "./pages/Wishlist";
 import RecentToursPage from "./pages/recent/RecentToursPage";
+import NotificationsPage from "./pages/notifications/NotificationsPage";
 
 const App = () => (
   <TooltipProvider>
@@ -99,6 +100,7 @@ const App = () => (
             <Route path="/payments/sepay/return" element={<SepayReturn />} />
             <Route path="/cart" element={<CartPage />} />
             <Route path="/wishlist" element={<Wishlist />} />
+            <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/account-settings" element={<AccountSettings />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/about/our-story" element={<OurStory />} />

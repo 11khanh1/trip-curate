@@ -246,6 +246,18 @@ export async function createBooking(payload: CreateBookingPayload): Promise<Crea
   return data as CreateBookingResponse;
 }
 
+export interface PayLaterResponse {
+  message?: string;
+  payment?: BookingPayment;
+  payment_url?: string | null;
+  payment_qr_url?: string | null;
+}
+
+export async function payBookingLater(id: string | number): Promise<PayLaterResponse> {
+  const res = await apiClient.post(`/bookings/${id}/pay-later`);
+  return res.data as PayLaterResponse;
+}
+
 export interface CancelBookingResponse {
   message: string;
   refund?: {

@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/popover";
 import { fetchSearchSuggestions, type SearchSuggestion } from "@/services/publicApi";
 import { Separator } from "./ui/separator";
+import NotificationDropdown from "@/components/notifications/NotificationsDropdown";
 
 interface CurrentUser {
     id: string;
@@ -567,6 +568,7 @@ const TravelHeader = () => {
                 <HelpCircle className="w-4 h-4 mr-1" />
                 Trợ giúp
               </Button>
+              {currentUser ? <NotificationDropdown /> : null}
               <Button
                 variant="ghost"
                 size="sm"

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import {
@@ -33,8 +33,17 @@ import {
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { deriveQrFromPaymentUrl } from "@/lib/sepay";
 
-import { fetchBookings, cancelBooking, type Booking, type BookingListResponse } from "@/services/bookingApi";
+import {
+  fetchBookings,
+  cancelBooking,
+  payBookingLater,
+  fetchBookingPaymentStatus,
+  type Booking,
+  type BookingListResponse,
+  type BookingPayment,
+} from "@/services/bookingApi";
 import {
   createReview,
   deleteReview,
@@ -89,6 +98,19 @@ const statusLabel = (status?: string) => {
     default:
       return status ? status : "Đang cập nhật";
   }
+};
+
+const PAYMENT_SUCCESS_STATUSES = new Set(["paid", "success", "completed"]);
+const normalizeStatus = (status?: string | null) => (status ?? "").toString().trim().toLowerCase();
+const didPaymentSucceed = (payment?: BookingPayment | null) => {
+  if (!payment) return false;
+  const normalized = normalizeStatus(payment.status);
+  if (PAYMENT_SUCCESS_STATUSES.has(normalized)) return true;
+  if (typeof payment?.paid_at === "string" && payment.paid_at.trim().length > 0) {
+    const paidAt = new Date(payment.paid_at);
+    return !Number.isNaN(paidAt.getTime());
+  }
+  return false;
 };
 
 const paymentMethodLabel = (method?: string) => {
@@ -294,6 +316,19 @@ interface ReviewDialogState {
   comment: string;
 }
 
+interface PayLaterDialogState {
+  bookingId: string | number;
+  qrUrl: string;
+  amount?: number | null;
+  currency?: string | null;
+}
+
+interface PayLaterVariables {
+  bookingId: string | number;
+  currency?: string | null;
+  amount?: number | null;
+}
+
 interface UpdateReviewVariables {
   reviewId: string | number;
   payload: UpdateReviewPayload;
@@ -357,6 +392,8 @@ const BookingsList = () => {
     rating: 5,
     comment: "",
   });
+  const [payLaterDialog, setPayLaterDialog] = useState<PayLaterDialogState | null>(null);
+  const [pollingBookingId, setPollingBookingId] = useState<string | number | null>(null);
 
   const resetReviewDialog = () =>
     setReviewDialog({
@@ -485,6 +522,14 @@ const BookingsList = () => {
     });
   };
 
+  const handlePayLater = (booking: Booking) => {
+    payLaterMutation.mutate({
+      bookingId: booking.id,
+      currency: booking.currency ?? "VND",
+      amount: resolveBookingTotal(booking),
+    });
+  };
+
   const cancelMutation = useMutation({
     mutationFn: (bookingId: string) => cancelBooking(bookingId),
     onSuccess: (response) => {
@@ -539,6 +584,65 @@ const BookingsList = () => {
     return String(cancelMutation.variables) === String(bookingId);
   };
 
+  const payLaterMutation = useMutation({
+    mutationFn: (variables: PayLaterVariables) => payBookingLater(variables.bookingId),
+    onSuccess: (response, variables) => {
+      toast({
+        title: "Đã tạo liên kết thanh toán",
+        description: response.message ?? "Vui lòng hoàn tất giao dịch trong vài phút.",
+      });
+      setPollingBookingId(variables.bookingId);
+      const directUrl =
+        typeof response.payment_url === "string" && response.payment_url.trim().length > 0
+          ? response.payment_url.trim()
+          : "";
+      if (directUrl) {
+        window.open(directUrl, "_blank", "noopener,noreferrer");
+      }
+      const qrCandidate =
+        response.payment_qr_url ??
+        deriveQrFromPaymentUrl(response.payment_url ?? undefined) ??
+        deriveQrFromPaymentUrl(directUrl || undefined);
+      if (!directUrl && qrCandidate) {
+        setPayLaterDialog({
+          bookingId: variables.bookingId,
+          qrUrl: qrCandidate,
+          amount: response.payment?.amount ?? variables.amount ?? null,
+          currency: response.payment?.currency ?? variables.currency ?? "VND",
+        });
+      }
+      if (!directUrl && !qrCandidate) {
+        toast({
+          title: "Không tìm thấy liên kết thanh toán",
+          description: "Vui lòng thử lại sau hoặc liên hệ hỗ trợ.",
+          variant: "destructive",
+        });
+      }
+    },
+    onError: (error: unknown) => {
+      let description = "Không thể tạo liên kết thanh toán. Vui lòng thử lại.";
+      if (isAxiosError(error)) {
+        description =
+          (error.response?.data as { message?: string } | undefined)?.message ??
+          error.response?.statusText ??
+          description;
+      } else if (error instanceof Error) {
+        description = error.message;
+      }
+      toast({
+        title: "Tạo liên kết thất bại",
+        description,
+        variant: "destructive",
+      });
+      setPollingBookingId(null);
+    },
+  });
+
+  const isPayLaterProcessing = (bookingId: string | number) => {
+    if (!payLaterMutation.isPending || !payLaterMutation.variables) return false;
+    return String(payLaterMutation.variables.bookingId) === String(bookingId);
+  };
+
   const {
     data,
     isLoading,
@@ -559,6 +663,36 @@ const BookingsList = () => {
   const meta = (data?.meta ?? {}) as Record<string, unknown>;
   const currentPage = typeof meta.current_page === "number" ? meta.current_page : page;
   const lastPage = typeof meta.last_page === "number" ? meta.last_page : undefined;
+  const { data: paymentStatusData } = useQuery({
+    queryKey: ["booking-payment-status", pollingBookingId],
+    queryFn: () => fetchBookingPaymentStatus(String(pollingBookingId)),
+    enabled: Boolean(pollingBookingId),
+    refetchInterval: pollingBookingId ? 5000 : false,
+  });
+
+  useEffect(() => {
+    if (!pollingBookingId || !paymentStatusData) return;
+    const normalized = normalizeStatus(
+      paymentStatusData.status ?? paymentStatusData.payment?.status ?? null,
+    );
+    if (normalized && PAYMENT_SUCCESS_STATUSES.has(normalized)) {
+      toast({
+        title: "Thanh toán thành công",
+        description: "Chúng tôi đã cập nhật trạng thái đơn.",
+      });
+      setPollingBookingId(null);
+      setPayLaterDialog(null);
+      void queryClient.invalidateQueries({ queryKey: ["bookings"] });
+    } else if (normalized === "failed" || normalized === "cancelled") {
+      toast({
+        title: "Thanh toán chưa hoàn tất",
+        description: paymentStatusData.message ?? "Giao dịch bị hủy hoặc thất bại.",
+        variant: "destructive",
+      });
+      setPollingBookingId(null);
+      setPayLaterDialog(null);
+    }
+  }, [pollingBookingId, paymentStatusData, toast, queryClient]);
 
   const hasMore = lastPage ? currentPage < lastPage : false;
   const total = typeof meta.total === "number" ? meta.total : bookings.length;
@@ -630,6 +764,21 @@ const BookingsList = () => {
                     typeof promo?.discount_amount === "number" ? sum + promo.discount_amount : sum,
                   0,
                 );
+              const hasPaidTransaction =
+                Array.isArray(booking.payments) && booking.payments.some((payment) => didPaymentSucceed(payment));
+              const paymentStatusNormalized =
+                typeof booking.payment_status === "string" ? booking.payment_status.toLowerCase() : "";
+              const paymentStatusDisplayLabel =
+                booking.status === "cancelled" && !hasPaidTransaction
+                  ? "Chờ thanh toán"
+                  : booking.payment_status
+                  ? statusLabel(booking.payment_status)
+                  : "Đang cập nhật";
+              const showPayLaterButton =
+                booking.status !== "cancelled" &&
+                (paymentStatusNormalized === "pending" ||
+                  paymentStatusNormalized === "unpaid" ||
+                  (!booking.payment_status && !hasPaidTransaction));
               const bookingDate = booking.booking_date ?? booking.booked_at ?? booking.created_at ?? null;
               const totalAdults = booking.total_adults ?? booking.adults ?? 0;
               const totalChildren = booking.total_children ?? booking.children ?? 0;
@@ -874,10 +1023,20 @@ const BookingsList = () => {
                           Số khách: <span className="font-medium text-foreground">{guestSummary}</span>
                         </p>
                       )}
-                      {booking.payment_status && (
+                      {booking.status && (
+                        <p>
+                          Trạng thái đơn:{" "}
+                          <span className="font-medium text-foreground">
+                            {paymentStatusNormalized === "paid" || paymentStatusNormalized === "success"
+                              ? "Chờ xác nhận"
+                              : statusLabel(booking.status)}
+                          </span>
+                        </p>
+                      )}
+                      {(booking.payment_status || booking.status === "cancelled") && (
                         <p>
                           Trạng thái thanh toán:{" "}
-                          <span className="font-medium text-foreground">{statusLabel(booking.payment_status)}</span>
+                          <span className="font-medium text-foreground">{paymentStatusDisplayLabel}</span>
                         </p>
                       )}
                       {booking.payment_method && (
@@ -914,6 +1073,24 @@ const BookingsList = () => {
                         >
                           <MessageSquare className="h-4 w-4" />
                           Đánh giá tour
+                        </Button>
+                      )}
+                      {showPayLaterButton && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="gap-1 bg-primary text-white hover:bg-primary/90"
+                          onClick={() => handlePayLater(booking)}
+                          disabled={isPayLaterProcessing(booking.id)}
+                        >
+                          {isPayLaterProcessing(booking.id) ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Đang tạo link...
+                            </>
+                          ) : (
+                            "Thanh toán"
+                          )}
                         </Button>
                       )}
                       {canCancel && (
@@ -1048,6 +1225,42 @@ const BookingsList = () => {
               className="h-10 px-6 bg-[#ff5b00] text-white hover:bg-[#e24c00]"
             >
               {isSubmittingReview ? "Đang gửi..." : reviewDialog.mode === "edit" ? "Lưu thay đổi" : "Gửi đánh giá"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={Boolean(payLaterDialog)} onOpenChange={(open) => (!open ? setPayLaterDialog(null) : undefined)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Quét mã để thanh toán</DialogTitle>
+            <DialogDescription>
+              Sử dụng ứng dụng ngân hàng hỗ trợ VietQR để hoàn tất giao dịch trong vài phút tiếp theo.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-4 py-4">
+            {payLaterDialog?.qrUrl ? (
+              <img
+                src={payLaterDialog.qrUrl}
+                alt="QR thanh toán"
+                className="h-56 w-56 rounded-2xl border bg-white object-contain p-3"
+              />
+            ) : (
+              <div className="flex h-56 w-56 items-center justify-center rounded-2xl border border-dashed bg-muted text-center text-sm text-muted-foreground">
+                Không có mã QR khả dụng. Vui lòng mở liên kết thanh toán trên tab mới.
+              </div>
+            )}
+            {typeof payLaterDialog?.amount === "number" && (
+              <p className="text-lg font-semibold text-foreground">
+                {formatCurrency(payLaterDialog.amount, payLaterDialog.currency ?? "VND")}
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground text-center">
+              Sau khi thanh toán thành công, trạng thái đơn sẽ tự động cập nhật. Bạn có thể đóng cửa sổ này.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setPayLaterDialog(null)}>
+              Đóng
             </Button>
           </DialogFooter>
         </DialogContent>

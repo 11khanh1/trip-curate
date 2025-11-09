@@ -67,6 +67,8 @@ interface SepayPanelState {
   paymentId?: string;
   amount?: number | null;
   originalAmount?: number | null;
+  displayOriginalAmount?: number | null;
+  displayDiscountAmount?: number | null;
   currency: string;
   qrImage?: string | null;
   providerName: string;
@@ -668,6 +670,9 @@ const BookingCheckout = () => {
       const fallbackPriceAmount =
         typeof rawPriceFieldAmount === "number" && Number.isFinite(rawPriceFieldAmount) ? rawPriceFieldAmount : null;
       let normalizedTotalAmount = Math.max(0, preferredFinalAmount ?? fallbackPriceAmount ?? totalPrice);
+      if (totalPrice > 0 && normalizedTotalAmount - totalPrice > 1) {
+        normalizedTotalAmount = totalPrice;
+      }
       const bookingPromotions =
         bookingEntity?.promotions ??
         (Array.isArray(response?.promotions) ? response.promotions : null);
@@ -731,6 +736,20 @@ const BookingCheckout = () => {
           normalizedTotalAmount = recalculated;
         }
       }
+      const displayOriginalAmount =
+        typeof priceSummary.original === "number" && priceSummary.original > 0
+          ? priceSummary.original
+          : normalizedOriginalAmount ??
+            (typeof effectiveDiscountTotal === "number" && effectiveDiscountTotal > 0
+              ? normalizedTotalAmount + effectiveDiscountTotal
+              : null);
+      const displayDiscountAmount =
+        typeof priceSummary.discountAmount === "number" && priceSummary.discountAmount > 0
+          ? priceSummary.discountAmount
+          : typeof displayOriginalAmount === "number"
+          ? Math.max(0, displayOriginalAmount - normalizedTotalAmount)
+          : effectiveDiscountTotal ?? null;
+
       const bookingIdentifier =
         bookingEntity?.id ??
         bookingEntity?.uuid ??
@@ -819,6 +838,8 @@ const BookingCheckout = () => {
             paymentId: response.payment_id ? String(response.payment_id) : undefined,
             amount: amountFromResponse,
             originalAmount: normalizedOriginalAmount ?? null,
+            displayOriginalAmount,
+            displayDiscountAmount,
             currency: currencyFromResponse,
             qrImage: resolvedQrImage ?? null,
             providerName,
@@ -843,6 +864,8 @@ const BookingCheckout = () => {
             paymentId: response.payment_id ? String(response.payment_id) : undefined,
             amount: amountFromResponse,
             originalAmount: normalizedOriginalAmount ?? null,
+            displayOriginalAmount,
+            displayDiscountAmount,
             currency: currencyFromResponse,
             qrImage: resolvedQrImage ?? null,
             providerName,
@@ -981,12 +1004,15 @@ const BookingCheckout = () => {
       ? sepayPanel.discountTotal
       : null;
   const sepayDiscountTotal =
+    sepayPanel?.displayDiscountAmount ??
     explicitSepayDiscount ??
     (typeof sepayPromotionDiscountTotal === "number" && sepayPromotionDiscountTotal > 0
       ? sepayPromotionDiscountTotal
       : null);
   const sepayOriginalAmountCandidate =
-    typeof sepayPanel?.originalAmount === "number"
+    typeof sepayPanel?.displayOriginalAmount === "number"
+      ? sepayPanel.displayOriginalAmount
+      : typeof sepayPanel?.originalAmount === "number"
       ? sepayPanel.originalAmount
       : typeof sepayPanel?.amount === "number" && typeof sepayDiscountTotal === "number"
       ? sepayPanel.amount + sepayDiscountTotal
@@ -994,7 +1020,7 @@ const BookingCheckout = () => {
   const sepayOriginalAmount =
     typeof sepayOriginalAmountCandidate === "number" &&
     typeof sepayPanel?.amount === "number" &&
-    sepayOriginalAmountCandidate > sepayPanel.amount
+    sepayOriginalAmountCandidate >= sepayPanel.amount
       ? sepayOriginalAmountCandidate
       : null;
   const sepayDiscountLabel =
@@ -1228,17 +1254,14 @@ const BookingCheckout = () => {
                           {sepayAppliedPromotions.map((promo, index) => (
                             <li
                               key={promo.id ?? promo.code ?? `sepay-promo-${index}`}
-                              className="flex items-center justify-between gap-4"
+                              className="flex flex-col gap-0.5 rounded-lg bg-white/40 px-3 py-2"
                             >
-                              <span>
-                                {promo.description ??
-                                  (promo.code ? `Mã ${promo.code}` : "Khuyến mãi tự động")}
+                              <span className="font-medium text-emerald-800">
+                                {promo.description ?? (promo.code ? `Mã ${promo.code}` : "Khuyến mãi tự động")}
                               </span>
-                              {typeof promo.discount_amount === "number" ? (
-                                <span className="font-medium text-emerald-700">
-                                  -{formatCurrency(promo.discount_amount, sepayPanel?.currency ?? "VND")}
-                                </span>
-                              ) : null}
+                              {promo.code && (
+                                <span className="text-xs text-emerald-600">Mã: {promo.code}</span>
+                              )}
                             </li>
                           ))}
                         </ul>

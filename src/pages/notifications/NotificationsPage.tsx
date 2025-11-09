@@ -1,0 +1,361 @@
+import { useState, useMemo } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import TravelHeader from "@/components/TravelHeader";
+import Footer from "@/components/Footer";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import {
+  fetchNotifications,
+  fetchNotificationSettings,
+  fetchUnreadCount,
+  markAllNotificationsRead,
+  markNotificationRead,
+  toggleNotifications,
+  type NotificationPayload,
+} from "@/services/notificationApi";
+import { Loader2, BellRing, BellOff, ArrowRight, Inbox, CheckCircle } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { vi } from "date-fns/locale";
+import { cn } from "@/lib/utils";
+
+const PER_PAGE = 20;
+
+const notificationTypeLabel = (type?: string | null) => {
+  if (!type) return "Khác";
+  const normalized = type.toLowerCase();
+  if (normalized === "voucher") return "Voucher";
+  if (normalized === "refund_request") return "Yêu cầu hoàn tiền";
+  if (normalized === "refund_update") return "Cập nhật hoàn tiền";
+  if (normalized === "invoice") return "Hóa đơn";
+  if (normalized === "chatbot") return "Chatbot";
+  return type.replace(/_/g, " ");
+};
+
+const renderRelativeTime = (value?: string | null) => {
+  if (!value) return "Vừa cập nhật";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return formatDistanceToNow(date, { addSuffix: true, locale: vi });
+};
+
+const NotificationsPage = () => {
+  const [page, setPage] = useState(1);
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+
+  const notificationsQuery = useQuery({
+    queryKey: ["notifications", { page }],
+    queryFn: () => fetchNotifications({ page, per_page: PER_PAGE }),
+    keepPreviousData: true,
+  });
+
+  const unreadQuery = useQuery({
+    queryKey: ["notifications-unread"],
+    queryFn: fetchUnreadCount,
+    refetchInterval: 60000,
+  });
+
+  const settingsQuery = useQuery({
+    queryKey: ["notifications-settings"],
+    queryFn: fetchNotificationSettings,
+  });
+
+  const markReadMutation = useMutation({
+    mutationFn: (id: string | number) => markNotificationRead(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      void queryClient.invalidateQueries({ queryKey: ["notifications-unread"] });
+    },
+  });
+
+  const markAllMutation = useMutation({
+    mutationFn: markAllNotificationsRead,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      void queryClient.invalidateQueries({ queryKey: ["notifications-unread"] });
+    },
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: (enabled: boolean) => toggleNotifications(enabled),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["notifications-settings"], data);
+    },
+  });
+
+  const notificationsEnabled =
+    settingsQuery.data?.notifications_enabled ??
+    notificationsQuery.data?.notifications_enabled ??
+    true;
+
+  const notifications = notificationsQuery.data?.data ?? [];
+  const unreadCount = unreadQuery.data?.unread ?? 0;
+
+  const meta = notificationsQuery.data?.meta ?? {};
+  const currentPage =
+    typeof meta?.current_page === "number" ? meta.current_page : page;
+  const lastPage =
+    typeof meta?.last_page === "number" ? meta.last_page : currentPage;
+  const hasNextPage = lastPage ? currentPage < lastPage : notifications.length === PER_PAGE;
+  const hasPrevPage = currentPage > 1;
+
+  const isLoading = notificationsQuery.isLoading;
+  const isError = Boolean(notificationsQuery.error);
+
+  const handleItemClick = (notification: NotificationPayload) => {
+    const bookingId =
+      (notification.data?.["booking_id"] ?? notification.data?.["bookingId"]) as
+        | string
+        | undefined;
+    if (bookingId) {
+      navigate(`/bookings/${bookingId}`);
+    }
+  };
+
+  const summaryItems = useMemo(
+    () => [
+      {
+        label: "Tổng chưa đọc",
+        value: unreadCount,
+        icon: BellRing,
+        accent: "text-primary",
+      },
+      {
+        label: "Đã đọc gần đây",
+        value: notifications.filter((item) => item.read_at).length,
+        icon: CheckCircle,
+        accent: "text-emerald-600",
+      },
+    ],
+    [notifications, unreadCount],
+  );
+
+  return (
+    <div className="flex min-h-screen flex-col bg-muted/20">
+      <TravelHeader />
+      <main className="flex-1 py-10">
+        <div className="container mx-auto flex flex-col gap-6 px-4 lg:flex-row">
+          <aside className="lg:w-80">
+            <Card>
+              <CardHeader className="space-y-1">
+                <CardTitle className="text-lg font-semibold">Trung tâm thông báo</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Quản lý cách bạn nhận các nhắc nhở từ VietTravel
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="flex items-center justify-between rounded-lg border px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">
+                      Nhận thông báo
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Bật để hệ thống tiếp tục gửi cập nhật
+                    </p>
+                  </div>
+                  <Switch
+                    checked={notificationsEnabled}
+                    disabled={toggleMutation.isPending}
+                    onCheckedChange={(checked) => toggleMutation.mutate(checked)}
+                  />
+                </div>
+                <div className="space-y-4">
+                  {summaryItems.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <div
+                        key={item.label}
+                        className="flex items-center justify-between rounded-lg bg-white px-4 py-3 shadow-sm"
+                      >
+                        <div>
+                          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                            {item.label}
+                          </p>
+                          <p className="text-2xl font-semibold text-foreground">
+                            {item.value}
+                          </p>
+                        </div>
+                        <Icon className={cn("h-6 w-6", item.accent)} />
+                      </div>
+                    );
+                  })}
+                </div>
+                <Separator />
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  <p className="font-medium text-foreground">Sự kiện gửi thông báo</p>
+                  <ul className="list-disc pl-5">
+                    <li>Tặng voucher khi tour bị huỷ tự động</li>
+                    <li>Cập nhật trạng thái yêu cầu hoàn tiền</li>
+                    <li>Thông báo phát hành hóa đơn điện tử</li>
+                  </ul>
+                </div>
+              </CardContent>
+            </Card>
+          </aside>
+          <section className="flex-1">
+            <Card className="h-full">
+              <CardHeader className="flex flex-col gap-4 border-b border-dashed border-border md:flex-row md:items-center md:justify-between">
+                <div>
+                  <CardTitle className="text-2xl font-semibold text-foreground">
+                    Danh sách thông báo
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Mỗi thông báo được lưu tối đa 30 ngày. Nhấn để xem chi tiết.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={markAllMutation.isPending || notifications.length === 0}
+                    onClick={() => markAllMutation.mutate()}
+                  >
+                    Đánh dấu tất cả đã đọc
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => notificationsQuery.refetch()}
+                    disabled={notificationsQuery.isFetching}
+                  >
+                    Làm mới
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                {isLoading ? (
+                  <div className="flex min-h-[320px] flex-col items-center justify-center gap-2 text-muted-foreground">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                    Đang tải thông báo...
+                  </div>
+                ) : isError ? (
+                  <div className="flex min-h-[320px] flex-col items-center justify-center gap-3 text-center">
+                    <Inbox className="h-10 w-10 text-muted-foreground" />
+                    <p className="text-sm font-medium text-foreground">Không thể tải dữ liệu</p>
+                    <p className="text-xs text-muted-foreground">
+                      Vui lòng thử lại hoặc kiểm tra kết nối mạng.
+                    </p>
+                    <Button
+                      size="sm"
+                      onClick={() => notificationsQuery.refetch()}
+                      disabled={notificationsQuery.isFetching}
+                    >
+                      Thử lại
+                    </Button>
+                  </div>
+                ) : notifications.length === 0 ? (
+                  <div className="flex min-h-[320px] flex-col items-center justify-center gap-2 text-muted-foreground">
+                    <BellOff className="h-10 w-10" />
+                    <p className="text-sm">Hiện chưa có thông báo nào</p>
+                  </div>
+                ) : (
+                  <div className="divide-y">
+                    {notifications.map((notification) => {
+                      const title =
+                        (notification.data?.["title"] as string | undefined) ??
+                        (notification.type === "voucher"
+                          ? "Bạn được tặng voucher mới"
+                          : "Thông báo mới");
+                      const message =
+                        (notification.data?.["message"] as string | undefined) ??
+                        "Nhấn để xem chi tiết.";
+                      const bookingId =
+                        (notification.data?.["booking_id"] ??
+                          notification.data?.["bookingId"]) as string | undefined;
+                      const isRead = Boolean(notification.read_at);
+                      return (
+                        <div
+                          key={notification.id}
+                          className={cn(
+                            "flex flex-col gap-2 px-6 py-5 transition hover:bg-muted/50",
+                            !isRead && "bg-primary/5",
+                          )}
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <Badge variant={isRead ? "secondary" : "default"}>
+                                {notificationTypeLabel(notification.type)}
+                              </Badge>
+                              {!isRead && (
+                                <span className="text-xs font-medium text-primary">Mới</span>
+                              )}
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                              {renderRelativeTime(notification.created_at)}
+                            </span>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-sm font-semibold text-foreground">{title}</p>
+                            <p className="text-sm text-muted-foreground">{message}</p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-3 text-xs">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="px-2"
+                              onClick={() => handleItemClick(notification)}
+                              disabled={!bookingId}
+                            >
+                              Xem chi tiết
+                              <ArrowRight className="ml-1 h-3 w-3" />
+                            </Button>
+                            {!isRead && (
+                              <Button
+                                variant="link"
+                                size="sm"
+                                className="px-0 text-foreground"
+                                onClick={() => markReadMutation.mutate(notification.id)}
+                                disabled={markReadMutation.isPending}
+                              >
+                                Đánh dấu đã đọc
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t p-4 text-sm">
+                <span className="text-muted-foreground">
+                  Trang {currentPage}
+                  {lastPage ? ` / ${lastPage}` : null}
+                </span>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!hasPrevPage || notificationsQuery.isFetching}
+                    onClick={() => {
+                      if (hasPrevPage) setPage((prev) => Math.max(1, prev - 1));
+                    }}
+                  >
+                    Trước
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!hasNextPage || notificationsQuery.isFetching}
+                    onClick={() => {
+                      if (hasNextPage) setPage((prev) => prev + 1);
+                    }}
+                  >
+                    Sau
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          </section>
+        </div>
+      </main>
+      <Footer />
+    </div>
+  );
+};
+
+export default NotificationsPage;

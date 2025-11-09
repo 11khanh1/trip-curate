@@ -166,6 +166,10 @@ const getRefundStepIndex = (status?: RefundRequestStatus): number => {
   }
 };
 
+const PAYMENT_SUCCESS_STATUSES = new Set(["paid", "success", "completed"]);
+const PAYMENT_REFUND_STATUSES = new Set(["refunded"]);
+const normalizeStatus = (status?: string | null) => (status ?? "").toString().trim().toLowerCase();
+
 const formatCurrency = (value?: number | null, currency = "VND") => {
   if (typeof value !== "number") return "Đang cập nhật";
   try {
@@ -253,6 +257,19 @@ const parseCurrencyInput = (raw: string): number | null => {
     return null;
   }
   return parsed;
+};
+
+const didPaymentSucceed = (payment?: BookingPayment | null) => {
+  if (!payment) return false;
+  const normalized = normalizeStatus(payment.status);
+  if (PAYMENT_SUCCESS_STATUSES.has(normalized)) {
+    return true;
+  }
+  if (typeof payment.paid_at === "string" && payment.paid_at.trim().length > 0) {
+    const paidAt = new Date(payment.paid_at);
+    return !Number.isNaN(paidAt.getTime());
+  }
+  return false;
 };
 
 
@@ -424,9 +441,17 @@ const BookingDetailPage = () => {
         (bookingRecord?.["paymentStatus"] as string | undefined),
       successfulPaymentStatus,
     ) ?? (booking?.status ?? "");
-  const paymentStatusNormalized = resolvedPaymentStatus.toString().trim().toLowerCase();
+  const paymentStatusNormalized = normalizeStatus(resolvedPaymentStatus);
   const hasResolvedPaymentStatus = resolvedPaymentStatus.toString().trim().length > 0;
+  const hasPaidTransaction =
+    Array.isArray(booking?.payments) && booking.payments.some((payment) => didPaymentSucceed(payment));
+  const hasRefundedTransaction =
+    Array.isArray(booking?.payments) &&
+    booking.payments.some(
+      (payment) => didPaymentSucceed(payment) && PAYMENT_REFUND_STATUSES.has(normalizeStatus(payment.status)),
+    );
   const isPaid =
+    hasPaidTransaction ||
     paymentStatusNormalized === "paid" ||
     paymentStatusNormalized === "success" ||
     paymentStatusNormalized === "completed";
@@ -823,27 +848,43 @@ const BookingDetailPage = () => {
     const status = (request.status ?? "").toString().trim().toLowerCase();
     return status === "pending" || status === "await_partner" || status === "await_customer_confirm";
   });
-  const hasRefundCompleted = derivedRefundRequests.some(
-    (request) => (request.status ?? "").toString().trim().toLowerCase() === "completed",
-  );
+  const hasRefundCompleted =
+    derivedRefundRequests.some(
+      (request) => (request.status ?? "").toString().trim().toLowerCase() === "completed",
+    ) || (hasPaidTransaction && hasRefundedTransaction);
   const canRequestRefund = Boolean(
-    booking?.status === "cancelled" && paymentStatusNormalized === "paid" && !hasRefundInProgress && !hasRefundCompleted,
+    booking?.status === "cancelled" &&
+      hasPaidTransaction &&
+      paymentStatusNormalized !== "refunded" &&
+      !hasRefundInProgress &&
+      !hasRefundCompleted,
   );
   const refundIneligibleReason = (() => {
-    if (hasRefundInProgress) {
-      return "Bạn đã gửi yêu cầu hoàn tiền. Vui lòng theo dõi tiến trình bên dưới.";
-    }
-    if (hasRefundCompleted || paymentStatusNormalized === "refunded") {
-      return "Đơn này đã hoàn tiền thành công. Xem lịch sử để kiểm tra chi tiết.";
+    if (!hasPaidTransaction) {
+      return "Chỉ hỗ trợ hoàn tiền cho các booking đã được ghi nhận thanh toán thành công.";
     }
     if (booking?.status !== "cancelled") {
       return "Chỉ hỗ trợ hoàn tiền sau khi bạn hủy booking.";
     }
-    if (paymentStatusNormalized !== "paid") {
-      return "Hệ thống chỉ mở hoàn tiền cho các booking đã thanh toán thành công.";
+    if (hasRefundInProgress) {
+      return "Bạn đã gửi yêu cầu hoàn tiền. Vui lòng theo dõi tiến trình bên dưới.";
+    }
+    if (hasRefundCompleted) {
+      return "Đơn này đã hoàn tiền thành công. Xem lịch sử để kiểm tra chi tiết.";
+    }
+    if (paymentStatusNormalized === "refunded") {
+      return "Hệ thống đã đánh dấu hoàn tiền. Nếu bạn chưa nhận được tiền, vui lòng liên hệ hỗ trợ.";
     }
     return "Chưa đủ điều kiện để tạo yêu cầu hoàn tiền.";
   })();
+  const paymentStatusDisplayLabel =
+    booking?.status === "cancelled" && !hasPaidTransaction
+      ? "Chờ thanh toán"
+      : statusLabel(resolvedPaymentStatus);
+  const paymentStatusBadgeVariant =
+    booking?.status === "cancelled" && !hasPaidTransaction ? "outline" : statusVariant(resolvedPaymentStatus);
+  const shouldShowSepayReminder =
+    paymentMethod === "sepay" && !isPaid && paymentStatusNormalized === "pending" && typeof bookingPaymentUrl === "string" && bookingPaymentUrl.length > 0;
   const canRequestInvoice = Boolean(
     booking?.status === "completed" && isPaid && !invoice && !invoiceRequestMutation.isPending,
   );
@@ -923,9 +964,7 @@ const BookingDetailPage = () => {
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant={statusVariant(booking.status)}>{statusLabel(booking.status)}</Badge>
                 {hasResolvedPaymentStatus && (
-                  <Badge variant={statusVariant(resolvedPaymentStatus)}>
-                    Thanh toán: {statusLabel(resolvedPaymentStatus)}
-                  </Badge>
+                  <Badge variant={paymentStatusBadgeVariant}>Thanh toán: {paymentStatusDisplayLabel}</Badge>
                 )}
               </div>
             </div>
@@ -1117,6 +1156,31 @@ const BookingDetailPage = () => {
             )}
 
             <div className="grid gap-6 lg:grid-cols-2">
+              {shouldShowSepayReminder && (
+                <Card className="border border-primary/20 bg-primary/5">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-primary">
+                      <CreditCard className="h-5 w-5" />
+                      Thanh toán Sepay còn dang dở
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 text-sm text-muted-foreground">
+                    <p>
+                      Đơn của bạn đang chờ thanh toán qua Sepay. Bấm nút dưới đây để mở lại cổng thanh toán và hoàn tất giao dịch.
+                    </p>
+                    <Button
+                      className="mt-2"
+                      onClick={() => window.open(bookingPaymentUrl, "_blank", "noopener,noreferrer")}
+                    >
+                      Mở cổng thanh toán Sepay
+                    </Button>
+                    <p className="text-xs">
+                      Sau khi thanh toán thành công, trạng thái đơn sẽ cập nhật tự động trong ít phút.
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+
               <Card ref={refundSectionRef}>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -1468,70 +1532,82 @@ const BookingDetailPage = () => {
                       </TableRow>
                     </TableHeader>
                       <TableBody>
-                        {booking.payments.map((payment: BookingPayment, index) => (
-                          <TableRow key={payment.id ?? index}>
-                        <TableCell className="font-medium text-foreground">
-                          {payment.order_code ?? payment.transaction_id ?? "—"}
-                        </TableCell>
-                        <TableCell>
-                          {formatCurrency(payment.amount, payment.currency ?? "VND")}
-                          {typeof payment.refund_amount === "number" && Number.isFinite(payment.refund_amount) && payment.refund_amount > 0 ? (
-                            <div className="text-xs text-emerald-600">
-                              Hoàn: {formatCurrency(payment.refund_amount, payment.currency ?? "VND")}
-                            </div>
-                          ) : null}
-                        </TableCell>
-                            <TableCell>
-                              <Badge variant={statusVariant(payment.status)}>{statusLabel(payment.status)}</Badge>
-                            </TableCell>
-                            <TableCell>
-                              {payment.paid_at
-                                ? formatDateTime(payment.paid_at)
-                                : payment.status === "pending"
-                                ? "Đang chờ"
-                                : payment.updated_at
-                                ? formatDateTime(payment.updated_at as string)
-                                : "—"}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {(() => {
-                                const rowStatus = (payment.status ?? "").toString().toLowerCase();
-                                const rowPaid =
-                                  rowStatus === "paid" ||
-                                  rowStatus === "success" ||
-                                  rowStatus === "completed";
-                                if (rowPaid) {
+                        {booking.payments.map((payment: BookingPayment, index) => {
+                          const normalizedRowStatus = normalizeStatus(payment.status);
+                          const refundAmountValue =
+                            typeof payment.refund_amount === "number" && Number.isFinite(payment.refund_amount)
+                              ? payment.refund_amount
+                              : null;
+                          const rowPaid = didPaymentSucceed(payment);
+                          const rowRefunded =
+                            rowPaid &&
+                            PAYMENT_REFUND_STATUSES.has(normalizedRowStatus) &&
+                            refundAmountValue !== null &&
+                            refundAmountValue > 0;
+                          const rowStatusLabel = rowPaid
+                            ? statusLabel(payment.status)
+                            : "Chờ thanh toán";
+                          const rowStatusVariant = rowPaid ? statusVariant(payment.status) : "outline";
+                          return (
+                            <TableRow key={payment.id ?? index}>
+                              <TableCell className="font-medium text-foreground">
+                                {payment.order_code ?? payment.transaction_id ?? "—"}
+                              </TableCell>
+                              <TableCell>
+                                {formatCurrency(payment.amount, payment.currency ?? "VND")}
+                                {rowRefunded && (
+                                  <div className="text-xs text-emerald-600">
+                                    Hoàn: {formatCurrency(refundAmountValue, payment.currency ?? "VND")}
+                                  </div>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={rowStatusVariant}>{rowStatusLabel}</Badge>
+                              </TableCell>
+                              <TableCell>
+                                {payment.paid_at
+                                  ? formatDateTime(payment.paid_at)
+                                  : normalizedRowStatus === "pending"
+                                  ? "Đang chờ"
+                                  : payment.updated_at
+                                  ? formatDateTime(payment.updated_at as string)
+                                  : "—"}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {(() => {
+                                  if (rowPaid) {
+                                    return "—";
+                                  }
+                                  if (canPayOnline) {
+                                    return (
+                                      <Button
+                                        size="sm"
+                                        onClick={handleInitiatePayment}
+                                        disabled={paymentMutation.isPending}
+                                      >
+                                        {paymentMutation.isPending ? "Đang xử lý..." : "Thanh toán"}
+                                      </Button>
+                                    );
+                                  }
+                                  if (bookingPaymentUrl && paymentMethod !== "offline") {
+                                    return (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() =>
+                                          window.open(bookingPaymentUrl, "_blank", "noopener,noreferrer")
+                                        }
+                                      >
+                                        Mở liên kết
+                                      </Button>
+                                    );
+                                  }
                                   return "—";
-                                }
-                                if (canPayOnline) {
-                                  return (
-                                    <Button
-                                      size="sm"
-                                      onClick={handleInitiatePayment}
-                                      disabled={paymentMutation.isPending}
-                                    >
-                                      {paymentMutation.isPending ? "Đang xử lý..." : "Thanh toán"}
-                                    </Button>
-                                  );
-                                }
-                                if (bookingPaymentUrl && paymentMethod !== "offline") {
-                                  return (
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() =>
-                                        window.open(bookingPaymentUrl, "_blank", "noopener,noreferrer")
-                                      }
-                                    >
-                                      Mở liên kết
-                                    </Button>
-                                  );
-                                }
-                                return "—";
-                              })()}
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                                })()}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                 ) : (
