@@ -728,8 +728,8 @@ const BookingCheckout = () => {
         effectiveDiscountTotal > 0;
       if (
         discountOverrideEligible &&
-        (!preferredFinalAmount ||
-          Math.round(normalizedTotalAmount) >= Math.round(normalizedOriginalBase))
+        !preferredFinalAmount &&
+        Math.round(normalizedTotalAmount) >= Math.round(normalizedOriginalBase)
       ) {
         const recalculated = normalizedOriginalBase - effectiveDiscountTotal;
         if (recalculated >= 0) {
