@@ -2,8 +2,9 @@ import type { FC } from "react";
 import { useGoogleMap } from "@/hooks/useGoogleMap";
 
 interface GoogleMapEmbedProps {
-  lat: number;
-  lng: number;
+  lat?: number;
+  lng?: number;
+  address?: string;
   zoom?: number;
   title?: string;
   className?: string;
@@ -11,12 +12,20 @@ interface GoogleMapEmbedProps {
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
-const GoogleMapEmbed: FC<GoogleMapEmbedProps> = ({ lat, lng, zoom = 13, title, className }) => {
-  const normalizedLat = clamp(lat, -90, 90);
-  const normalizedLng = clamp(lng, -180, 180);
+const GoogleMapEmbed: FC<GoogleMapEmbedProps> = ({
+  lat,
+  lng,
+  address,
+  zoom = 13,
+  title,
+  className,
+}) => {
+  const normalizedLat = typeof lat === "number" ? clamp(lat, -90, 90) : undefined;
+  const normalizedLng = typeof lng === "number" ? clamp(lng, -180, 180) : undefined;
   const { mapRef, isLoading, error } = useGoogleMap({
     lat: normalizedLat,
     lng: normalizedLng,
+    address,
     zoom,
     title,
   });

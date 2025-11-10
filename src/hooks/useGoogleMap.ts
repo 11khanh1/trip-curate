@@ -2,6 +2,14 @@ import { useEffect, useRef, useState } from "react";
 
 declare const google: any;
 
+interface UseGoogleMapOptions {
+  lat?: number;
+  lng?: number;
+  address?: string;
+  zoom?: number;
+  title?: string;
+}
+
 interface UseGoogleMapResult {
   mapRef: (node: HTMLDivElement | null) => void;
   isLoading: boolean;
@@ -42,12 +50,7 @@ const loadGoogleMapsScript = (apiKey: string) =>
     document.head.appendChild(script);
   });
 
-export const useGoogleMap = (options: {
-  lat: number;
-  lng: number;
-  zoom?: number;
-  title?: string;
-}): UseGoogleMapResult => {
+export const useGoogleMap = (options: UseGoogleMapOptions): UseGoogleMapResult => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,22 +64,48 @@ export const useGoogleMap = (options: {
     }
     let isMounted = true;
 
+    const initializeMap = (center: { lat: number; lng: number }) => {
+      if (!isMounted || !containerRef.current) return;
+      const map = new google.maps.Map(containerRef.current, {
+        center,
+        zoom: options.zoom ?? 13,
+        disableDefaultUI: true,
+        zoomControl: true,
+      });
+      new google.maps.Marker({
+        position: center,
+        map,
+        title: options.title,
+      });
+      setIsLoading(false);
+    };
+
+    const handleMissingData = () => {
+      setError("Không có tọa độ hoặc địa chỉ hợp lệ.");
+      setIsLoading(false);
+    };
+
     loadGoogleMapsScript(apiKey)
       .then(() => {
-        if (!isMounted || !containerRef.current) return;
-        const center = { lat: options.lat, lng: options.lng };
-        const map = new google.maps.Map(containerRef.current, {
-          center,
-          zoom: options.zoom ?? 13,
-          disableDefaultUI: true,
-          zoomControl: true,
+        if (typeof options.lat === "number" && typeof options.lng === "number") {
+          initializeMap({ lat: options.lat, lng: options.lng });
+          return;
+        }
+        if (!options.address) {
+          handleMissingData();
+          return;
+        }
+        const geocoder = new google.maps.Geocoder();
+        geocoder.geocode({ address: options.address }, (results, status) => {
+          if (!isMounted) return;
+          if (status === "OK" && results && results[0]) {
+            const location = results[0].geometry.location;
+            initializeMap({ lat: location.lat(), lng: location.lng() });
+          } else {
+            console.warn("Geocoder không tìm thấy địa điểm:", status);
+            handleMissingData();
+          }
         });
-        new google.maps.Marker({
-          position: center,
-          map,
-          title: options.title,
-        });
-        setIsLoading(false);
       })
       .catch((err) => {
         console.error("Không thể tải Google Maps:", err);
@@ -89,7 +118,7 @@ export const useGoogleMap = (options: {
     return () => {
       isMounted = false;
     };
-  }, [options.lat, options.lng, options.zoom, options.title]);
+  }, [options.lat, options.lng, options.address, options.zoom, options.title]);
 
   return {
     mapRef: (node) => {

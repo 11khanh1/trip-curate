@@ -54,7 +54,6 @@ import {
   type PublicTourSchedule,
   type TourType,
 } from "@/services/publicApi";
-import { geocodeAddress } from "@/services/geocodingApi";
 import { useToast } from "@/hooks/use-toast";
 import { useCart } from "@/context/CartContext";
 import { useUser } from "@/context/UserContext";
@@ -964,31 +963,6 @@ const activity = useMemo(
   [tourDetail, trendingTours],
 );
 
-const locationCoordsFromApi = activity?.location?.coordinates ?? null;
-const locationNameCandidate =
-  activity?.location?.name ??
-  activity?.locationName ??
-  tourDetail?.destination ??
-  activity?.partner?.companyName ??
-  "";
-const shouldGeocodeLocation = Boolean(locationNameCandidate) && !locationCoordsFromApi;
-const {
-  data: geocodedLocation,
-  isFetching: isGeocodingLocation,
-} = useQuery({
-  queryKey: ["geocode-location", locationNameCandidate],
-  queryFn: async () => {
-    const coords = await geocodeAddress(locationNameCandidate);
-    if (!coords) {
-      throw new Error(`Không tìm thấy tọa độ cho ${locationNameCandidate}`);
-    }
-    return coords;
-  },
-  enabled: shouldGeocodeLocation,
-  staleTime: 1000 * 60 * 60 * 24,
-  retry: 1,
-  refetchOnWindowFocus: false,
-});
 
 const resolvedTourEntityId = useMemo(() => {
   const candidates: Array<unknown> = [tourDetail?.uuid, tourDetail?.id, activity?.id, id];
@@ -1670,7 +1644,13 @@ useEffect(() => {
   const hasFaqs = activity.faqs.length > 0;
   const hasReviews = combinedReviews.length > 0;
   const hasLocation = Boolean(activity.location?.name || activity.location?.address);
-  const locationCoords = locationCoordsFromApi ?? geocodedLocation ?? null;
+  const locationCoords = activity.location?.coordinates ?? null;
+  const locationNameCandidate =
+    activity.location?.name ??
+    activity.locationName ??
+    tourDetail?.destination ??
+    activity.partner?.companyName ??
+    "";
   const hasRelated = activity.relatedActivities.length > 0;
   const bookedCount = typeof activity.bookedCount === "number" ? activity.bookedCount : null;
   const durationLabel = activity.duration ? String(activity.duration) : null;
@@ -2468,17 +2448,14 @@ useEffect(() => {
                           </p>
                         )}
                       </div>
-                        {locationCoords ? (
-                          <GoogleMapEmbed
-                          lat={Number(locationCoords.lat)}
-                          lng={Number(locationCoords.lng)}
-                          title={activity.location?.name ?? tourDetail?.destination ?? "Điểm đến"}
+                      {locationCoords || locationNameCandidate ? (
+                        <GoogleMapEmbed
+                          lat={locationCoords?.lat}
+                          lng={locationCoords?.lng}
+                          address={locationCoords ? undefined : locationNameCandidate}
+                          title={activity.location?.name ?? tourDetail?.destination ?? locationNameCandidate}
                           className="mt-2"
                         />
-                      ) : isGeocodingLocation ? (
-                        <div className="w-full h-64 bg-muted rounded-lg flex items-center justify-center text-muted-foreground">
-                          Đang tải bản đồ địa điểm...
-                        </div>
                       ) : (
                         <div className="w-full h-64 bg-muted rounded-lg flex items-center justify-center text-muted-foreground">
                           Đang cập nhật bản đồ địa điểm.
