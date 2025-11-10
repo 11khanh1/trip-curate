@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import NotificationInbox from "@/components/notifications/NotificationInbox";
 
 // DỰ ĐOÁN: Bạn sẽ có một UserContext cho Partner User.
 // Đảm bảo đường dẫn import này chính xác hoặc thay thế bằng context của bạn.
@@ -192,6 +193,7 @@ export default function PartnerLayout() {
                 <Input placeholder="Tìm kiếm trong trang đối tác..." className="pl-9" />
               </div>
               <div className="flex items-center gap-3">
+                <NotificationInbox variant="partner" />
                 <div className="hidden flex-col items-end leading-tight md:flex">
                   <p className="text-sm font-medium">{currentUser?.name || "Partner User"}</p>
                   <p className="text-xs text-muted-foreground">{currentUser?.email || "Chưa có email"}</p>

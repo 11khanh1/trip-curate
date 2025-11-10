@@ -22,6 +22,12 @@ const TYPE_LABELS: Record<string, string> = {
   booking_cancelled: "Đơn đã hủy",
   payment_status: "Thanh toán",
   payment_update: "Thanh toán",
+  booking_confirmation: "Xác nhận đặt tour",
+  payment_reminder: "Nhắc thanh toán",
+  booking_update: "Cập nhật đơn",
+  inventory_update: "Trạng thái chỗ",
+  promotion_update: "Khuyến mãi",
+  post_trip_review: "Mời đánh giá",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -133,11 +139,20 @@ export const getNotificationCopy = (notification: NotificationPayload): Notifica
 
   switch (type) {
     case "booking_success":
+    case "booking_confirmation":
+    case "booking_confirmed":
       return {
         title: "Đặt tour thành công",
         message: bookingCode
           ? `Đơn ${bookingCode} đã được tạo. Chúng tôi sẽ thông báo khi đối tác xác nhận.`
           : "Đơn đặt tour của bạn đã được tạo thành công.",
+      };
+    case "payment_reminder":
+      return {
+        title: "Nhắc thanh toán",
+        message: bookingCode
+          ? `Đơn ${bookingCode} vẫn chưa được thanh toán. Vui lòng hoàn tất để giữ chỗ.`
+          : "Đơn đặt tour của bạn chưa được thanh toán. Hãy hoàn tất để giữ chỗ.",
       };
     case "payment_status":
     case "payment_update":
@@ -147,12 +162,12 @@ export const getNotificationCopy = (notification: NotificationPayload): Notifica
           ? `Đơn ${bookingCode}: ${statusLabel}.`
           : `Trạng thái thanh toán: ${statusLabel}.`,
       };
-    case "booking_confirmed":
+    case "booking_update":
       return {
-        title: "Đơn đã được xác nhận",
+        title: "Cập nhật đơn đặt tour",
         message: bookingCode
-          ? `Đối tác đã xác nhận đơn ${bookingCode}. Hãy chuẩn bị cho chuyến đi của bạn!`
-          : "Đơn đặt tour của bạn đã được đối tác xác nhận.",
+          ? `Đơn ${bookingCode} có cập nhật mới: ${statusLabel}.`
+          : `Đơn đặt tour của bạn có cập nhật mới: ${statusLabel}.`,
       };
     case "booking_cancelled":
     case "booking_status":
@@ -161,6 +176,13 @@ export const getNotificationCopy = (notification: NotificationPayload): Notifica
         message: bookingCode
           ? `Đơn ${bookingCode} đã bị hủy. Vui lòng xem chi tiết để biết hướng dẫn tiếp theo.`
           : "Đơn đặt tour của bạn đã bị hủy.",
+      };
+    case "inventory_update":
+      return {
+        title: "Trạng thái chỗ trống thay đổi",
+        message: bookingCode
+          ? `Chỗ trống của đơn ${bookingCode} vừa thay đổi. Hãy kiểm tra lại hành trình của bạn.`
+          : "Một tour trong danh sách của bạn vừa thay đổi số chỗ. Hãy kiểm tra để kịp điều chỉnh.",
       };
     case "refund_request":
       return {
@@ -193,6 +215,13 @@ export const getNotificationCopy = (notification: NotificationPayload): Notifica
           : "Một voucher mới vừa được tặng cho bạn.",
       };
     }
+    case "promotion_update":
+      return {
+        title: "Khuyến mãi mới",
+        message: data?.["promotion"]
+          ? `Ưu đãi ${String(data["promotion"])} đang diễn ra. Hãy áp dụng ngay!`
+          : "Một chương trình khuyến mãi mới vừa mở. Đừng bỏ lỡ!",
+      };
     case "invoice":
     case "invoice_ready":
       return {
@@ -200,6 +229,13 @@ export const getNotificationCopy = (notification: NotificationPayload): Notifica
         message: bookingCode
           ? `Hóa đơn cho đơn ${bookingCode} đã được phát hành.`
           : "Hóa đơn điện tử của bạn đã sẵn sàng.",
+      };
+    case "post_trip_review":
+      return {
+        title: "Chia sẻ cảm nhận của bạn",
+        message: bookingCode
+          ? `Chuyến đi của đơn ${bookingCode} đã kết thúc. Hãy dành ít phút đánh giá để nhận ưu đãi!`
+          : "Chuyến đi của bạn đã kết thúc. Hãy gửi đánh giá để chúng tôi phục vụ tốt hơn.",
       };
     default:
       return {

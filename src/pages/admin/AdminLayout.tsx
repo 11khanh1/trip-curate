@@ -17,6 +17,7 @@ import {
 import { useUser } from "@/context/UserContext"; 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import NotificationInbox from "@/components/notifications/NotificationInbox";
 
 // --- AdminSidebar Component ---
 
@@ -175,6 +176,7 @@ export default function AdminLayout() {
               </div>
 
               <div className="flex items-center gap-3">
+                <NotificationInbox variant="admin" />
                 <div className="hidden md:flex flex-col items-end leading-tight">
                   <p className="text-sm font-medium">{currentUser?.name || "Người dùng"}</p>
                   <p className="text-xs text-muted-foreground">
