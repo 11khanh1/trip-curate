@@ -53,7 +53,7 @@ const Footer = () => {
           {/* Company Info */}
           <div className="lg:col-span-1">
             <div className="text-2xl font-bold text-primary mb-4">
-              TravelBooking
+              VietTravel
             </div>
             <p className="text-gray-400 mb-6">
               Nền tảng đặt tour du lịch hàng đầu với gợi ý cá nhân hóa.

@@ -67,7 +67,6 @@ import {
   type TourReviewListResponse,
 } from "@/services/reviewApi";
 import SimilarTourRecommendations from "@/components/recommendations/SimilarTourRecommendations";
-import GoogleMapEmbed from "@/components/maps/GoogleMapEmbed";
 
 
 // ====================================================================================
@@ -2430,42 +2429,6 @@ useEffect(() => {
               baseTourTitle={activity?.title}
               limit={6}
             />
-
-            {hasLocation && (
-              <div className="space-y-4">
-                <h2 className="text-2xl font-bold text-foreground">Địa điểm</h2>
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="space-y-4">
-                      <div>
-                        <h4 className="font-semibold text-foreground mb-2">
-                          {activity.location?.name ?? "Đang cập nhật"}
-                        </h4>
-                        {activity.location?.address && (
-                          <p className="text-muted-foreground flex items-start gap-2">
-                            <MapPin className="h-5 w-5 mt-0.5 flex-shrink-0" />
-                            <span>{activity.location.address}</span>
-                          </p>
-                        )}
-                      </div>
-                      {locationCoords || locationNameCandidate ? (
-                        <GoogleMapEmbed
-                          lat={locationCoords?.lat}
-                          lng={locationCoords?.lng}
-                          address={locationCoords ? undefined : locationNameCandidate}
-                          title={activity.location?.name ?? tourDetail?.destination ?? locationNameCandidate}
-                          className="mt-2"
-                        />
-                      ) : (
-                        <div className="w-full h-64 bg-muted rounded-lg flex items-center justify-center text-muted-foreground">
-                          Đang cập nhật bản đồ địa điểm.
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
 
             {hasFaqs && (
               <div className="space-y-4">
