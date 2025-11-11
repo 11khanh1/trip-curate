@@ -31,6 +31,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 type NormalizedCategory = {
   id: string;
@@ -57,6 +62,7 @@ export default function AdminCategories() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const NO_PARENT_VALUE = "__none";
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   const [createForm, setCreateForm] = useState({
     name: "",
@@ -190,6 +196,7 @@ export default function AdminCategories() {
   const parentOptions = useMemo(() => rootCategories, [rootCategories]);
 
   const totalCategories = categories.length;
+  const resetCreateForm = () => setCreateForm({ name: "", slug: "", parent_id: NO_PARENT_VALUE });
 
   return (
     <div className="space-y-6">
@@ -199,48 +206,74 @@ export default function AdminCategories() {
         <StatCard title="Danh mục con" value={childCategories.length} icon={Tag} />
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Thêm danh mục</CardTitle>
-          <CardDescription>Tạo danh mục mới và cấu hình cấp cha nếu cần</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form className="grid gap-4 md:grid-cols-[2fr,2fr,2fr,auto]" onSubmit={handleCreate}>
-            <Input
-              placeholder="Tên danh mục (ví dụ: Du lịch sinh thái)"
-              value={createForm.name}
-              onChange={(e) => setCreateForm((prev) => ({ ...prev, name: e.target.value }))}
-              required
-            />
-            <Input
-              placeholder="Slug (tùy chọn)"
-              value={createForm.slug}
-              onChange={(e) => setCreateForm((prev) => ({ ...prev, slug: e.target.value }))}
-            />
-            <Select
-              value={createForm.parent_id}
-              onValueChange={(value) => setCreateForm((prev) => ({ ...prev, parent_id: value }))}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Danh mục cha (tùy chọn)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NO_PARENT_VALUE}>Không có</SelectItem>
-                {parentOptions.map((option) => (
-                  <SelectItem key={option.id} value={option.id}>
-                    {option.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button type="submit" disabled={createMutation.isPending}>
-              {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Thêm mới"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+      <Collapsible open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <Card className="border border-primary/20 bg-white/95 shadow-md">
+          <CardHeader className="gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle className="text-foreground">Thêm danh mục</CardTitle>
+              <CardDescription className="text-muted-foreground">
+                Tạo danh mục mới và cấu hình cấp cha nếu cần
+              </CardDescription>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={resetCreateForm}
+                disabled={createMutation.isPending}
+              >
+                Làm mới
+              </Button>
+              <CollapsibleTrigger asChild>
+                <Button size="sm" variant={isCreateOpen ? "secondary" : "default"}>
+                  {isCreateOpen ? "Thu gọn form" : "Mở form thêm"}
+                </Button>
+              </CollapsibleTrigger>
+            </div>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent>
+              <form className="grid gap-4 md:grid-cols-[2fr,2fr,2fr,auto]" onSubmit={handleCreate}>
+                <Input
+                  placeholder="Tên danh mục (ví dụ: Du lịch sinh thái)"
+                  value={createForm.name}
+                  onChange={(e) => setCreateForm((prev) => ({ ...prev, name: e.target.value }))}
+                  required
+                  className="border-primary/30 focus-visible:ring-primary/40"
+                />
+                <Input
+                  placeholder="Slug (tùy chọn)"
+                  value={createForm.slug}
+                  onChange={(e) => setCreateForm((prev) => ({ ...prev, slug: e.target.value }))}
+                  className="border-primary/10 focus-visible:ring-primary/40"
+                />
+                <Select
+                  value={createForm.parent_id}
+                  onValueChange={(value) => setCreateForm((prev) => ({ ...prev, parent_id: value }))}
+                >
+                  <SelectTrigger className="border-primary/10 focus:ring-primary/30 focus:ring-2">
+                    <SelectValue placeholder="Danh mục cha (tùy chọn)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NO_PARENT_VALUE}>Không có</SelectItem>
+                    {parentOptions.map((option) => (
+                      <SelectItem key={option.id} value={option.id}>
+                        {option.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button type="submit" disabled={createMutation.isPending} className="shadow">
+                  {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Thêm mới"}
+                </Button>
+              </form>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
-      <Card>
+      <Card className="border border-slate-200/80 shadow-sm">
         <CardHeader>
           <CardTitle>Danh sách danh mục</CardTitle>
           <CardDescription>Hiển thị danh mục hiện có và quan hệ cấp cha</CardDescription>

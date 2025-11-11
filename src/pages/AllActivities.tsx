@@ -26,63 +26,6 @@ import { getTourPriceInfo, buildPromotionLabel } from "@/lib/tour-utils";
 
 const PER_PAGE = 50;
 
-const fallbackTours = [
-  {
-    id: "fallback-1",
-    title: "Khám phá vịnh Hạ Long trong ngày",
-    location: "Quảng Ninh",
-    image: "https://images.unsplash.com/photo-1528127269322-539801943592?w=800&h=600&fit=crop",
-    rating: 4.9,
-    reviewCount: 3560,
-    bookingsCount: 46800,
-    price: 990000,
-    duration: "1 ngày",
-    category: "Tour",
-    features: ["Đón tại khách sạn", "Hướng dẫn viên", "Buffet hải sản"],
-    isPopular: true,
-  },
-  {
-    id: "fallback-2",
-    title: "Combo nghỉ dưỡng Phú Quốc 3N2Đ",
-    location: "Phú Quốc",
-    image: "https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=800&h=600&fit=crop",
-    rating: 4.8,
-    reviewCount: 2410,
-    bookingsCount: 32500,
-    price: 3250000,
-    duration: "3 ngày",
-    category: "Combo nghỉ dưỡng",
-    features: ["Resort 5*", "Vé tham quan", "Xe đưa đón sân bay"],
-    isPopular: true,
-  },
-  {
-    id: "fallback-3",
-    title: "Trải nghiệm văn hóa bản địa ở Sa Pa",
-    location: "Lào Cai",
-    image: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=800&h=600&fit=crop",
-    rating: 4.9,
-    reviewCount: 1820,
-    bookingsCount: 18200,
-    price: 790000,
-    duration: "2 ngày",
-    category: "Trải nghiệm",
-    features: ["Hướng dẫn viên", "Ẩm thực địa phương", "Xe đưa đón"],
-  },
-  {
-    id: "fallback-4",
-    title: "Vé vào VinWonders Nha Trang",
-    location: "Nha Trang",
-    image: "https://images.unsplash.com/photo-1501594907352-04cda38ebc29?w=800&h=600&fit=crop",
-    rating: 4.7,
-    reviewCount: 4320,
-    bookingsCount: 47800,
-    price: 880000,
-    duration: "Trong ngày",
-    category: "Công viên giải trí",
-    features: ["Cáp treo", "Show biểu diễn", "Ẩm thực"],
-  },
-];
-
 const DEFAULT_TOUR_IMAGE =
   "https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?w=800&h=600&fit=crop";
 
@@ -276,7 +219,7 @@ const AllActivities = () => {
   const toursMeta =
     activeCategory === "all" ? undefined : toursQuery.data?.meta ?? {};
 
-  const mappedTours = toursData.length > 0 ? toursData.map(mapTourToCard) : fallbackTours;
+  const mappedTours = toursData.length > 0 ? toursData.map(mapTourToCard) : [];
 
   const currentPage =
     activeCategory === "all"

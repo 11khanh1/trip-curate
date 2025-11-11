@@ -6,17 +6,6 @@ interface TopDestinationsProps {
   categories?: HomeCategory[];
 }
 
-const fallbackDestinations: HomeCategory[] = [
-  { id: "fallback-1", name: "Vịnh Hạ Long", tours_count: 128 },
-  { id: "fallback-2", name: "Địa đạo Củ Chi", tours_count: 96 },
-  { id: "fallback-3", name: "Bà Nà Hills", tours_count: 88 },
-  { id: "fallback-4", name: "Phố Cổ Hội An", tours_count: 75 },
-  { id: "fallback-5", name: "Tràng An - Ninh Bình", tours_count: 64 },
-  { id: "fallback-6", name: "Sa Pa", tours_count: 54 },
-  { id: "fallback-7", name: "Đà Lạt", tours_count: 49 },
-  { id: "fallback-8", name: "Phú Quốc", tours_count: 42 },
-];
-
 const HIGHLIGHT_LIMIT = 12;
 
 const TopDestinations = ({ categories }: TopDestinationsProps) => {
@@ -30,7 +19,7 @@ const TopDestinations = ({ categories }: TopDestinationsProps) => {
 
   const data = categories ?? categoriesQuery.data ?? [];
   const isLoading = shouldFetch ? categoriesQuery.isLoading : false;
-  const destinations = data.length > 0 ? data : fallbackDestinations;
+  const destinations = data.length > 0 ? data : [];
 
   return (
     <section className="py-16 bg-muted/50">
@@ -47,6 +36,13 @@ const TopDestinations = ({ categories }: TopDestinationsProps) => {
             {Array.from({ length: 8 }).map((_, index) => (
               <Skeleton key={index} className="h-20 rounded-lg" />
             ))}
+          </div>
+        ) : destinations.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-primary/30 bg-white px-6 py-12 text-center text-sm text-muted-foreground shadow-inner">
+            <p className="font-medium text-foreground">Chưa có danh mục nổi bật</p>
+            <p className="mt-2">
+              Khi API trả về dữ liệu, các điểm đến được quan tâm sẽ hiển thị tại đây.
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">

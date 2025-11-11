@@ -155,9 +155,8 @@ export default function AdminLayout() {
     <SidebarProvider>
       <div className="flex min-h-screen w-full">
         <AdminSidebar />
-        <div className="flex-1 flex flex-col">
-          {/* Header chính */}
-          <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-4 border-b border-border bg-white/95 px-4 pr-6 backdrop-blur supports-[backdrop-filter]:bg-white/75">
+        <div className="flex flex-1 flex-col bg-slate-50">
+          <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-4 border-b border-slate-200 bg-white/90 px-4 pr-6 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/80">
             <div className="flex items-center gap-4">
               <SidebarTrigger className="text-muted-foreground" />
               <div className="space-y-0.5">
@@ -193,9 +192,10 @@ export default function AdminLayout() {
             </div>
           </header>
 
-          {/* Nội dung chính */}
-          <main className="flex-1 p-6 bg-muted/30">
-            <Outlet />
+          <main className="flex-1 overflow-auto px-4 py-6">
+            <div className="mx-auto w-full max-w-6xl space-y-6">
+              <Outlet />
+            </div>
           </main>
         </div>
       </div>

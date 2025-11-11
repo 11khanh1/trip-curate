@@ -15,50 +15,6 @@ interface PopularActivitiesProps {
 const DEFAULT_TOUR_IMAGE =
   "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&h=600&fit=crop";
 
-const fallbackActivities = [
-  {
-    id: "placeholder-1",
-    title: "Khám phá Việt Nam",
-    location: "Hà Nội",
-    image: DEFAULT_TOUR_IMAGE,
-    rating: 4.8,
-    reviewCount: 1240,
-    bookingsCount: 24500,
-    price: 890000,
-    duration: "2-3 ngày",
-    category: "Tour",
-    features: ["Miễn phí huỷ", "Xác nhận tức thời", "Hướng dẫn viên"],
-    isPopular: true,
-  },
-  {
-    id: "placeholder-2",
-    title: "Combo du lịch biển",
-    location: "Nha Trang",
-    image: "https://images.unsplash.com/photo-1505765050516-f72dcac9c60e?w=800&h=600&fit=crop",
-    rating: 4.7,
-    reviewCount: 980,
-    bookingsCount: 18700,
-    price: 1250000,
-    duration: "3 ngày 2 đêm",
-    category: "Combo nghỉ dưỡng",
-    features: ["Resort 5*", "Vé tham quan", "Ăn sáng buffet"],
-    isPopular: true,
-  },
-  {
-    id: "placeholder-3",
-    title: "Trải nghiệm văn hoá bản địa",
-    location: "Đà Lạt",
-    image: "https://images.unsplash.com/photo-1526481280695-3c469b17b2cc?w=800&h=600&fit=crop",
-    rating: 4.9,
-    reviewCount: 1560,
-    bookingsCount: 16200,
-    price: 590000,
-    duration: "1 ngày",
-    category: "Trải nghiệm",
-    features: ["Chụp ảnh miễn phí", "Hướng dẫn viên", "Xe đưa đón"],
-  },
-];
-
 const normalizeDuration = (duration?: number | string | null) => {
   if (duration === null || duration === undefined) return "Linh hoạt";
   if (typeof duration === "number") {
@@ -208,7 +164,7 @@ const PopularActivities = ({ tours }: PopularActivitiesProps) => {
 
   const data = tours ?? trendingQuery.data ?? [];
   const isLoading = shouldFetch ? trendingQuery.isLoading : false;
-  const activities = data.length > 0 ? data.map(mapTourToCard) : fallbackActivities;
+  const activities = data.length > 0 ? data.map(mapTourToCard) : [];
 
   return (
     <section className="py-12">
@@ -228,6 +184,13 @@ const PopularActivities = ({ tours }: PopularActivitiesProps) => {
             {Array.from({ length: 3 }).map((_, index) => (
               <Skeleton key={index} className="h-[440px] rounded-xl" />
             ))}
+          </div>
+        ) : activities.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-primary/30 bg-white/90 px-6 py-16 text-center text-sm text-muted-foreground shadow-inner">
+            <p className="font-medium text-foreground">Chưa có tour nổi bật để hiển thị</p>
+            <p className="mt-2 text-muted-foreground">
+              Dữ liệu sẽ xuất hiện ngay khi hệ thống trả về các tour thịnh hành từ API.
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

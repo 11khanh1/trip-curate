@@ -1642,14 +1642,6 @@ useEffect(() => {
   const hasTerms = activity.termsAndConditions.length > 0;
   const hasFaqs = activity.faqs.length > 0;
   const hasReviews = combinedReviews.length > 0;
-  const hasLocation = Boolean(activity.location?.name || activity.location?.address);
-  const locationCoords = activity.location?.coordinates ?? null;
-  const locationNameCandidate =
-    activity.location?.name ??
-    activity.locationName ??
-    tourDetail?.destination ??
-    activity.partner?.companyName ??
-    "";
   const hasRelated = activity.relatedActivities.length > 0;
   const bookedCount = typeof activity.bookedCount === "number" ? activity.bookedCount : null;
   const durationLabel = activity.duration ? String(activity.duration) : null;

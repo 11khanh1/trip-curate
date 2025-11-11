@@ -36,6 +36,11 @@ import {
   Shield,
 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 const PARTNER_TOUR_ENDPOINT = "/partner/tours";
 
@@ -221,6 +226,7 @@ export default function PartnerActivities() {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const baseFormDefaults = useMemo(() => createInitialFormData(), []);
   const [formData, setFormData] = useState<FormData>(() => createInitialFormData());
+  const [isFormOpen, setIsFormOpen] = useState(false);
 
   const showToast = useCallback(
     ({ title, description, variant }: { title: string; description?: string; variant?: "default" | "destructive" }) => {
@@ -549,6 +555,7 @@ useEffect(() => { fetchTours(); }, []);
       await fetchTours();
       setEditingTour(null);
       setFormData(createInitialFormData());
+      setIsFormOpen(false);
     } catch (err: any) {
       console.error(err);
       showToast({
@@ -772,6 +779,13 @@ useEffect(() => { fetchTours(); }, []);
   const handleAddTour = () => {
     setEditingTour(null);
     setFormData(createInitialFormData());
+    setIsFormOpen(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleEditTour = (tour: Tour) => {
+    setEditingTour(tour);
+    setIsFormOpen(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -1158,20 +1172,55 @@ const handleMoveItinerary = (index: number, delta: number) => {
   
   // FIX: Khai báo biến currentImage trước khi sử dụng
   const currentImage = mediaList[selectedImageIndex];
+  const editingLabel = editingTour?.title ?? editingTour?.destination ?? "Tour";
 
   // ---------------------------- RENDER ----------------------------
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader className="space-y-1">
-          <CardTitle>{editingTour ? "Cập nhật tour" : "Thêm tour mới"}</CardTitle>
-          <CardDescription>
-            {editingTour
-              ? "Điều chỉnh thông tin tour. Sau khi lưu, tour sẽ quay về trạng thái chờ duyệt."
-              : "Nhập thông tin chi tiết để tạo tour mới trên hệ thống."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <Collapsible open={isFormOpen} onOpenChange={setIsFormOpen}>
+        <Card className="border border-primary/25 bg-white/95 shadow-md">
+          <CardHeader className="space-y-4 lg:flex lg:items-center lg:justify-between">
+            <div className="space-y-1">
+              <CardTitle className="text-foreground">
+                {editingTour ? "Cập nhật tour" : "Thêm tour mới"}
+              </CardTitle>
+              <CardDescription className="text-muted-foreground">
+                {editingTour
+                  ? "Điều chỉnh thông tin tour. Sau khi lưu, tour sẽ quay về trạng thái chờ duyệt."
+                  : "Nhập thông tin chi tiết để tạo tour mới trên hệ thống."}
+              </CardDescription>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge
+                variant="outline"
+                className={
+                  editingTour
+                    ? "border-amber-300 bg-amber-50 text-amber-700"
+                    : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                }
+              >
+                {editingTour ? `Đang chỉnh: ${editingLabel.slice(0, 28)}` : "Chế độ tạo tour"}
+              </Badge>
+              <Button type="button" variant="outline" size="sm" onClick={handleAddTour}>
+                Tour mới
+              </Button>
+              <CollapsibleTrigger asChild>
+                <Button
+                  size="sm"
+                  variant={isFormOpen ? "secondary" : "default"}
+                  className="shadow"
+                >
+                  {isFormOpen
+                    ? "Thu gọn form"
+                    : editingTour
+                    ? "Mở form chỉnh sửa"
+                    : "Mở form thêm"}
+                </Button>
+              </CollapsibleTrigger>
+            </div>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               <div className="space-y-2">
@@ -1782,7 +1831,9 @@ const handleMoveItinerary = (index: number, delta: number) => {
             </div>
           </form>
         </CardContent>
-      </Card>
+      </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto scrollbar-hide">
@@ -2115,8 +2166,8 @@ const handleMoveItinerary = (index: number, delta: number) => {
               <Button
                 variant="secondary"
                 onClick={() => {
-                  setIsDetailOpen(false)
-                  setEditingTour(selectedTour)
+                  setIsDetailOpen(false);
+                  handleEditTour(selectedTour);
                 }}
                 disabled={selectedTour.status === "approved"}
               >
@@ -2180,7 +2231,7 @@ const handleMoveItinerary = (index: number, delta: number) => {
                             </Button>
                           )}
                           
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditingTour(tour)} disabled={tour.status === 'approved'} aria-label="Chỉnh sửa tour">
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditTour(tour)} disabled={tour.status === 'approved'} aria-label="Chỉnh sửa tour">
                             <Edit className="h-4 w-4" />
                           </Button>
                           
