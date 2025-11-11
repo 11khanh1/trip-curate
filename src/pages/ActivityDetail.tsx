@@ -884,22 +884,7 @@ const ActivityDetail = () => {
         title: "Đã thêm vào yêu thích",
         description: "Bạn có thể xem lại tour này trong mục Wishlist.",
       });
-      const entityId = resolvedTourEntityId ?? (item.tour_id ? String(item.tour_id) : null);
-      if (entityId) {
-        trackEvent(
-          {
-            event_name: "wishlist_add",
-            entity_type: "tour",
-            entity_id: entityId,
-            metadata: {
-              source: "activity_detail",
-              wishlist_item_id: item.id,
-            },
-          },
-          { immediate: true },
-        );
-        scheduleRecommendationRefresh();
-      }
+      scheduleRecommendationRefresh();
     },
     onError: (error: unknown) => {
       toast({
@@ -1249,6 +1234,25 @@ useEffect(() => {
   const { mutate: removeFromWishlist, isPending: isRemovingWishlist } = removeWishlistMutation;
   const isWishlistMutating = isAddingWishlist || isRemovingWishlist;
 
+  const emitWishlistAddEvent = useCallback(() => {
+    if (!resolvedTourEntityId) {
+      console.warn("Không thể gửi analytics cho wishlist_add do thiếu entity_id");
+      return false;
+    }
+    trackEvent(
+      {
+        event_name: "wishlist_add",
+        entity_type: "tour",
+        entity_id: resolvedTourEntityId,
+        metadata: {
+          source: "activity_detail",
+        },
+      },
+      { immediate: true },
+    );
+    return true;
+  }, [resolvedTourEntityId, trackEvent]);
+
   const handleWishlistToggle = useCallback(() => {
     if (!activity?.id) {
       toast({
@@ -1286,10 +1290,12 @@ useEffect(() => {
       return;
     }
 
+    emitWishlistAddEvent();
     addToWishlist(String(activity.id));
   }, [
     activity?.id,
     addToWishlist,
+    emitWishlistAddEvent,
     currentUser,
     isWishlisted,
     isWishlistMutating,

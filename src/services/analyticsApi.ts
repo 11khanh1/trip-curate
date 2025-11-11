@@ -42,9 +42,31 @@ export const postAnalyticsEvents = async (events: AnalyticsEventPayload[]) => {
     events: enrichedEvents.slice(0, 50),
   };
 
-  await apiClient.post("/analytics/events", payload, {
-    headers: {
-      "X-Device-Id": deviceId,
-    },
-  });
+  const batchSize = payload.events.length;
+
+  try {
+    const response = await apiClient.post("/analytics/events", payload, {
+      headers: {
+        "X-Device-Id": deviceId,
+      },
+    });
+    console.info("[analytics] events sent", {
+      status: response.status,
+      count: batchSize,
+    });
+  } catch (error) {
+    const status =
+      typeof error === "object" &&
+      error !== null &&
+      "response" in error &&
+      typeof (error as { response?: { status?: number } }).response?.status === "number"
+        ? ((error as { response?: { status?: number } }).response?.status as number)
+        : undefined;
+    console.error("[analytics] events failed", {
+      status,
+      count: batchSize,
+      message: error instanceof Error ? error.message : "Unknown analytics error",
+    });
+    throw error;
+  }
 };
