@@ -3,9 +3,7 @@ import {
   LayoutDashboard,
   MapPin,
   Calendar,
-  DollarSign,
   Settings,
-  BarChart3,
   Search,
   Gift,
   RefreshCcw,
@@ -38,8 +36,6 @@ const menuItems = [
   { title: "Khuyến mãi", url: "/partner/promotions", icon: Gift },
   { title: "Yêu cầu hoàn tiền", url: "/partner/refund-requests", icon: RefreshCcw },
   { title: "Đơn đặt", url: "/partner/bookings", icon: Calendar },
-  { title: "Doanh thu", url: "/partner/revenue", icon: DollarSign },
-  { title: "Thống kê", url: "/partner/analytics", icon: BarChart3 },
   { title: "Cài đặt", url: "/partner/settings", icon: Settings },
 ];
 
@@ -145,8 +141,6 @@ export default function PartnerLayout() {
       title: "Yêu cầu hoàn tiền",
       desc: "Xử lý hoàn tiền và cập nhật chứng từ",
     },
-    "/partner/revenue": { title: "Doanh thu", desc: "Thống kê thu nhập và thanh toán" },
-    "/partner/analytics": { title: "Thống kê", desc: "Phân tích hiệu suất hoạt động" },
     "/partner/settings": { title: "Cài đặt", desc: "Cấu hình tài khoản đối tác" },
   };
 

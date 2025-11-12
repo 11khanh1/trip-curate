@@ -48,8 +48,6 @@ import PartnerLayout from "./pages/partner/PartnerLayout";
 import PartnerDashboard from "./pages/partner/Dashboard";
 import PartnerActivities from "./pages/partner/Activities";
 import PartnerBookings from "./pages/partner/Bookings";
-import PartnerRevenue from "./pages/partner/Revenue";
-import PartnerAnalytics from "./pages/partner/Analytics";
 import PartnerSettings from "./pages/partner/Settings";
 import PartnerPromotions from "./pages/partner/Promotions";
 import PartnerRefundRequests from "./pages/partner/RefundRequests";
@@ -131,8 +129,6 @@ const App = () => (
           <Route path="promotions" element={<PartnerPromotions />} />
           <Route path="refund-requests" element={<PartnerRefundRequests />} />
           <Route path="bookings" element={<PartnerBookings />} />
-          <Route path="revenue" element={<PartnerRevenue />} />
-          <Route path="analytics" element={<PartnerAnalytics />} />
           <Route path="settings" element={<PartnerSettings />} />
         </Route>
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

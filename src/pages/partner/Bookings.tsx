@@ -324,9 +324,17 @@ export default function PartnerBookings() {
           status: nextStatus,
         });
 
-        if (updatedBooking) {
+        const enrichedBooking =
+          updatedBooking && nextStatus === "completed"
+            ? ({ ...updatedBooking, payment_status: "paid" } as PartnerBooking)
+            : updatedBooking;
+
+        if (enrichedBooking) {
           setBookings((prev) =>
-            prev.map((item) => (String(item.id) === String(bookingId) ? { ...item, ...updatedBooking } : item)),
+            prev.map((item) => (String(item.id) === String(bookingId) ? { ...item, ...enrichedBooking } : item)),
+          );
+          setSelectedBooking((prev) =>
+            prev && String(prev.id) === String(bookingId) ? { ...prev, ...enrichedBooking } : prev,
           );
         } else {
           await loadBookings();
