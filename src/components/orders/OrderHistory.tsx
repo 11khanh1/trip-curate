@@ -230,13 +230,28 @@ const OrderHistory = ({ title = "Đơn hàng gần đây", limit = 5, emptyMessa
               booking.status !== "completed" &&
               booking.status !== "cancelled";
             const showPaymentHistory = hasPayments || sepayPending || offlinePending;
+            const bookingCode = booking.code ?? booking.uuid ?? booking.id;
+            const bookingCodeLabel = typeof bookingCode === "string" ? bookingCode : String(bookingCode ?? booking.id);
+            const detailUrl = `/bookings/${booking.id}`;
+            const reviewUrl = `/bookings?review=${booking.id}`;
+            const isCompleted = (booking.status ?? "").toString().toLowerCase() === "completed";
+
             return (
-              <Card key={booking.id}>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <div>
+              <Card
+                key={booking.id}
+                className="border border-slate-200/80 bg-gradient-to-br from-white via-white to-slate-50 shadow-sm"
+              >
+                <CardHeader className="flex flex-col gap-2 pb-2 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="space-y-1">
                     <CardTitle className="text-base font-semibold text-foreground">
                       {booking.tour?.title ?? booking.tour?.name ?? `Đơn #${booking.id}`}
                     </CardTitle>
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground/70">Mã đơn:</span>
+                      <Badge variant="outline" className="font-mono text-[11px] uppercase tracking-wide">
+                        {bookingCodeLabel}
+                      </Badge>
+                    </div>
                     <p className="text-xs text-muted-foreground">
                       Đặt lúc {formatDate(booking.booking_date ?? booking.booked_at ?? booking.created_at)}
                     </p>
@@ -376,6 +391,44 @@ const OrderHistory = ({ title = "Đơn hàng gần đây", limit = 5, emptyMessa
                     </div>
                   )}
                 </CardContent>
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200/80 bg-white/70 px-6 py-4">
+                  <div className="text-xs text-muted-foreground">
+                    Cập nhật lúc {formatDate(booking.updated_at ?? booking.booked_at ?? booking.created_at)}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {isCompleted ? (
+                      <>
+                        <Button asChild size="sm" variant="outline">
+                          <Link to={reviewUrl}>Đánh giá</Link>
+                        </Button>
+                        <Button asChild size="sm">
+                          <Link to={detailUrl}>Xem chi tiết</Link>
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        {sepayPending && (
+                          <Button asChild size="sm">
+                            <a href={booking.payment_url ?? "#"} target="_blank" rel="noopener noreferrer">
+                              Thanh toán ngay
+                            </a>
+                          </Button>
+                        )}
+                        {offlinePending && (
+                          <Button asChild size="sm" variant="outline">
+                            <Link to={detailUrl}>Cập nhật thanh toán</Link>
+                          </Button>
+                        )}
+                        <Button asChild size="sm" variant="ghost">
+                          <Link to={detailUrl} className="inline-flex items-center gap-1">
+                            Xem chi tiết
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </Link>
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
               </Card>
             );
           })}
