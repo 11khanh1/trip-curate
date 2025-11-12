@@ -584,6 +584,18 @@ const BookingDetailPage = () => {
       if (!bookingActionId) {
         return Promise.reject(new Error("Thiếu mã booking"));
       }
+      const trimmedName = invoiceForm.customer_name.trim();
+      const trimmedTaxCode = invoiceForm.customer_tax_code.trim();
+      const trimmedAddress = invoiceForm.customer_address.trim();
+      if (!trimmedName) {
+        return Promise.reject(new Error("Vui lòng nhập tên đơn vị/khách hàng trên hóa đơn."));
+      }
+      if (!trimmedTaxCode) {
+        return Promise.reject(new Error("Vui lòng nhập mã số thuế."));
+      }
+      if (!trimmedAddress) {
+        return Promise.reject(new Error("Vui lòng nhập địa chỉ xuất hóa đơn."));
+      }
       if (invoiceForm.delivery_method === "email" && !invoiceForm.customer_email.trim()) {
         return Promise.reject(new Error("Vui lòng nhập email để nhận hóa đơn."));
       }

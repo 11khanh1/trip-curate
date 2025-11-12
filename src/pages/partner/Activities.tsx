@@ -5,6 +5,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -43,6 +59,7 @@ import {
 } from "@/components/ui/collapsible";
 
 const PARTNER_TOUR_ENDPOINT = "/partner/tours";
+const TOUR_PER_PAGE_OPTIONS = [5, 10, 20] as const;
 
 // ---------------------------- INTERFACES ----------------------------
 type ItineraryType = "single-day" | "multi-day";
@@ -223,6 +240,8 @@ export default function PartnerActivities() {
   const [selectedTour, setSelectedTour] = useState<Tour | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
+  const [tourPage, setTourPage] = useState(1);
+  const [tourPerPage, setTourPerPage] = useState<(typeof TOUR_PER_PAGE_OPTIONS)[number]>(TOUR_PER_PAGE_OPTIONS[1]);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const baseFormDefaults = useMemo(() => createInitialFormData(), []);
   const [formData, setFormData] = useState<FormData>(() => createInitialFormData());
@@ -433,6 +452,17 @@ const fetchTours = async () => {
 };
 
 useEffect(() => { fetchTours(); }, []);
+
+  useEffect(() => {
+    setTourPage(1);
+  }, [tourPerPage]);
+
+  useEffect(() => {
+    setTourPage((prev) => {
+      const nextTotalPages = Math.max(1, Math.ceil(tours.length / tourPerPage));
+      return Math.min(prev, nextTotalPages);
+    });
+  }, [tours.length, tourPerPage]);
   
   const parseItineraryString = (itinerary: unknown): ItineraryItem[] => {
     if (!Array.isArray(itinerary) || itinerary.length === 0) {
@@ -1172,6 +1202,48 @@ const handleMoveItinerary = (index: number, delta: number) => {
   
   // FIX: Khai báo biến currentImage trước khi sử dụng
   const currentImage = mediaList[selectedImageIndex];
+  const totalTourPages = Math.max(1, Math.ceil(tours.length / tourPerPage));
+  const currentTourPage = Math.min(tourPage, totalTourPages);
+  const tourStartIndex = (currentTourPage - 1) * tourPerPage;
+  const paginatedTours = tours.slice(tourStartIndex, tourStartIndex + tourPerPage);
+  const tourRangeStart = tours.length === 0 ? 0 : tourStartIndex + 1;
+  const tourRangeEnd = tours.length === 0 ? 0 : Math.min(tours.length, tourStartIndex + tourPerPage);
+  const tourPaginationRange = useMemo<(number | "ellipsis")[]>(() => {
+    if (totalTourPages <= 5) {
+      return Array.from({ length: totalTourPages }, (_, index) => index + 1);
+    }
+    const siblings = 1;
+    const range: (number | "ellipsis")[] = [1];
+    const start = Math.max(2, currentTourPage - siblings);
+    const end = Math.min(totalTourPages - 1, currentTourPage + siblings);
+    if (start > 2) {
+      range.push("ellipsis");
+    }
+    for (let i = start; i <= end; i += 1) {
+      range.push(i);
+    }
+    if (end < totalTourPages - 1) {
+      range.push("ellipsis");
+    }
+    range.push(totalTourPages);
+    return range;
+  }, [currentTourPage, totalTourPages]);
+
+  const handleTourPageChange = useCallback(
+    (nextPage: number) => {
+      setTourPage((prev) => {
+        if (nextPage === prev) return prev;
+        return Math.min(Math.max(1, nextPage), totalTourPages);
+      });
+    },
+    [totalTourPages],
+  );
+
+  const handleTourPerPageChange = (value: string) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return;
+    setTourPerPage(numeric as (typeof TOUR_PER_PAGE_OPTIONS)[number]);
+  };
   const editingLabel = editingTour?.title ?? editingTour?.destination ?? "Tour";
 
   // ---------------------------- RENDER ----------------------------
@@ -2181,9 +2253,23 @@ const handleMoveItinerary = (index: number, delta: number) => {
         </DialogContent>
       </Dialog>
       <Card>
-        <CardHeader>
-          <CardTitle>Danh sách Tour đã đăng</CardTitle>
-          <CardDescription>Tour cần được admin duyệt trước khi hiển thị công khai.</CardDescription>
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle>Danh sách Tour đã đăng</CardTitle>
+            <CardDescription>Tour cần được admin duyệt trước khi hiển thị công khai.</CardDescription>
+          </div>
+          <Select value={String(tourPerPage)} onValueChange={handleTourPerPageChange}>
+            <SelectTrigger className="w-[180px] justify-between">
+              <SelectValue placeholder="Số dòng" />
+            </SelectTrigger>
+            <SelectContent>
+              {TOUR_PER_PAGE_OPTIONS.map((option) => (
+                <SelectItem key={option} value={String(option)}>
+                  {option} tour/trang
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -2210,7 +2296,7 @@ const handleMoveItinerary = (index: number, delta: number) => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  tours.map((tour) => (
+                  paginatedTours.map((tour) => (
                     <TableRow key={tour.id}>
                       <TableCell className="font-medium max-w-xs truncate">{tour.title}</TableCell>
                       <TableCell>{tour.destination}</TableCell>
@@ -2247,6 +2333,57 @@ const handleMoveItinerary = (index: number, delta: number) => {
             </Table>
           )}
         </CardContent>
+        {tours.length > 0 && (
+          <div className="flex flex-col gap-3 border-t border-muted px-6 py-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+            <span>
+              Hiển thị {tourRangeStart}-{tourRangeEnd} trên tổng {tours.length} tour
+            </span>
+            <Pagination className="justify-end md:justify-normal">
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    href="#"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      if (currentTourPage > 1) handleTourPageChange(currentTourPage - 1);
+                    }}
+                    className={currentTourPage <= 1 ? "pointer-events-none opacity-50" : undefined}
+                  />
+                </PaginationItem>
+                {tourPaginationRange.map((item, index) => (
+                  <PaginationItem key={`${item}-${index}`}>
+                    {item === "ellipsis" ? (
+                      <PaginationEllipsis />
+                    ) : (
+                      <PaginationLink
+                        href="#"
+                        isActive={item === currentTourPage}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          handleTourPageChange(item as number);
+                        }}
+                      >
+                        {item}
+                      </PaginationLink>
+                    )}
+                  </PaginationItem>
+                ))}
+                <PaginationItem>
+                  <PaginationNext
+                    href="#"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      if (currentTourPage < totalTourPages) {
+                        handleTourPageChange(currentTourPage + 1);
+                      }
+                    }}
+                    className={currentTourPage >= totalTourPages ? "pointer-events-none opacity-50" : undefined}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
+        )}
       </Card>
     </div>
   );

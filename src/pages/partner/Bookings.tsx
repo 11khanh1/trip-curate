@@ -18,6 +18,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import type { LucideIcon } from "lucide-react";
 import {
   Check,
@@ -108,6 +117,8 @@ const STATUS_FILTER_OPTIONS: Array<{
     className: STATUS_ICON_MAP.completed.className,
   },
 ];
+
+const PER_PAGE_OPTIONS = [10, 20, 50] as const;
 
 const isPartnerStatus = (value: string): value is PartnerBookingStatus => {
   return PARTNER_STATUS_VALUES.includes(value as PartnerBookingStatus);
@@ -268,6 +279,8 @@ export default function PartnerBookings() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [isLoading, setIsLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState<(typeof PER_PAGE_OPTIONS)[number]>(PER_PAGE_OPTIONS[0]);
   const [updating, setUpdating] = useState<{ id: string | number | null; status: PartnerBookingStatus | null }>({
     id: null,
     status: null,
@@ -315,6 +328,63 @@ export default function PartnerBookings() {
       return [code, customer, tourTitle, destination].some((value) => value.includes(keyword));
     });
   }, [bookings, searchTerm, statusFilter]);
+
+  const totalFiltered = filteredBookings.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / perPage));
+  const currentPage = Math.min(page, totalPages);
+  const pageStartIndex = (currentPage - 1) * perPage;
+  const paginatedBookings = filteredBookings.slice(pageStartIndex, pageStartIndex + perPage);
+  const rangeStart = totalFiltered === 0 ? 0 : pageStartIndex + 1;
+  const rangeEnd = totalFiltered === 0 ? 0 : Math.min(totalFiltered, pageStartIndex + perPage);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, statusFilter]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [perPage]);
+
+  useEffect(() => {
+    setPage((prev) => Math.min(prev, Math.max(1, totalPages)));
+  }, [totalPages]);
+
+  const paginationRange = useMemo<(number | "ellipsis")[]>(() => {
+    if (totalPages <= 5) {
+      return Array.from({ length: totalPages }, (_, index) => index + 1);
+    }
+    const siblings = 1;
+    const range: (number | "ellipsis")[] = [1];
+    const start = Math.max(2, currentPage - siblings);
+    const end = Math.min(totalPages - 1, currentPage + siblings);
+    if (start > 2) {
+      range.push("ellipsis");
+    }
+    for (let i = start; i <= end; i += 1) {
+      range.push(i);
+    }
+    if (end < totalPages - 1) {
+      range.push("ellipsis");
+    }
+    range.push(totalPages);
+    return range;
+  }, [currentPage, totalPages]);
+
+  const handlePageChange = useCallback(
+    (nextPage: number) => {
+      setPage((prev) => {
+        if (nextPage === prev) return prev;
+        return Math.min(Math.max(1, nextPage), totalPages);
+      });
+    },
+    [totalPages],
+  );
+
+  const handlePerPageChange = (value: string) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return;
+    setPerPage(numeric as (typeof PER_PAGE_OPTIONS)[number]);
+  };
 
   const handleStatusUpdate = useCallback(
     async (bookingId: string | number, nextStatus: PartnerBookingStatus) => {
@@ -426,6 +496,18 @@ export default function PartnerBookings() {
                   ))}
                 </SelectContent>
               </Select>
+              <Select value={String(perPage)} onValueChange={handlePerPageChange}>
+                <SelectTrigger className="sm:w-[160px] justify-between">
+                  <SelectValue placeholder="Số dòng" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PER_PAGE_OPTIONS.map((option) => (
+                    <SelectItem key={option} value={String(option)}>
+                      {option} dòng/trang
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Button
                 variant="outline"
                 size="sm"
@@ -451,120 +533,169 @@ export default function PartnerBookings() {
               {searchTerm.trim().length > 0 ? "Không tìm thấy đơn phù hợp." : "Chưa có đơn đặt nào."}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px]">
-                <thead className="bg-muted/50">
-                  <tr>
-                    <th className="p-3 text-left text-sm font-medium">Mã đơn</th>
-                    <th className="p-3 text-left text-sm font-medium">Khách hàng</th>
-                    <th className="p-3 text-left text-sm font-medium">Tour</th>
-                    <th className="p-3 text-left text-sm font-medium">Ngày đặt</th>
-                    <th className="p-3 text-left text-sm font-medium">Số khách</th>
-                    <th className="p-3 text-left text-sm font-medium">Tổng tiền</th>
-                    <th className="p-3 text-left text-sm font-medium">Trạng thái</th>
-                    <th className="p-3 text-left text-sm font-medium">Thanh toán</th>
-                    <th className="p-3 text-left text-sm font-medium">Hành động</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredBookings.map((booking) => {
-                    const statusBadge = getStatusBadge(booking.status);
-                    const paymentBadge = getPaymentBadge(booking.payment_status);
-                    const guestCount = resolveGuestCount(booking);
-                    const normalizedStatus = normalizeStatusForFilter(booking.status);
-                    const isRowUpdating =
-                      updating.id !== null && String(updating.id) === String(booking.id) && updating.status !== null;
-                    const isMutatingTo = (target: PartnerBookingStatus) =>
-                      isRowUpdating && updating.status === target;
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[720px]">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="p-3 text-left text-sm font-medium">Mã đơn</th>
+                      <th className="p-3 text-left text-sm font-medium">Khách hàng</th>
+                      <th className="p-3 text-left text-sm font-medium">Tour</th>
+                      <th className="p-3 text-left text-sm font-medium">Ngày đặt</th>
+                      <th className="p-3 text-left text-sm font-medium">Số khách</th>
+                      <th className="p-3 text-left text-sm font-medium">Tổng tiền</th>
+                      <th className="p-3 text-left text-sm font-medium">Trạng thái</th>
+                      <th className="p-3 text-left text-sm font-medium">Thanh toán</th>
+                      <th className="p-3 text-left text-sm font-medium">Hành động</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedBookings.map((booking) => {
+                      const statusBadge = getStatusBadge(booking.status);
+                      const paymentBadge = getPaymentBadge(booking.payment_status);
+                      const guestCount = resolveGuestCount(booking);
+                      const normalizedStatus = normalizeStatusForFilter(booking.status);
+                      const isRowUpdating =
+                        updating.id !== null && String(updating.id) === String(booking.id) && updating.status !== null;
+                      const isMutatingTo = (target: PartnerBookingStatus) =>
+                        isRowUpdating && updating.status === target;
 
-                    return (
-                      <tr key={resolveBookingCode(booking)} className="border-t transition-colors hover:bg-muted/30">
-                        <td className="p-3 font-mono text-sm font-semibold">{resolveBookingCode(booking)}</td>
-                        <td className="p-3 text-sm">{resolveCustomerName(booking)}</td>
-                        <td className="p-3 text-sm">{resolveTourTitle(booking)}</td>
-                        <td className="p-3 text-sm text-muted-foreground">
-                          {formatDateTime(resolveBookingDate(booking))}
-                        </td>
-                        <td className="p-3 text-sm">{guestCount ? `${guestCount} khách` : "—"}</td>
-                        <td className="p-3 text-sm font-semibold text-primary">
-                          {formatCurrency(resolveTotalAmount(booking))}
-                        </td>
-                        <td className="p-3">
-                          <Badge variant={statusBadge.variant}>{statusBadge.label}</Badge>
-                        </td>
-                        <td className="p-3">
-                          <Badge variant={paymentBadge.variant}>{paymentBadge.label}</Badge>
-                        </td>
-                        <td className="p-3">
-                          <div className="flex gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-muted-foreground hover:bg-muted/30"
-                              aria-label="Xem chi tiết"
-                              onClick={() => handleViewDetail(booking)}
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-
-                            {normalizedStatus === "pending" && (
+                      return (
+                        <tr key={resolveBookingCode(booking)} className="border-t transition-colors hover:bg-muted/30">
+                          <td className="p-3 font-mono text-sm font-semibold">{resolveBookingCode(booking)}</td>
+                          <td className="p-3 text-sm">{resolveCustomerName(booking)}</td>
+                          <td className="p-3 text-sm">{resolveTourTitle(booking)}</td>
+                          <td className="p-3 text-sm text-muted-foreground">
+                            {formatDateTime(resolveBookingDate(booking))}
+                          </td>
+                          <td className="p-3 text-sm">{guestCount ? `${guestCount} khách` : "—"}</td>
+                          <td className="p-3 text-sm font-semibold text-primary">
+                            {formatCurrency(resolveTotalAmount(booking))}
+                          </td>
+                          <td className="p-3">
+                            <Badge variant={statusBadge.variant}>{statusBadge.label}</Badge>
+                          </td>
+                          <td className="p-3">
+                            <Badge variant={paymentBadge.variant}>{paymentBadge.label}</Badge>
+                          </td>
+                          <td className="p-3">
+                            <div className="flex gap-1">
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 text-emerald-600 hover:bg-emerald-50"
-                                aria-label="Xác nhận đơn"
-                                onClick={() => handleStatusUpdate(booking.id, "confirmed")}
-                                disabled={isRowUpdating}
+                                className="h-8 w-8 text-muted-foreground hover:bg-muted/30"
+                                aria-label="Xem chi tiết"
+                                onClick={() => handleViewDetail(booking)}
                               >
-                                {isMutatingTo("confirmed") ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Check className="h-4 w-4" />
-                                )}
+                                <Eye className="h-4 w-4" />
                               </Button>
-                            )}
 
-                            {(normalizedStatus === "pending" || normalizedStatus === "confirmed") && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-destructive hover:bg-red-50"
-                                aria-label="Hủy đơn"
-                                onClick={() => handleStatusUpdate(booking.id, "cancelled")}
-                                disabled={isRowUpdating}
-                              >
-                                {isMutatingTo("cancelled") ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <X className="h-4 w-4" />
-                                )}
-                              </Button>
-                            )}
+                              {normalizedStatus === "pending" && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-emerald-600 hover:bg-emerald-50"
+                                  aria-label="Xác nhận đơn"
+                                  onClick={() => handleStatusUpdate(booking.id, "confirmed")}
+                                  disabled={isRowUpdating}
+                                >
+                                  {isMutatingTo("confirmed") ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Check className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              )}
 
-                            {normalizedStatus === "confirmed" && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-primary hover:bg-primary/10"
-                                aria-label="Hoàn thành đơn"
-                                onClick={() => handleStatusUpdate(booking.id, "completed")}
-                                disabled={isRowUpdating}
-                              >
-                                {isMutatingTo("completed") ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <CheckCircle2 className="h-4 w-4" />
-                                )}
-                              </Button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                              {(normalizedStatus === "pending" || normalizedStatus === "confirmed") && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-destructive hover:bg-red-50"
+                                  aria-label="Hủy đơn"
+                                  onClick={() => handleStatusUpdate(booking.id, "cancelled")}
+                                  disabled={isRowUpdating}
+                                >
+                                  {isMutatingTo("cancelled") ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <X className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              )}
+
+                              {normalizedStatus === "confirmed" && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-primary hover:bg-primary/10"
+                                  aria-label="Hoàn thành đơn"
+                                  onClick={() => handleStatusUpdate(booking.id, "completed")}
+                                  disabled={isRowUpdating}
+                                >
+                                  {isMutatingTo("completed") ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <CheckCircle2 className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex flex-col gap-3 border-t border-muted pt-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+                <span>
+                  Hiển thị {rangeStart}-{rangeEnd} trên tổng {totalFiltered} đơn
+                </span>
+                <Pagination className="justify-end md:justify-normal">
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        href="#"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          if (currentPage > 1) handlePageChange(currentPage - 1);
+                        }}
+                        className={currentPage <= 1 ? "pointer-events-none opacity-50" : undefined}
+                      />
+                    </PaginationItem>
+                    {paginationRange.map((item, index) => (
+                      <PaginationItem key={`${item}-${index}`}>
+                        {item === "ellipsis" ? (
+                          <PaginationEllipsis />
+                        ) : (
+                          <PaginationLink
+                            href="#"
+                            isActive={item === currentPage}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              handlePageChange(item as number);
+                            }}
+                          >
+                            {item}
+                          </PaginationLink>
+                        )}
+                      </PaginationItem>
+                    ))}
+                    <PaginationItem>
+                      <PaginationNext
+                        href="#"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          if (currentPage < totalPages) handlePageChange(currentPage + 1);
+                        }}
+                        className={currentPage >= totalPages ? "pointer-events-none opacity-50" : undefined}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
