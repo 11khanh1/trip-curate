@@ -129,6 +129,7 @@ export async function fetchPartnerBookingDetail(id: string | number): Promise<Pa
 export interface UpdatePartnerBookingStatusPayload {
   status: PartnerBookingStatus;
   note?: string;
+  payment_status?: string;
 }
 
 export interface PartnerBookingMutationResult {

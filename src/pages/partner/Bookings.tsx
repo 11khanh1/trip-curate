@@ -322,6 +322,7 @@ export default function PartnerBookings() {
       try {
         const { booking: updatedBooking, message } = await updatePartnerBookingStatus(bookingId, {
           status: nextStatus,
+          payment_status: nextStatus === "completed" ? "paid" : undefined,
         });
 
         const enrichedBooking =

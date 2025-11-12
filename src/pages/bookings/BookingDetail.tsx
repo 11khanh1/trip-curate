@@ -362,7 +362,12 @@ const BookingDetailPage = () => {
   });
 
   const cancelMutation = useMutation({
-    mutationFn: () => cancelBooking(String(id)),
+    mutationFn: () => {
+      if (!bookingActionId) {
+        return Promise.reject(new Error("Thiếu mã booking"));
+      }
+      return cancelBooking(bookingActionId);
+    },
     onSuccess: (response) => {
       const baseTitle = response?.message ?? "Hủy booking thành công";
       let description = "Chúng tôi đã gửi email xác nhận hủy cho bạn.";
@@ -467,11 +472,28 @@ const BookingDetailPage = () => {
   const hasPaymentLink =
     typeof bookingPaymentUrl === "string" && bookingPaymentUrl.length > 0 && !isOfflinePayment;
   const canPayOnline = canAttemptOnlinePayment;
+  const bookingActionId = useMemo(() => {
+    if (booking?.id !== null && booking?.id !== undefined) {
+      return String(booking.id);
+    }
+    if (booking?.uuid) {
+      return String(booking.uuid);
+    }
+    if (id) {
+      return String(id);
+    }
+    return null;
+  }, [booking?.id, booking?.uuid, id]);
+
   const paymentMutation = useMutation({
-    mutationFn: () =>
-      initiateBookingPayment(String(id), {
+    mutationFn: () => {
+      if (!bookingActionId) {
+        return Promise.reject(new Error("Thiếu mã booking"));
+      }
+      return initiateBookingPayment(bookingActionId, {
         method: booking?.payment_method ?? "sepay",
-      }),
+      });
+    },
     onSuccess: (response) => {
       const nextUrl = extractPaymentIntentUrl(response, response?.booking ?? booking);
       if (nextUrl) {
@@ -506,10 +528,10 @@ const BookingDetailPage = () => {
 
   const refundRequestMutation = useMutation({
     mutationFn: (payload: CreateRefundRequestPayload) => {
-      if (!id) {
+      if (!bookingActionId) {
         return Promise.reject(new Error("Thiếu mã booking"));
       }
-      return createRefundRequest(String(id), payload);
+      return createRefundRequest(bookingActionId, payload);
     },
     onSuccess: () => {
       toast({
@@ -559,13 +581,13 @@ const BookingDetailPage = () => {
 
   const invoiceRequestMutation = useMutation({
     mutationFn: () => {
-      if (!id) {
+      if (!bookingActionId) {
         return Promise.reject(new Error("Thiếu mã booking"));
       }
       if (invoiceForm.delivery_method === "email" && !invoiceForm.customer_email.trim()) {
         return Promise.reject(new Error("Vui lòng nhập email để nhận hóa đơn."));
       }
-      return requestInvoice(String(id), invoiceForm);
+      return requestInvoice(bookingActionId, invoiceForm);
     },
     onSuccess: () => {
       toast({
@@ -589,10 +611,10 @@ const BookingDetailPage = () => {
 
   const invoiceDownloadMutation = useMutation({
     mutationFn: () => {
-      if (!id) {
+      if (!bookingActionId) {
         return Promise.reject(new Error("Thiếu mã booking"));
       }
-      return downloadBookingInvoice(String(id));
+      return downloadBookingInvoice(bookingActionId);
     },
     onSuccess: (blob) => {
       const fileUrl = window.URL.createObjectURL(blob);
@@ -615,7 +637,7 @@ const BookingDetailPage = () => {
   });
 
   const handleInitiatePayment = () => {
-    if (!id || paymentMutation.isPending) return;
+    if (!bookingActionId || paymentMutation.isPending) return;
     paymentMutation.mutate();
   };
 
