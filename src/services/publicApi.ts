@@ -203,7 +203,15 @@ export type TourStatusFilter = "approved" | "pending" | "rejected" | "all";
 export type TourSortOption =
   | "price_asc"
   | "price_desc"
+  | "price_low"
+  | "price_high"
+  | "popular"
+  | "booked"
+  | "most_booked"
+  | "rating"
+  | "top_rated"
   | "newest"
+  | "recent"
   | "created_desc"
   | "created_asc"
   | "title_asc"
@@ -213,6 +221,7 @@ export interface ToursQueryParams {
   status?: TourStatusFilter;
   partner_id?: string | number;
   destination?: string;
+  destinations?: string[];
   search?: string;
   category_id?: string | number | Array<string | number>;
   tags?: string[];
@@ -221,6 +230,9 @@ export interface ToursQueryParams {
   duration_min?: number;
   duration_max?: number;
   start_date?: string;
+  departure?: "today" | "tomorrow";
+  departure_date?: string;
+  stats_days?: number;
   sort?: TourSortOption;
   page?: number;
   per_page?: number;
@@ -261,12 +273,23 @@ const buildQueryString = (params: ToursQueryParams = {}) => {
   appendValue("partner_id", params.partner_id);
   appendValue("destination", params.destination);
   appendValue("search", params.search);
+  appendValue("departure", params.departure);
+  appendValue("departure_date", params.departure_date);
+  appendValue("stats_days", params.stats_days);
 
   const category = params.category_id;
   if (Array.isArray(category)) {
     category.forEach((value) => appendValue("category_id[]", value));
   } else {
     appendValue("category_id", category);
+  }
+
+  const destinations = params.destinations;
+  if (Array.isArray(destinations)) {
+    destinations
+      .map((value) => (typeof value === "string" ? value.trim() : value))
+      .filter((value) => typeof value === "string" && value.length > 0)
+      .forEach((value) => appendValue("destinations[]", value));
   }
 
   const tags = params.tags;

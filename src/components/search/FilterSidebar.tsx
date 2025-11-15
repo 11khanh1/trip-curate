@@ -1,21 +1,81 @@
-import { useState } from "react";
 import { Calendar, Clock, MapPin } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 const QUICK_DATES = [
   { id: "today", label: "Hôm nay", description: "Khởi hành trong ngày" },
   { id: "tomorrow", label: "Ngày mai", description: "Sẵn sàng ngay" },
-  { id: "weekend", label: "Cuối tuần", description: "Thêm thời gian khám phá" },
-];
+] as const;
 
 const POPULAR_LOCATIONS = ["Hà Nội", "Hồ Chí Minh", "Đà Nẵng", "Phú Quốc", "Hạ Long", "Sapa"];
 
-export const FilterSidebarKlook = () => {
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [priceRange, setPriceRange] = useState([0, 10_000_000]);
+export type QuickDateFilter = (typeof QUICK_DATES)[number]["id"];
+
+export interface SearchFilterState {
+  quickDate: QuickDateFilter | null;
+  priceRange: [number, number];
+  destinations: string[];
+  customDestination: string;
+  departureDate: string | null;
+  startDate: string | null;
+  durationRange: [number | null, number | null];
+  statsDays: number | null;
+}
+
+interface FilterSidebarProps {
+  filters: SearchFilterState;
+  onFiltersChange: (next: Partial<SearchFilterState>) => void;
+  onReset: () => void;
+}
+
+export const FilterSidebarKlook = ({ filters, onFiltersChange, onReset }: FilterSidebarProps) => {
+  const selectedDate = filters.quickDate;
+  const priceRange = filters.priceRange;
+  const selectedDestinations = filters.destinations;
+  const customDestination = filters.customDestination;
+  const departureDate = filters.departureDate ?? "";
+  const startDate = filters.startDate ?? "";
+  const [durationMin, durationMax] = filters.durationRange;
+  const statsDaysValue = filters.statsDays ?? "";
+
+  const handleDateSelect = (value: QuickDateFilter) => {
+    const nextValue = selectedDate === value ? null : value;
+    onFiltersChange({ quickDate: nextValue });
+  };
+
+  const handlePriceRangeChange = (value: number[]) => {
+    if (!Array.isArray(value) || value.length !== 2) return;
+    onFiltersChange({ priceRange: [value[0], value[1]] as [number, number] });
+  };
+
+  const handleDestinationToggle = (location: string) => {
+    const exists = selectedDestinations.includes(location);
+    const next = exists
+      ? selectedDestinations.filter((item) => item !== location)
+      : [...selectedDestinations, location];
+    onFiltersChange({ destinations: next });
+  };
+
+  const handleDateInputChange = (field: "departureDate" | "startDate", value: string) => {
+    const trimmed = value.trim();
+    onFiltersChange({ [field]: trimmed.length > 0 ? trimmed : null } as Partial<SearchFilterState>);
+  };
+
+  const handleDurationInputChange = (index: 0 | 1, value: string) => {
+    const parsed = Number(value);
+    const normalized = Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+    const currentRange: [number | null, number | null] = [...filters.durationRange];
+    currentRange[index] = normalized;
+    onFiltersChange({ durationRange: currentRange });
+  };
+
+  const handleStatsDaysChange = (value: string) => {
+    const parsed = Number(value);
+    onFiltersChange({ statsDays: Number.isFinite(parsed) && parsed > 0 ? parsed : null });
+  };
 
   return (
     <aside className="space-y-4">
@@ -25,7 +85,7 @@ export const FilterSidebarKlook = () => {
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Bộ lọc</p>
             <h3 className="text-sm font-semibold text-foreground">Tinh chỉnh kết quả</h3>
           </div>
-          <Button variant="ghost" size="sm" className="h-8 px-2 text-sm text-primary">
+          <Button variant="ghost" size="sm" className="h-8 px-2 text-sm text-primary" onClick={onReset}>
             Đặt lại
           </Button>
         </div>
@@ -41,7 +101,7 @@ export const FilterSidebarKlook = () => {
                 <button
                   key={option.id}
                   type="button"
-                  onClick={() => setSelectedDate(option.id)}
+                  onClick={() => handleDateSelect(option.id)}
                   className={cn(
                     "flex items-start justify-between rounded-xl border px-3 py-2 text-left transition-colors",
                     selectedDate === option.id
@@ -53,10 +113,31 @@ export const FilterSidebarKlook = () => {
                   <span className="text-xs text-muted-foreground">{option.description}</span>
                 </button>
               ))}
-              <Button variant="outline" size="sm" className="mt-1 w-full justify-start gap-2">
-                <Clock className="h-4 w-4" />
-                Chọn ngày khác
-              </Button>
+            </div>
+          </section>
+
+          <section className="space-y-3">
+            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <Clock className="h-4 w-4 text-primary" />
+              Lịch trình cụ thể
+            </div>
+            <div className="grid gap-3">
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Ngày khởi hành</p>
+                <Input
+                  type="date"
+                  value={departureDate}
+                  onChange={(event) => handleDateInputChange("departureDate", event.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Từ ngày</p>
+                <Input
+                  type="date"
+                  value={startDate}
+                  onChange={(event) => handleDateInputChange("startDate", event.target.value)}
+                />
+              </div>
             </div>
           </section>
 
@@ -68,7 +149,7 @@ export const FilterSidebarKlook = () => {
             <div className="mt-4">
               <Slider
                 value={priceRange}
-                onValueChange={setPriceRange}
+                onValueChange={handlePriceRangeChange}
                 max={10_000_000}
                 step={100_000}
                 className="my-5"
@@ -91,22 +172,77 @@ export const FilterSidebarKlook = () => {
           </section>
 
           <section>
+            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <Calendar className="h-4 w-4 text-primary" />
+              Thời lượng (ngày)
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Tối thiểu</p>
+                <Input
+                  type="number"
+                  min={0}
+                  value={durationMin ?? ""}
+                  onChange={(event) => handleDurationInputChange(0, event.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Tối đa</p>
+                <Input
+                  type="number"
+                  min={0}
+                  value={durationMax ?? ""}
+                  onChange={(event) => handleDurationInputChange(1, event.target.value)}
+                />
+              </div>
+            </div>
+          </section>
+
+          <section>
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-semibold text-foreground">Địa điểm phổ biến</h4>
-              <Button variant="ghost" size="sm" className="h-8 px-2 text-xs text-primary">
-                Xem tất cả
-              </Button>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {POPULAR_LOCATIONS.map((location) => (
                 <Badge
                   key={location}
                   variant="outline"
-                  className="cursor-pointer border-primary/30 bg-primary/5 text-xs text-primary transition-colors hover:bg-primary/10"
+                  className={cn(
+                    "cursor-pointer border-primary/30 bg-primary/5 text-xs text-primary transition-colors hover:bg-primary/10",
+                    selectedDestinations.includes(location) && "border-primary bg-primary/15 text-primary"
+                  )}
+                  onClick={() => handleDestinationToggle(location)}
                 >
                   {location}
                 </Badge>
               ))}
+            </div>
+            <div className="mt-4 space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">Hoặc nhập địa điểm khác</p>
+              <Input
+                placeholder="VD: Nha Trang"
+                value={customDestination}
+                onChange={(event) => onFiltersChange({ customDestination: event.target.value })}
+              />
+            </div>
+          </section>
+
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-semibold text-foreground">Thống kê đặt chỗ</div>
+              <span className="text-xs text-muted-foreground">stats_days</span>
+            </div>
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                Chỉ tính lượt đặt trong khoảng ngày gần nhất (ví dụ 90 ngày)
+              </p>
+              <Input
+                type="number"
+                min={1}
+                placeholder="90"
+                value={statsDaysValue}
+                onChange={(event) => handleStatsDaysChange(event.target.value)}
+              />
             </div>
           </section>
 

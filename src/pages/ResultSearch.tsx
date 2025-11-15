@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { SlidersHorizontal, Sparkles, TrendingUp, Wallet, MapPin } from "lucide-react";
@@ -6,7 +6,11 @@ import { SlidersHorizontal, Sparkles, TrendingUp, Wallet, MapPin } from "lucide-
 import TravelHeader from "@/components/TravelHeader";
 import Footer from "@/components/Footer";
 import { TabNavigation } from "@/components/search/TabNavigation";
-import { FilterSidebarKlook } from "@/components/search/FilterSidebar";
+import {
+  FilterSidebarKlook,
+  type SearchFilterState,
+  type QuickDateFilter,
+} from "@/components/search/FilterSidebar";
 import { ActivityCardKlook } from "@/components/search/ActivityCard";
 import { ResultsHeader } from "@/components/search/ResultsHeader";
 import { Button } from "@/components/ui/button";
@@ -21,25 +25,127 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { Skeleton } from "@/components/ui/skeleton";
-import { fetchTours, type PublicTour, type TourSortOption } from "@/services/publicApi";
+import { fetchTours, type PublicTour, type TourSortOption, type ToursQueryParams } from "@/services/publicApi";
 import { getTourStartingPrice } from "@/lib/tour-utils";
 
 const PER_PAGE = 12;
 
 const sortOptions = [
+  { value: "recommended", label: "Gợi ý hàng đầu" },
   { value: "popular", label: "Phổ biến" },
+  { value: "most_booked", label: "Đặt nhiều nhất" },
   { value: "rating", label: "Đánh giá cao" },
-  { value: "new", label: "Mới nhất" },
-  { value: "price-asc", label: "Giá thấp đến cao" },
-  { value: "price-desc", label: "Giá cao xuống thấp" },
+  { value: "top_rated", label: "Ưa thích nhất" },
+  { value: "newest", label: "Mới cập nhật" },
+  { value: "recent", label: "Mới nhất" },
+  { value: "price_low", label: "Giá thấp đến cao" },
+  { value: "price_high", label: "Giá cao đến thấp" },
 ];
 
 const sortMapping: Record<string, TourSortOption | undefined> = {
-  popular: "created_desc",
-  rating: "created_desc",
-  new: "created_desc",
-  "price-asc": "price_asc",
-  "price-desc": "price_desc",
+  recommended: undefined,
+  popular: "popular",
+  most_booked: "most_booked",
+  rating: "rating",
+  top_rated: "top_rated",
+  newest: "newest",
+  recent: "recent",
+  price_low: "price_low",
+  price_high: "price_high",
+};
+
+const PRICE_RANGE_DEFAULT: [number, number] = [0, 10_000_000];
+
+const parseNumberParam = (value?: string | null): number | null => {
+  if (!value) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const createDefaultFilters = (params?: URLSearchParams): SearchFilterState => {
+  const priceMin = parseNumberParam(params?.get("price_min"));
+  const priceMax = parseNumberParam(params?.get("price_max"));
+  const quickDateParam = params?.get("departure");
+  const quickDate =
+    quickDateParam === "today" || quickDateParam === "tomorrow" ? quickDateParam : null;
+  const destinations = params
+    ? Array.from(new Set(params.getAll("destinations[]").map((value) => value.trim()))).filter(
+        (value) => value.length > 0,
+      )
+    : [];
+  const customDestination = params?.get("destination") ?? "";
+  const departureDate = params?.get("departure_date") ?? null;
+  const startDate = params?.get("start_date") ?? null;
+  const durationMin = parseNumberParam(params?.get("duration_min"));
+  const durationMax = parseNumberParam(params?.get("duration_max"));
+  const statsDays = parseNumberParam(params?.get("stats_days"));
+
+  return {
+    quickDate,
+    priceRange: [
+      priceMin ?? PRICE_RANGE_DEFAULT[0],
+      priceMax ?? PRICE_RANGE_DEFAULT[1],
+    ] as [number, number],
+    destinations,
+    customDestination: customDestination ?? "",
+    departureDate: departureDate && departureDate.trim().length > 0 ? departureDate : null,
+    startDate: startDate && startDate.trim().length > 0 ? startDate : null,
+    durationRange: [durationMin, durationMax],
+    statsDays,
+  };
+};
+
+const coerceNumber = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const resolveTourRating = (tour: PublicTour): number | null => {
+  const candidates = [
+    tour.average_rating,
+    tour.rating_average,
+    (tour as Record<string, unknown>)?.rating,
+    (tour as Record<string, unknown>)?.ratingAverage,
+  ];
+  for (const candidate of candidates) {
+    const parsed = coerceNumber(candidate);
+    if (parsed !== null && parsed > 0) return parsed;
+  }
+  return null;
+};
+
+const resolveReviewCount = (tour: PublicTour): number | null => {
+  const candidates = [
+    tour.rating_count,
+    tour.reviews_count,
+    (tour as Record<string, unknown>)?.reviewsCount,
+    (tour as Record<string, unknown>)?.review_count,
+  ];
+  for (const candidate of candidates) {
+    const parsed = coerceNumber(candidate);
+    if (parsed !== null && parsed >= 0) {
+      return parsed;
+    }
+  }
+  return null;
+};
+
+const resolveBookingCount = (tour: PublicTour): number | null => {
+  const parsed = coerceNumber(tour.bookings_count);
+  if (parsed !== null && parsed >= 0) return parsed;
+  const fallback = (tour as Record<string, unknown>)?.bookingsCount;
+  const parsedFallback = coerceNumber(fallback);
+  return parsedFallback !== null && parsedFallback >= 0 ? parsedFallback : null;
+};
+
+const formatDateLabel = (value: string): string => {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString("vi-VN");
 };
 
 const mapTourToActivityCard = (tour: PublicTour) => {
@@ -53,25 +159,52 @@ const mapTourToActivityCard = (tour: PublicTour) => {
     tour.categories && tour.categories.length > 0
       ? tour.categories[0]?.name ?? "Tour"
       : tour.partner?.company_name ?? "Tour";
+  const bookingCount = resolveBookingCount(tour);
+  const rating = resolveTourRating(tour) ?? 4.9;
+  const reviews = resolveReviewCount(tour) ?? bookingCount ?? 0;
   const bookedCount =
-    tour.bookings_count && tour.bookings_count > 0
-      ? `${tour.bookings_count.toLocaleString("vi-VN")} lượt đặt`
-      : undefined;
+    bookingCount && bookingCount > 0 ? `${bookingCount.toLocaleString("vi-VN")} lượt đặt` : undefined;
+  const upcomingSchedule = getUpcomingScheduleDate(tour);
 
   return {
     image,
     category,
     location,
     title,
-    bookingType: tour.schedules?.[0]?.start_date
-      ? `Khởi hành ${new Date(tour.schedules[0].start_date!).toLocaleDateString("vi-VN")}`
+    bookingType: upcomingSchedule
+      ? `Khởi hành ${upcomingSchedule.toLocaleDateString("vi-VN")}`
       : undefined,
-    rating: 4.8,
-    reviews: tour.bookings_count ?? 1200,
+    rating,
+    reviews,
     booked: bookedCount,
     price,
     discount: undefined,
   };
+};
+
+const getUpcomingScheduleDate = (tour: PublicTour): Date | null => {
+  if (!Array.isArray(tour.schedules) || tour.schedules.length === 0) return null;
+  const validDates = tour.schedules
+    .map((schedule) => schedule?.start_date)
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .map((value) => new Date(value))
+    .filter((date) => !Number.isNaN(date.getTime()))
+    .sort((a, b) => a.getTime() - b.getTime());
+  return validDates[0] ?? null;
+};
+
+const QUICK_DATE_LABELS: Record<QuickDateFilter, string> = {
+  today: "Khởi hành hôm nay",
+  tomorrow: "Khởi hành ngày mai",
+};
+
+type PaginationMeta = {
+  current_page?: number;
+  last_page?: number;
+  per_page?: number;
+  total?: number;
+  from?: number;
+  to?: number;
 };
 
 const ResultSearch = () => {
@@ -79,57 +212,136 @@ const ResultSearch = () => {
   const keyword = (searchParams.get("keyword") ?? "").trim();
 
   const [showFilters, setShowFilters] = useState(false);
-  const [sortBy, setSortBy] = useState<string>("popular");
-  const [page, setPage] = useState(1);
+  const [sortBy, setSortBy] = useState<string>(() => {
+    const sortParam = searchParams.get("sort");
+    if (!sortParam) return "recommended";
+    const matched = Object.entries(sortMapping).find(([, apiValue]) => apiValue === sortParam);
+    return matched?.[0] ?? "recommended";
+  });
+  const [page, setPage] = useState(() => {
+    const pageParam = Number(searchParams.get("page"));
+    return Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 1;
+  });
+  const [filters, setFilters] = useState<SearchFilterState>(() => createDefaultFilters(searchParams));
+
+  const handleFiltersChange = useCallback(
+    (patch: Partial<SearchFilterState>) => {
+      setFilters((prev) => {
+        const next: SearchFilterState = {
+          ...prev,
+          ...patch,
+        };
+        if (patch.priceRange) {
+          next.priceRange = [...patch.priceRange] as [number, number];
+        }
+        if (patch.destinations) {
+          const normalized = patch.destinations
+            .map((value) => value.trim())
+            .filter((value) => value.length > 0);
+          next.destinations = Array.from(new Set(normalized));
+        }
+        if (patch.durationRange) {
+          next.durationRange = [...patch.durationRange] as [number | null, number | null];
+        }
+        return next;
+      });
+    },
+    [],
+  );
+
+  const handleResetFilters = useCallback(() => {
+    setFilters(createDefaultFilters());
+    setPage(1);
+  }, []);
+
+  useEffect(() => {
+    setPage(1);
+  }, [keyword]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [
+    filters.priceRange[0],
+    filters.priceRange[1],
+    filters.quickDate,
+    filters.destinations,
+    filters.customDestination,
+    filters.departureDate,
+    filters.startDate,
+    filters.durationRange[0],
+    filters.durationRange[1],
+    filters.statsDays,
+  ]);
+
+  const queryPayload = useMemo(() => {
+    const [priceMin, priceMax] = filters.priceRange;
+    const [durationMin, durationMax] = filters.durationRange;
+    const trimmedDestination = filters.customDestination.trim();
+    const normalizedDestinations = filters.destinations
+      .map((value) => value.trim())
+      .filter((value) => value.length > 0);
+
+    const payload: ToursQueryParams = {
+      status: "approved",
+      search: keyword.length > 0 ? keyword : undefined,
+      destination: trimmedDestination.length > 0 ? trimmedDestination : undefined,
+      destinations: normalizedDestinations.length > 0 ? normalizedDestinations : undefined,
+      departure: filters.quickDate ?? undefined,
+      departure_date: filters.departureDate ?? undefined,
+      start_date: filters.startDate ?? undefined,
+      price_min: priceMin > PRICE_RANGE_DEFAULT[0] ? priceMin : undefined,
+      price_max: priceMax < PRICE_RANGE_DEFAULT[1] ? priceMax : undefined,
+      duration_min: durationMin ?? undefined,
+      duration_max: durationMax ?? undefined,
+      stats_days: filters.statsDays ?? undefined,
+      sort: sortMapping[sortBy],
+      page,
+      per_page: PER_PAGE,
+    };
+    return payload;
+  }, [filters, keyword, page, sortBy]);
 
   const toursQuery = useQuery({
-    queryKey: ["public-tours-search", keyword, sortBy, page],
-    queryFn: () =>
-      fetchTours({
-        status: "approved",
-        search: keyword || undefined,
-        page,
-        per_page: PER_PAGE,
-        sort: sortMapping[sortBy],
-      }),
-    enabled: keyword.length > 0,
+    queryKey: ["public-tours-search", queryPayload],
+    queryFn: () => fetchTours(queryPayload),
     placeholderData: keepPreviousData,
     staleTime: 60 * 1000,
   });
 
-  const toursData = toursQuery.data?.data;
-  const toursMeta = toursQuery.data?.meta ?? {};
+  const toursData = toursQuery.data?.data ?? [];
+  const metaRecord = (toursQuery.data?.meta ?? {}) as Record<string, unknown>;
+  const metaCurrentPage = coerceNumber(metaRecord.current_page);
+  const metaLastPage = coerceNumber(metaRecord.last_page);
+  const metaPerPage = coerceNumber(metaRecord.per_page) ?? PER_PAGE;
+  const metaTotal = coerceNumber(metaRecord.total);
 
-  const safeTours = toursData ?? [];
+  useEffect(() => {
+    if (toursQuery.isFetching) return;
+    if (metaCurrentPage && metaCurrentPage !== page) {
+      setPage(metaCurrentPage);
+    }
+  }, [metaCurrentPage, page, toursQuery.isFetching]);
 
-  const currentPage = Number(toursMeta.current_page ?? page) || 1;
-  const totalResults = Number(toursMeta.total ?? safeTours.length) || safeTours.length;
-  const lastPage =
-    Number(toursMeta.last_page ?? (totalResults > 0 ? Math.ceil(totalResults / PER_PAGE) : 1)) || 1;
-  const rangeStart =
-    Number(toursMeta.from ?? (totalResults === 0 ? 0 : (currentPage - 1) * PER_PAGE + 1)) || 0;
-  const rangeEnd =
-    Number(toursMeta.to ?? (totalResults === 0 ? 0 : Math.min(totalResults, currentPage * PER_PAGE))) ||
-    0;
+  const totalResults = metaTotal ?? toursData.length;
+  const currentPage = metaCurrentPage ?? page;
+  const lastPage = metaLastPage ?? Math.max(1, Math.ceil(Math.max(totalResults, 1) / metaPerPage));
   const isFirstPage = currentPage <= 1;
   const isLastPage = currentPage >= lastPage;
 
   const paginationRange = useMemo<(number | "ellipsis")[]>(() => {
-    const totalPages = Math.max(1, lastPage);
-    const current = Math.min(Math.max(1, currentPage), totalPages);
-    if (totalPages <= 5) {
-      return Array.from({ length: totalPages }, (_, index) => index + 1);
+    if (lastPage <= 5) {
+      return Array.from({ length: lastPage }, (_, index) => index + 1);
     }
 
     const range: (number | "ellipsis")[] = [1];
     const siblings = 1;
-    const start = Math.max(2, current - siblings);
-    const end = Math.min(totalPages - 1, current + siblings);
+    const start = Math.max(2, currentPage - siblings);
+    const end = Math.min(lastPage - 1, currentPage + siblings);
 
     if (start > 2) range.push("ellipsis");
     for (let i = start; i <= end; i += 1) range.push(i);
-    if (end < totalPages - 1) range.push("ellipsis");
-    range.push(totalPages);
+    if (end < lastPage - 1) range.push("ellipsis");
+    range.push(lastPage);
     return range;
   }, [currentPage, lastPage]);
 
@@ -145,15 +357,52 @@ const ResultSearch = () => {
     setPage(clamped);
   };
 
-  const activeFilters = useMemo(
-    () => (keyword.length > 0 ? [`Từ khóa: "${keyword}"`] : []),
-    [keyword],
-  );
+  const activeFilters = useMemo(() => {
+    const chips: string[] = [];
+    if (keyword.length > 0) {
+      chips.push(`Từ khóa: "${keyword}"`);
+    }
+    const [priceMin, priceMax] = filters.priceRange;
+    const isPriceFiltered =
+      priceMin > PRICE_RANGE_DEFAULT[0] || priceMax < PRICE_RANGE_DEFAULT[1];
+    if (isPriceFiltered) {
+      chips.push(
+        `Giá: ₫${priceMin.toLocaleString("vi-VN")} - ₫${priceMax.toLocaleString("vi-VN")}`,
+      );
+    }
+    if (filters.destinations.length > 0) {
+      chips.push(`Điểm đến: ${filters.destinations.join(", ")}`);
+    }
+    const trimmedCustomDestination = filters.customDestination.trim();
+    if (trimmedCustomDestination.length > 0) {
+      chips.push(`Điểm đến: ${trimmedCustomDestination}`);
+    }
+    if (filters.departureDate) {
+      chips.push(`Khởi hành: ${formatDateLabel(filters.departureDate)}`);
+    }
+    if (filters.startDate) {
+      chips.push(`Từ ngày: ${formatDateLabel(filters.startDate)}`);
+    }
+    if (filters.durationRange[0] !== null) {
+      chips.push(`Tối thiểu: ${filters.durationRange[0]} ngày`);
+    }
+    if (filters.durationRange[1] !== null) {
+      chips.push(`Tối đa: ${filters.durationRange[1]} ngày`);
+    }
+    if (filters.statsDays) {
+      chips.push(`Thống kê ${filters.statsDays} ngày`);
+    }
+    if (filters.quickDate) {
+      chips.push(QUICK_DATE_LABELS[filters.quickDate]);
+    }
+    return chips;
+  }, [filters, keyword]);
 
-  const mappedActivities = safeTours.length > 0 ? safeTours.map(mapTourToActivityCard) : [];
+  const mappedActivities =
+    toursData.length > 0 ? toursData.map(mapTourToActivityCard) : [];
 
   const priceStats = useMemo(() => {
-    const prices = (toursData ?? [])
+    const prices = toursData
       .map((tour) => getTourStartingPrice(tour))
       .filter((value) => Number.isFinite(value) && value > 0);
     if (!prices.length) return null;
@@ -260,7 +509,11 @@ const ResultSearch = () => {
           </div>
 
           <aside className={`${showFilters ? "block" : "hidden"} lg:block lg:w-80 lg:flex-shrink-0 lg:sticky lg:top-24`}>
-            <FilterSidebarKlook />
+            <FilterSidebarKlook
+              filters={filters}
+              onFiltersChange={handleFiltersChange}
+              onReset={handleResetFilters}
+            />
           </aside>
 
           <section className="flex-1 min-w-0 space-y-6">
@@ -271,6 +524,7 @@ const ResultSearch = () => {
               sortOptions={sortOptions}
               keyword={keyword.length > 0 ? keyword : undefined}
               onSortChange={handleSortChange}
+              onClearFilters={handleResetFilters}
             />
 
             {toursQuery.isLoading ? (
@@ -281,7 +535,8 @@ const ResultSearch = () => {
               </div>
             ) : mappedActivities.length === 0 ? (
               <div className="rounded-xl border px-6 py-12 text-center text-muted-foreground">
-                Không tìm thấy tour phù hợp với từ khóa "{keyword}". Vui lòng thử lại với từ khóa khác.
+                Không tìm thấy tour phù hợp với tiêu chí hiện tại
+                {keyword.length > 0 ? ` cho từ khóa "${keyword}"` : ""}. Vui lòng chỉnh sửa bộ lọc và thử lại.
               </div>
             ) : (
               <>
