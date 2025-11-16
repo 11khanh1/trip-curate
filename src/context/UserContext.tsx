@@ -1,21 +1,25 @@
 // src/context/UserContext.tsx
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState, useEffect, type Dispatch, type SetStateAction } from "react";
 
-interface User {
+export interface User {
   id?: string | number;
   name: string;
   email: string;
   role?: "admin" | "user" | "partner" | "customer";
+  phone?: string;
+  address?: string;
+  dateOfBirth?: string;
+  gender?: string;
 }
 
 interface UserContextType {
   currentUser: User | null;
-  setCurrentUser: (user: User | null) => void;
+  setCurrentUser: Dispatch<SetStateAction<User | null>>;
 }
 
 const UserContext = createContext<UserContextType>({
   currentUser: null,
-  setCurrentUser: () => {},
+  setCurrentUser: () => undefined,
 });
 
 export const UserProvider = ({ children }: { children: React.ReactNode }) => {

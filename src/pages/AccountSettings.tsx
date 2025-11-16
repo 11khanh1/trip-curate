@@ -1,21 +1,130 @@
-import { useState } from "react";
-import { useUser } from "@/context/UserContext";
+import { useCallback, useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useUser, type User as AccountUser } from "@/context/UserContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { User, Lock, Bell, CreditCard, Globe, Shield, ChevronRight, Mail, Phone, Calendar } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import {
+  User as UserIcon,
+  Lock,
+  Bell,
+  CreditCard,
+  Globe,
+  Shield,
+  ChevronRight,
+  Mail,
+  Phone,
+  Calendar,
+  Trash2,
+  Star,
+} from "lucide-react";
 import TravelHeader from "@/components/TravelHeader";
 import Footer from "@/components/Footer";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import {  MapPin } from "lucide-react";
-import { apiClient, ensureCsrfToken } from "@/lib/api-client";
 import { isPastDate, isValidVietnamPhone, normalizeVietnamPhone } from "@/lib/validators";
+import { fetchProfile, updateProfile, PROFILE_QUERY_KEY, type UserProfile, type UpdateProfilePayload } from "@/services/profileApi";
 
 
 type SectionType = "profile" | "security" | "notifications" | "payment" | "preferences";
+
+type NotificationSettings = {
+  promotionalEmails: boolean;
+  bookingUpdates: boolean;
+  travelTips: boolean;
+  reminders: boolean;
+};
+
+type PaymentMethod = {
+  id: string;
+  brand: "visa" | "mastercard" | "amex" | "jcb" | "other";
+  cardholder: string;
+  cardNumber: string;
+  expiry: string;
+  isDefault: boolean;
+};
+
+type PreferenceSettings = {
+  language: string;
+  currency: string;
+  timezone: string;
+};
+
+type SecuritySettings = {
+  password: string;
+  twoFactorEnabled: boolean;
+  lastPasswordChange: string;
+};
+
+type AccountLocalSettings = {
+  notifications: NotificationSettings;
+  paymentMethods: PaymentMethod[];
+  preferences: PreferenceSettings;
+  security: SecuritySettings;
+};
+
+type NotificationKey = keyof NotificationSettings;
+
+type PaymentFormState = {
+  cardholder: string;
+  cardNumber: string;
+  expiry: string;
+  brand: PaymentMethod["brand"];
+};
+
+const SETTINGS_STORAGE_KEY = "accountSettings";
+
+const createDefaultSettings = (): AccountLocalSettings => ({
+  notifications: {
+    promotionalEmails: true,
+    bookingUpdates: true,
+    travelTips: true,
+    reminders: true,
+  },
+  paymentMethods: [],
+  preferences: {
+    language: "vi",
+    currency: "vnd",
+    timezone: "asia/ho_chi_minh",
+  },
+  security: {
+    password: "",
+    twoFactorEnabled: false,
+    lastPasswordChange: "",
+  },
+});
+
+const mergeSettingsWithDefaults = (stored?: Partial<AccountLocalSettings> | null): AccountLocalSettings => {
+  const defaults = createDefaultSettings();
+  if (!stored) {
+    return defaults;
+  }
+  return {
+    notifications: { ...defaults.notifications, ...(stored.notifications || {}) },
+    paymentMethods: stored.paymentMethods ?? defaults.paymentMethods,
+    preferences: { ...defaults.preferences, ...(stored.preferences || {}) },
+    security: { ...defaults.security, ...(stored.security || {}) },
+  };
+};
+
+const createEmptyPaymentForm = (): PaymentFormState => ({
+  cardholder: "",
+  cardNumber: "",
+  expiry: "",
+  brand: "visa",
+});
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (!error) return fallback;
+  if (typeof error === "string") return error;
+  if (error instanceof Error && error.message) return error.message;
+  const response = (error as any)?.response;
+  if (response?.data?.message) return response.data.message;
+  return fallback;
+};
 
 const AccountSettings = () => {
   const { currentUser, setCurrentUser } = useUser();
@@ -24,38 +133,172 @@ const AccountSettings = () => {
     name: currentUser?.name || "",
     email: currentUser?.email || "",
     phone: currentUser?.phone || "",
-    dateOfBirth: "",
-    gender: "",
+    dateOfBirth: currentUser?.dateOfBirth || "",
+    gender: currentUser?.gender || "",
+    addressLine1: "",
+    addressLine2: "",
+    city: "",
+    state: "",
+    postalCode: "",
+    country: "",
     currentPassword: "",
-    address:"",
     newPassword: "",
     confirmPassword: "",
   });
-  const getErrorMessage = (error: unknown, fallback: string) => {
-    if (!error) return fallback;
-    if (typeof error === "string") return error;
-    const response = (error as any)?.response;
-    if (response?.data?.message) return response.data.message;
-    if (error instanceof Error && error.message) return error.message;
-    return fallback;
-  };
+  const [accountSettings, setAccountSettings] = useState<AccountLocalSettings>(() => createDefaultSettings());
+  const [preferencesForm, setPreferencesForm] = useState<PreferenceSettings>(() => createDefaultSettings().preferences);
+  const [paymentForm, setPaymentForm] = useState<PaymentFormState>(() => createEmptyPaymentForm());
+  const queryClient = useQueryClient();
+  const [isProfileSaving, setIsProfileSaving] = useState(false);
+  const {
+    data: profileData,
+    isLoading: isProfileLoading,
+    isFetching: isProfileFetching,
+    error: profileError,
+  } = useQuery({
+    queryKey: PROFILE_QUERY_KEY,
+    queryFn: fetchProfile,
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+  const profileLoadError = profileError instanceof Error ? profileError.message : null;
+  const isProfileBusy = isProfileSaving || isProfileLoading;
+
+  const persistUserFromProfile = useCallback(
+    (profile: UserProfile) => {
+      if (!profile) return;
+      setCurrentUser((prev) => {
+        const previousUser = prev ?? { name: "", email: "" };
+        const merged: AccountUser = {
+          ...previousUser,
+          name: profile.name ?? previousUser.name ?? "",
+          email: profile.email ?? previousUser.email ?? "",
+          phone: profile.phone ?? previousUser.phone,
+          address: profile.address_line1 ?? previousUser.address,
+          gender: profile.gender ?? previousUser.gender,
+          dateOfBirth: profile.date_of_birth ?? previousUser.dateOfBirth,
+        };
+        try {
+          localStorage.setItem("user", JSON.stringify(merged));
+        } catch (error) {
+          console.warn("Không thể lưu user vào localStorage:", error);
+        }
+        return merged;
+      });
+    },
+    [setCurrentUser],
+  );
+
+  useEffect(() => {
+    if (!currentUser) return;
+    setFormData((prev) => ({
+      ...prev,
+      name: currentUser.name || "",
+      email: currentUser.email || "",
+      phone: currentUser.phone || "",
+      dateOfBirth: currentUser.dateOfBirth || "",
+      gender: currentUser.gender || "",
+    }));
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (!profileData) return;
+    setFormData((prev) => ({
+      ...prev,
+      name: profileData.name || prev.name,
+      email: profileData.email || prev.email,
+      phone: profileData.phone || prev.phone,
+      gender: profileData.gender || prev.gender,
+      dateOfBirth: profileData.date_of_birth || prev.dateOfBirth,
+      addressLine1: profileData.address_line1 || "",
+      addressLine2: profileData.address_line2 || "",
+      city: profileData.city || "",
+      state: profileData.state || "",
+      postalCode: profileData.postal_code || "",
+      country: profileData.country || "",
+    }));
+    persistUserFromProfile(profileData);
+  }, [profileData, persistUserFromProfile]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const storedSettings = localStorage.getItem(SETTINGS_STORAGE_KEY);
+      if (storedSettings) {
+        const parsed = JSON.parse(storedSettings) as Partial<AccountLocalSettings>;
+        const merged = mergeSettingsWithDefaults(parsed);
+        setAccountSettings(merged);
+        setPreferencesForm(merged.preferences);
+      }
+    } catch (error) {
+      console.error("Không thể tải cài đặt đã lưu:", error);
+    }
+  }, []);
 
   const menuItems = [
-    { id: "profile" as SectionType, label: "Hồ sơ của tôi", icon: User },
+    { id: "profile" as SectionType, label: "Hồ sơ của tôi", icon: UserIcon },
     { id: "security" as SectionType, label: "Bảo mật", icon: Lock },
     { id: "notifications" as SectionType, label: "Thông báo", icon: Bell },
     { id: "payment" as SectionType, label: "Thanh toán", icon: CreditCard },
     { id: "preferences" as SectionType, label: "Tùy chọn", icon: Globe },
   ];
 
+  const notificationOptions: { key: NotificationKey; title: string; description: string }[] = [
+    {
+      key: "promotionalEmails",
+      title: "Email khuyến mãi",
+      description: "Nhận thông tin ưu đãi, chương trình giảm giá và voucher mới nhất",
+    },
+    {
+      key: "bookingUpdates",
+      title: "Cập nhật đặt chỗ",
+      description: "Thông báo về trạng thái đặt chỗ, thanh toán và thay đổi lịch trình",
+    },
+    {
+      key: "travelTips",
+      title: "Tin tức và mẹo du lịch",
+      description: "Gợi ý điểm đến, hành trình đang hot và các kinh nghiệm hữu ích",
+    },
+    {
+      key: "reminders",
+      title: "Nhắc nhở sắp tới",
+      description: "Thông báo trước các hoạt động đã lên lịch và việc cần chuẩn bị",
+    },
+  ];
+
+  const paymentBrandOptions = [
+    { value: "visa" as const, label: "Visa" },
+    { value: "mastercard" as const, label: "Mastercard" },
+    { value: "amex" as const, label: "American Express" },
+    { value: "jcb" as const, label: "JCB" },
+    { value: "other" as const, label: "Khác" },
+  ];
+  const getPaymentBrandLabel = (brand: PaymentMethod["brand"]) =>
+    paymentBrandOptions.find((option) => option.value === brand)?.label || "Phương thức khác";
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
   };
 
-  const handleUpdateProfile = (e: React.FormEvent) => {
+  const persistSettings = (
+    updater: (prev: AccountLocalSettings) => AccountLocalSettings,
+    message?: string,
+  ) => {
+    setAccountSettings((prev) => {
+      const nextState = updater(prev);
+      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(nextState));
+      return nextState;
+    });
+    if (message) {
+      toast.success(message);
+    }
+  };
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.phone && !isValidVietnamPhone(formData.phone)) {
       toast.error("⚠️ Số điện thoại không hợp lệ. Vui lòng nhập 10 số bắt đầu bằng 0 hoặc +84.");
@@ -66,21 +309,58 @@ const AccountSettings = () => {
       return;
     }
 
-    const updatedUser = {
-      ...currentUser,
-      name: formData.name,
-      email: formData.email,
-      phone: formData.phone ? normalizeVietnamPhone(formData.phone) : formData.phone,
+    const payload: UpdateProfilePayload = {};
+    const previous = profileData ?? null;
+    const appendIfChanged = (
+      value: string,
+      original: string | null | undefined,
+      key: keyof UpdateProfilePayload,
+      transform?: (val: string) => string,
+    ) => {
+      const trimmed = value.trim();
+      if (!trimmed) return;
+      const nextValue = transform ? transform(trimmed) : trimmed;
+      const currentValue = (original ?? "").trim();
+      if (currentValue === nextValue) return;
+      payload[key] = nextValue;
     };
-    setCurrentUser(updatedUser);
-    localStorage.setItem("user", JSON.stringify(updatedUser));
-    toast.success("Cập nhật thông tin thành công!");
-    if (formData.phone) {
-      setFormData((prev) => ({ ...prev, phone: normalizeVietnamPhone(formData.phone) }));
+
+    appendIfChanged(formData.name, previous?.name, "name");
+    appendIfChanged(formData.email, previous?.email, "email");
+    appendIfChanged(formData.phone, previous?.phone, "phone", normalizeVietnamPhone);
+    appendIfChanged(formData.gender, previous?.gender, "gender");
+    appendIfChanged(formData.dateOfBirth, previous?.date_of_birth, "date_of_birth");
+    appendIfChanged(formData.addressLine1, previous?.address_line1, "address_line1");
+    appendIfChanged(formData.addressLine2, previous?.address_line2, "address_line2");
+    appendIfChanged(formData.city, previous?.city, "city");
+    appendIfChanged(formData.state, previous?.state, "state");
+    appendIfChanged(formData.postalCode, previous?.postal_code, "postal_code");
+    appendIfChanged(formData.country, previous?.country, "country");
+
+    if (Object.keys(payload).length === 0) {
+      toast.info("Không có thay đổi nào cần lưu.");
+      return;
+    }
+
+    setIsProfileSaving(true);
+    try {
+      const result = await updateProfile(payload);
+      const mergedProfile: UserProfile = {
+        ...(profileData ?? {}),
+        ...payload,
+        ...(result.profile ?? {}),
+      };
+      queryClient.setQueryData(PROFILE_QUERY_KEY, mergedProfile);
+      persistUserFromProfile(mergedProfile);
+      toast.success(result.message || "Cập nhật thông tin thành công!");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Không thể cập nhật hồ sơ."));
+    } finally {
+      setIsProfileSaving(false);
     }
   };
 
-  const handleChangePassword = async (e: React.FormEvent) => {
+  const handleChangePassword = (e: React.FormEvent) => {
     e.preventDefault();
 
     if (formData.newPassword !== formData.confirmPassword) {
@@ -93,31 +373,185 @@ const AccountSettings = () => {
       return;
     }
 
-    try {
-      toast.loading("⏳ Đang xử lý yêu cầu...", { id: "changePwd" });
-
-      await ensureCsrfToken();
-      const response = await apiClient.post("/reset-password", {
-        type: "email",
-        value: currentUser?.email,
-        current_password: formData.currentPassword,
-        new_password: formData.newPassword,
-        new_password_confirmation: formData.confirmPassword,
-      });
-      const data = response.data ?? {};
-
-      toast.success(data.message || "✅ Đổi mật khẩu thành công!", { id: "changePwd" });
-      setFormData((prev) => ({
-        ...prev,
-        currentPassword: "",
-        newPassword: "",
-        confirmPassword: "",
-      }));
-    } catch (error) {
-      console.error("Lỗi đổi mật khẩu:", error);
-      toast.error(getErrorMessage(error, "⚠️ Lỗi kết nối đến máy chủ!"), { id: "changePwd" });
+    if (accountSettings.security.password && formData.currentPassword !== accountSettings.security.password) {
+      toast.error("❌ Mật khẩu hiện tại chưa chính xác!");
+      return;
     }
+
+    const changedAt = new Date().toISOString();
+    persistSettings(
+      (prev) => ({
+        ...prev,
+        security: {
+          ...prev.security,
+          password: formData.newPassword,
+          lastPasswordChange: changedAt,
+        },
+      }),
+      "✅ Đổi mật khẩu thành công!",
+    );
+    setFormData((prev) => ({
+      ...prev,
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    }));
   };
+
+  const handleNotificationToggle = (key: NotificationKey, label: string, value: boolean) => {
+    persistSettings((prev) => ({
+      ...prev,
+      notifications: {
+        ...prev.notifications,
+        [key]: value,
+      },
+    }));
+    toast.success(`${value ? "Đã bật" : "Đã tắt"} ${label.toLowerCase()}`);
+  };
+
+  const handleToggleTwoFactor = (value: boolean) => {
+    persistSettings(
+      (prev) => ({
+        ...prev,
+        security: {
+          ...prev.security,
+          twoFactorEnabled: value,
+        },
+      }),
+      value ? "Đã bật xác thực hai yếu tố" : "Đã tắt xác thực hai yếu tố",
+    );
+  };
+
+  const handlePreferencesChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setPreferencesForm((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleSavePreferences = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    persistSettings(
+      (prev) => ({
+        ...prev,
+        preferences: { ...preferencesForm },
+      }),
+      "Đã lưu tùy chọn hiển thị!",
+    );
+  };
+
+  const formatCardNumberInput = (value: string) => {
+    const digitsOnly = value.replace(/\D/g, "").slice(0, 19);
+    return digitsOnly.replace(/(.{4})/g, "$1 ").trim();
+  };
+
+  const maskCardNumber = (value: string) => {
+    const digits = value.replace(/\s+/g, "");
+    if (digits.length <= 4) {
+      return digits;
+    }
+    const masked = digits.slice(0, -4).replace(/\d/g, "*") + digits.slice(-4);
+    return masked.replace(/(.{4})/g, "$1 ").trim();
+  };
+
+  const handlePaymentFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setPaymentForm((prev) => ({
+      ...prev,
+      [name]: name === "cardNumber" ? formatCardNumberInput(value) : value,
+    }));
+  };
+
+  const isValidExpiry = (value: string) => {
+    const match = /^(\d{2})\/(\d{2})$/.exec(value);
+    if (!match) return false;
+    const month = Number(match[1]);
+    const year = Number(match[2]);
+    if (month < 1 || month > 12) return false;
+    const now = new Date();
+    const fullYear = 2000 + year;
+    if (fullYear < now.getFullYear()) return false;
+    if (fullYear === now.getFullYear() && month < now.getMonth() + 1) return false;
+    return true;
+  };
+
+  const handleAddPaymentMethod = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!paymentForm.cardholder.trim()) {
+      toast.error("Vui lòng nhập tên chủ thẻ");
+      return;
+    }
+
+    const sanitizedCardNumber = paymentForm.cardNumber.replace(/\s+/g, "");
+    if (!/^\d{12,19}$/.test(sanitizedCardNumber)) {
+      toast.error("Số thẻ phải gồm 12-19 chữ số");
+      return;
+    }
+
+    if (!isValidExpiry(paymentForm.expiry)) {
+      toast.error("Ngày hết hạn không hợp lệ. Định dạng MM/YY và chưa hết hạn.");
+      return;
+    }
+
+    persistSettings(
+      (prev) => {
+        const isFirstCard = prev.paymentMethods.length === 0;
+        const newMethod: PaymentMethod = {
+          id: `${Date.now()}`,
+          brand: paymentForm.brand,
+          cardholder: paymentForm.cardholder.trim(),
+          cardNumber: sanitizedCardNumber,
+          expiry: paymentForm.expiry,
+          isDefault: isFirstCard,
+        };
+        return {
+          ...prev,
+          paymentMethods: [...prev.paymentMethods, newMethod],
+        };
+      },
+      "Đã thêm phương thức thanh toán",
+    );
+    setPaymentForm(createEmptyPaymentForm());
+  };
+
+  const handleSetDefaultPaymentMethod = (id: string) => {
+    persistSettings(
+      (prev) => ({
+        ...prev,
+        paymentMethods: prev.paymentMethods.map((method) => ({
+          ...method,
+          isDefault: method.id === id,
+        })),
+      }),
+      "Đã đặt phương thức mặc định",
+    );
+  };
+
+  const handleRemovePaymentMethod = (id: string) => {
+    persistSettings(
+      (prev) => {
+        const remaining = prev.paymentMethods.filter((method) => method.id !== id);
+        if (remaining.length === 0) {
+          return { ...prev, paymentMethods: [] };
+        }
+        if (!remaining.some((method) => method.isDefault)) {
+          return {
+            ...prev,
+            paymentMethods: remaining.map((method, index) =>
+              index === 0 ? { ...method, isDefault: true } : method,
+            ),
+          };
+        }
+        return { ...prev, paymentMethods: remaining };
+      },
+      "Đã xóa phương thức thanh toán",
+    );
+  };
+
+  const lastPasswordChangeLabel = accountSettings.security.lastPasswordChange
+    ? new Date(accountSettings.security.lastPasswordChange).toLocaleString("vi-VN")
+    : "Chưa có lịch sử";
 
 
   return (
@@ -170,126 +604,207 @@ const AccountSettings = () => {
                     <p className="text-sm text-gray-600 mt-1">Quản lý thông tin cá nhân của bạn</p>
                   </div>
                   <CardContent className="p-6">
-                    <form onSubmit={handleUpdateProfile} className="space-y-6">
-                      {/* Profile Photo */}
-                      <div className="flex items-center gap-6 pb-6 border-b">
-                        <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
-                          <User className="w-10 h-10 text-primary" />
+                    {profileLoadError && (
+                      <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                        {profileLoadError}
+                      </div>
+                    )}
+                    <form onSubmit={handleUpdateProfile}>
+                      <fieldset disabled={isProfileBusy} className="space-y-6">
+                        {/* Profile Photo */}
+                        <div className="flex items-center gap-6 pb-6 border-b">
+                          <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
+                            <UserIcon className="w-10 h-10 text-primary" />
+                          </div>
+                          <div>
+                            <Button type="button" variant="outline" size="sm">
+                              Thay đổi ảnh
+                            </Button>
+                            <p className="text-xs text-gray-500 mt-2">JPG, PNG hoặc GIF. Tối đa 2MB</p>
+                          </div>
                         </div>
-                        <div>
-                          <Button type="button" variant="outline" size="sm">
-                            Thay đổi ảnh
+
+                        {(isProfileLoading || isProfileFetching) && (
+                          <p className="text-sm text-gray-500">Đang tải dữ liệu hồ sơ...</p>
+                        )}
+
+                        {/* Personal Information */}
+                        <div className="space-y-4">
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <div className="space-y-2">
+                              <Label htmlFor="name" className="text-sm font-medium">
+                                Họ và tên <span className="text-red-500">*</span>
+                              </Label>
+                              <Input
+                                id="name"
+                                name="name"
+                                value={formData.name}
+                                onChange={handleInputChange}
+                                placeholder="Nhập họ và tên"
+                                className="h-11"
+                                required
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="gender" className="text-sm font-medium">
+                                Giới tính
+                              </Label>
+                              <select
+                                id="gender"
+                                name="gender"
+                                value={formData.gender}
+                                onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                                className="w-full h-11 px-3 border rounded-lg bg-white"
+                              >
+                                <option value="">Chọn giới tính</option>
+                                <option value="male">Nam</option>
+                                <option value="female">Nữ</option>
+                                <option value="other">Khác</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <div className="space-y-2">
+                              <Label htmlFor="email" className="text-sm font-medium flex items-center gap-2">
+                                <Mail className="w-4 h-4" />
+                                Email <span className="text-red-500">*</span>
+                              </Label>
+                              <Input
+                                id="email"
+                                name="email"
+                                type="email"
+                                value={formData.email}
+                                onChange={handleInputChange}
+                                placeholder="email@example.com"
+                                className="h-11"
+                                required
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="phone" className="text-sm font-medium flex items-center gap-2">
+                                <Phone className="w-4 h-4" />
+                                Số điện thoại
+                              </Label>
+                              <Input
+                                id="phone"
+                                name="phone"
+                                value={formData.phone}
+                                onChange={handleInputChange}
+                                placeholder="+84 xxx xxx xxx"
+                                className="h-11"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="dateOfBirth" className="text-sm font-medium flex items-center gap-2">
+                              <Calendar className="w-4 h-4" />
+                              Ngày sinh
+                            </Label>
+                            <Input
+                              id="dateOfBirth"
+                              name="dateOfBirth"
+                              type="date"
+                              value={formData.dateOfBirth}
+                              onChange={handleInputChange}
+                              className="h-11"
+                            />
+                          </div>
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label htmlFor="addressLine1" className="text-sm font-medium">
+                              Địa chỉ dòng 1
+                            </Label>
+                            <Input
+                              id="addressLine1"
+                              name="addressLine1"
+                              value={formData.addressLine1}
+                              onChange={handleInputChange}
+                              placeholder="Số nhà, đường"
+                              className="h-11"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="addressLine2" className="text-sm font-medium">
+                              Địa chỉ dòng 2
+                            </Label>
+                            <Input
+                              id="addressLine2"
+                              name="addressLine2"
+                              value={formData.addressLine2}
+                              onChange={handleInputChange}
+                              placeholder="Phường/Xã, Tòa nhà (tuỳ chọn)"
+                              className="h-11"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label htmlFor="city" className="text-sm font-medium">
+                              Thành phố
+                            </Label>
+                            <Input
+                              id="city"
+                              name="city"
+                              value={formData.city}
+                              onChange={handleInputChange}
+                              placeholder="Thành phố"
+                              className="h-11"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="state" className="text-sm font-medium">
+                              Tỉnh/Bang
+                            </Label>
+                            <Input
+                              id="state"
+                              name="state"
+                              value={formData.state}
+                              onChange={handleInputChange}
+                              placeholder="Tỉnh/Bang"
+                              className="h-11"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label htmlFor="postalCode" className="text-sm font-medium">
+                              Mã bưu điện
+                            </Label>
+                            <Input
+                              id="postalCode"
+                              name="postalCode"
+                              value={formData.postalCode}
+                              onChange={handleInputChange}
+                              placeholder="Mã bưu điện"
+                              className="h-11"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="country" className="text-sm font-medium">
+                              Quốc gia
+                            </Label>
+                            <Input
+                              id="country"
+                              name="country"
+                              value={formData.country}
+                              onChange={handleInputChange}
+                              placeholder="Quốc gia"
+                              className="h-11"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                        <div className="flex justify-end pt-4 border-t">
+                          <Button type="submit" className="bg-primary hover:bg-primary/90 px-8" disabled={isProfileBusy}>
+                            {isProfileSaving ? "Đang lưu..." : "Lưu thay đổi"}
                           </Button>
-                          <p className="text-xs text-gray-500 mt-2">JPG, PNG hoặc GIF. Tối đa 2MB</p>
                         </div>
-                      </div>
-
-                      {/* Personal Information */}
-                      <div className="space-y-4">
-                        <div className="grid gap-4 md:grid-cols-2">
-                          <div className="space-y-2">
-                            <Label htmlFor="name" className="text-sm font-medium">
-                              Họ và tên <span className="text-red-500">*</span>
-                            </Label>
-                            <Input
-                              id="name"
-                              name="name"
-                              value={formData.name}
-                              onChange={handleInputChange}
-                              placeholder="Nhập họ và tên"
-                              className="h-11"
-                              required
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="gender" className="text-sm font-medium">
-                              Giới tính
-                            </Label>
-                            <select
-                              id="gender"
-                              name="gender"
-                              value={formData.gender}
-                              onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                              className="w-full h-11 px-3 border rounded-lg bg-white"
-                            >
-                              <option value="">Chọn giới tính</option>
-                              <option value="male">Nam</option>
-                              <option value="female">Nữ</option>
-                              <option value="other">Khác</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        <div className="grid gap-4 md:grid-cols-2">
-                          <div className="space-y-2">
-                            <Label htmlFor="email" className="text-sm font-medium flex items-center gap-2">
-                              <Mail className="w-4 h-4" />
-                              Email <span className="text-red-500">*</span>
-                            </Label>
-                            <Input
-                              id="email"
-                              name="email"
-                              type="email"
-                              value={formData.email}
-                              onChange={handleInputChange}
-                              placeholder="email@example.com"
-                              className="h-11"
-                              required
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="phone" className="text-sm font-medium flex items-center gap-2">
-                              <Phone className="w-4 h-4" />
-                              Số điện thoại
-                            </Label>
-                            <Input
-                              id="phone"
-                              name="phone"
-                              value={formData.phone}
-                              onChange={handleInputChange}
-                              placeholder="+84 xxx xxx xxx"
-                              className="h-11"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="dateOfBirth" className="text-sm font-medium flex items-center gap-2">
-                            <Calendar className="w-4 h-4" />
-                            Ngày sinh
-                          </Label>
-                          <Input
-                            id="dateOfBirth"
-                            name="dateOfBirth"
-                            type="date"
-                            value={formData.dateOfBirth}
-                            onChange={handleInputChange}
-                            className="h-11"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                        <Label htmlFor="address" className="text-sm font-medium flex items-center gap-2">
-                          <MapPin className="w-4 h-4" />
-                          Địa chỉ <span className="text-red-500">*</span>
-                        </Label>
-                        <Input
-                          id="address"
-                          name="address"
-                          type="text"
-                          value={formData.address || ""}
-                          onChange={handleInputChange}
-                          placeholder="Nhập địa chỉ của bạn"
-                          className="h-11"
-                          required
-                        />
-                      </div>
-                      </div>
-
-                      <div className="flex justify-end pt-4 border-t">
-                        <Button type="submit" className="bg-primary hover:bg-primary/90 px-8">
-                          Lưu thay đổi
-                        </Button>
-                      </div>
+                      </fieldset>
                     </form>
                   </CardContent>
                 </Card>
@@ -302,7 +817,7 @@ const AccountSettings = () => {
                     <h2 className="text-xl font-semibold text-gray-900">Bảo mật</h2>
                     <p className="text-sm text-gray-600 mt-1">Quản lý mật khẩu và bảo mật tài khoản</p>
                   </div>
-                  <CardContent className="p-6">
+                  <CardContent className="p-6 space-y-8">
                     <form onSubmit={handleChangePassword} className="space-y-6">
                       <div className="space-y-4">
                         <div className="space-y-2">
@@ -355,6 +870,13 @@ const AccountSettings = () => {
                         </div>
                       </div>
 
+                      <div className="rounded-lg bg-gray-50 p-4 text-sm text-gray-600">
+                        <p>
+                          Lần cập nhật mật khẩu gần nhất:{" "}
+                          <span className="font-medium text-gray-900">{lastPasswordChangeLabel}</span>
+                        </p>
+                      </div>
+
                       <div className="flex justify-end pt-4 border-t">
                         <Button type="submit" className="bg-primary hover:bg-primary/90 px-8">
                           Đổi mật khẩu
@@ -362,22 +884,35 @@ const AccountSettings = () => {
                       </div>
                     </form>
 
-                    <Separator className="my-8" />
+                    <Separator />
 
-                    <div className="space-y-4">
-                      <div className="flex items-start gap-4">
-                        <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                          <Shield className="w-6 h-6 text-primary" />
+                    <div className="flex items-start gap-4 rounded-lg border p-4">
+                      <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                        <Shield className="w-6 h-6 text-primary" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                          <div>
+                            <h3 className="font-semibold text-gray-900">Xác thực hai yếu tố</h3>
+                            <p className="text-sm text-gray-600">
+                              Tăng cường bảo mật tài khoản bằng mã xác thực mỗi khi đăng nhập
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm font-medium text-gray-700">
+                              {accountSettings.security.twoFactorEnabled ? "Đang bật" : "Đang tắt"}
+                            </span>
+                            <Switch
+                              checked={accountSettings.security.twoFactorEnabled}
+                              onCheckedChange={handleToggleTwoFactor}
+                            />
+                          </div>
                         </div>
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-gray-900 mb-1">Xác thực hai yếu tố</h3>
-                          <p className="text-sm text-gray-600 mb-4">
-                            Tăng cường bảo mật tài khoản bằng cách yêu cầu mã xác thực khi đăng nhập
-                          </p>
-                          <Button variant="outline" className="border-primary text-primary hover:bg-primary/5">
-                            Kích hoạt ngay
-                          </Button>
-                        </div>
+                        <p className="text-xs text-gray-500 mt-3">
+                          {accountSettings.security.twoFactorEnabled
+                            ? "Chúng tôi sẽ gửi mã xác thực về email/điện thoại khi bạn đăng nhập."
+                            : "Bật tính năng này để thêm một lớp bảo vệ cho tài khoản của bạn."}
+                        </p>
                       </div>
                     </div>
                   </CardContent>
@@ -391,54 +926,24 @@ const AccountSettings = () => {
                     <h2 className="text-xl font-semibold text-gray-900">Thông báo</h2>
                     <p className="text-sm text-gray-600 mt-1">Quản lý cách bạn nhận thông báo</p>
                   </div>
-                  <CardContent className="p-6 space-y-6">
-                    <div className="flex items-start justify-between py-4 border-b">
-                      <div className="flex-1">
-                        <h4 className="font-medium text-gray-900">Email khuyến mãi</h4>
-                        <p className="text-sm text-gray-600 mt-1">
-                          Nhận thông tin về ưu đãi, khuyến mãi đặc biệt và các chương trình mới nhất
-                        </p>
+                  <CardContent className="p-6 divide-y">
+                    {notificationOptions.map((option) => (
+                      <div key={option.key} className="flex items-start justify-between py-5">
+                        <div className="flex-1 pr-6">
+                          <h4 className="font-medium text-gray-900">{option.title}</h4>
+                          <p className="text-sm text-gray-600 mt-1">{option.description}</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="hidden text-sm text-gray-500 md:inline">
+                            {accountSettings.notifications[option.key] ? "Đang bật" : "Đang tắt"}
+                          </span>
+                          <Switch
+                            checked={accountSettings.notifications[option.key]}
+                            onCheckedChange={(checked) => handleNotificationToggle(option.key, option.title, checked)}
+                          />
+                        </div>
                       </div>
-                      <Button variant="outline" size="sm" className="ml-4 shrink-0">
-                        Bật
-                      </Button>
-                    </div>
-
-                    <div className="flex items-start justify-between py-4 border-b">
-                      <div className="flex-1">
-                        <h4 className="font-medium text-gray-900">Cập nhật đặt chỗ</h4>
-                        <p className="text-sm text-gray-600 mt-1">
-                          Nhận thông báo về trạng thái đặt chỗ, xác nhận và thay đổi lịch trình
-                        </p>
-                      </div>
-                      <Button variant="outline" size="sm" className="ml-4 shrink-0">
-                        Bật
-                      </Button>
-                    </div>
-
-                    <div className="flex items-start justify-between py-4 border-b">
-                      <div className="flex-1">
-                        <h4 className="font-medium text-gray-900">Tin tức và mẹo du lịch</h4>
-                        <p className="text-sm text-gray-600 mt-1">
-                          Khám phá các mẹo du lịch hữu ích, điểm đến mới và trải nghiệm độc đáo
-                        </p>
-                      </div>
-                      <Button variant="outline" size="sm" className="ml-4 shrink-0">
-                        Bật
-                      </Button>
-                    </div>
-
-                    <div className="flex items-start justify-between py-4">
-                      <div className="flex-1">
-                        <h4 className="font-medium text-gray-900">Nhắc nhở sắp tới</h4>
-                        <p className="text-sm text-gray-600 mt-1">
-                          Nhận nhắc nhở về các hoạt động và đặt chỗ sắp diễn ra
-                        </p>
-                      </div>
-                      <Button variant="outline" size="sm" className="ml-4 shrink-0">
-                        Bật
-                      </Button>
-                    </div>
+                    ))}
                   </CardContent>
                 </Card>
               )}
@@ -450,19 +955,145 @@ const AccountSettings = () => {
                     <h2 className="text-xl font-semibold text-gray-900">Phương thức thanh toán</h2>
                     <p className="text-sm text-gray-600 mt-1">Quản lý thẻ và phương thức thanh toán</p>
                   </div>
-                  <CardContent className="p-6">
-                    <div className="text-center py-16">
-                      <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
-                        <CreditCard className="w-10 h-10 text-gray-400" />
+                  <CardContent className="p-6 space-y-8">
+                    {accountSettings.paymentMethods.length === 0 ? (
+                      <div className="text-center py-12">
+                        <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+                          <CreditCard className="w-10 h-10 text-gray-400" />
+                        </div>
+                        <h3 className="font-semibold text-gray-900 mb-2">Chưa có phương thức thanh toán</h3>
+                        <p className="text-sm text-gray-600 mb-6 max-w-md mx-auto">
+                          Thêm thẻ tín dụng hoặc phương thức thanh toán để đặt chỗ nhanh chóng và thuận tiện hơn
+                        </p>
                       </div>
-                      <h3 className="font-semibold text-gray-900 mb-2">Chưa có phương thức thanh toán</h3>
-                      <p className="text-sm text-gray-600 mb-6 max-w-md mx-auto">
-                        Thêm thẻ tín dụng hoặc phương thức thanh toán để đặt chỗ nhanh chóng và thuận tiện hơn
-                      </p>
-                      <Button className="bg-primary hover:bg-primary/90 px-6">
-                        <CreditCard className="w-4 h-4 mr-2" />
-                        Thêm phương thức thanh toán
-                      </Button>
+                    ) : (
+                      <div className="space-y-4">
+                        {accountSettings.paymentMethods.map((method) => (
+                          <div
+                            key={method.id}
+                            className="flex flex-col gap-4 rounded-xl border p-4 md:flex-row md:items-center md:justify-between"
+                          >
+                            <div>
+                              <p className="text-xs uppercase tracking-wide text-gray-500">
+                                {getPaymentBrandLabel(method.brand)}
+                              </p>
+                              <p className="text-lg font-semibold text-gray-900 mt-1">
+                                {maskCardNumber(method.cardNumber)}
+                              </p>
+                              <p className="text-sm text-gray-600 mt-1">Hết hạn: {method.expiry}</p>
+                            </div>
+                            <div className="flex flex-col gap-2 text-sm font-medium text-primary">
+                              {method.isDefault && (
+                                <span className="inline-flex items-center gap-1 text-primary">
+                                  <Star className="w-4 h-4 fill-primary text-primary" />
+                                  Mặc định
+                                </span>
+                              )}
+                              <span className="text-gray-500">Chủ thẻ: {method.cardholder}</span>
+                            </div>
+                            <div className="flex flex-wrap gap-3">
+                              {!method.isDefault && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleSetDefaultPaymentMethod(method.id)}
+                                >
+                                  Đặt mặc định
+                                </Button>
+                              )}
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="text-red-600 hover:text-red-700"
+                                onClick={() => handleRemovePaymentMethod(method.id)}
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Xóa
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <Separator />
+
+                    <div className="rounded-xl bg-gray-50 p-5">
+                      <h3 className="font-semibold text-gray-900">Thêm phương thức thanh toán mới</h3>
+                      <form onSubmit={handleAddPaymentMethod} className="mt-4 space-y-4">
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label htmlFor="cardholder" className="text-sm font-medium">
+                              Tên chủ thẻ
+                            </Label>
+                            <Input
+                              id="cardholder"
+                              name="cardholder"
+                              value={paymentForm.cardholder}
+                              onChange={handlePaymentFormChange}
+                              placeholder="Ví dụ: NGUYEN VAN A"
+                              className="h-11 uppercase"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="brand" className="text-sm font-medium">
+                              Loại thẻ
+                            </Label>
+                            <select
+                              id="brand"
+                              name="brand"
+                              value={paymentForm.brand}
+                              onChange={handlePaymentFormChange}
+                              className="w-full h-11 rounded-lg border bg-white px-3"
+                            >
+                              {paymentBrandOptions.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label htmlFor="cardNumber" className="text-sm font-medium">
+                              Số thẻ
+                            </Label>
+                            <Input
+                              id="cardNumber"
+                              name="cardNumber"
+                              value={paymentForm.cardNumber}
+                              onChange={handlePaymentFormChange}
+                              placeholder="0000 0000 0000 0000"
+                              inputMode="numeric"
+                              className="h-11"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="expiry" className="text-sm font-medium">
+                              Ngày hết hạn
+                            </Label>
+                            <Input
+                              id="expiry"
+                              name="expiry"
+                              value={paymentForm.expiry}
+                              onChange={handlePaymentFormChange}
+                              placeholder="MM/YY"
+                              className="h-11"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end">
+                          <Button type="submit" className="bg-primary hover:bg-primary/90 px-6">
+                            <CreditCard className="w-4 h-4 mr-2" />
+                            Thêm phương thức
+                          </Button>
+                        </div>
+                      </form>
                     </div>
                   </CardContent>
                 </Card>
@@ -475,54 +1106,73 @@ const AccountSettings = () => {
                     <h2 className="text-xl font-semibold text-gray-900">Tùy chọn</h2>
                     <p className="text-sm text-gray-600 mt-1">Cá nhân hóa trải nghiệm của bạn</p>
                   </div>
-                  <CardContent className="p-6 space-y-6">
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium flex items-center gap-2">
-                        <Globe className="w-4 h-4" />
-                        Ngôn ngữ hiển thị
-                      </Label>
-                      <select className="w-full h-11 px-3 border rounded-lg bg-white">
-                        <option value="vi">Tiếng Việt</option>
-                        <option value="en">English</option>
-                        <option value="zh">中文 (简体)</option>
-                        <option value="ja">日本語</option>
-                        <option value="ko">한국어</option>
-                        <option value="th">ไทย</option>
-                      </select>
-                      <p className="text-xs text-gray-500">Chọn ngôn ngữ bạn muốn sử dụng trên trang web</p>
-                    </div>
+                  <CardContent className="p-6">
+                    <form onSubmit={handleSavePreferences} className="space-y-6">
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium flex items-center gap-2">
+                          <Globe className="w-4 h-4" />
+                          Ngôn ngữ hiển thị
+                        </Label>
+                        <select
+                          name="language"
+                          value={preferencesForm.language}
+                          onChange={handlePreferencesChange}
+                          className="w-full h-11 px-3 border rounded-lg bg-white"
+                        >
+                          <option value="vi">Tiếng Việt</option>
+                          <option value="en">English</option>
+                          <option value="zh">中文 (简体)</option>
+                          <option value="ja">日本語</option>
+                          <option value="ko">한국어</option>
+                          <option value="th">ไทย</option>
+                        </select>
+                        <p className="text-xs text-gray-500">Chọn ngôn ngữ bạn muốn sử dụng trên trang web</p>
+                      </div>
 
-                    <Separator />
+                      <Separator />
 
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium">Đơn vị tiền tệ</Label>
-                      <select className="w-full h-11 px-3 border rounded-lg bg-white">
-                        <option value="vnd">VND - Đồng Việt Nam (₫)</option>
-                        <option value="usd">USD - Dollar Mỹ ($)</option>
-                        <option value="eur">EUR - Euro (€)</option>
-                        <option value="jpy">JPY - Yên Nhật (¥)</option>
-                        <option value="krw">KRW - Won Hàn Quốc (₩)</option>
-                        <option value="thb">THB - Baht Thái (฿)</option>
-                      </select>
-                      <p className="text-xs text-gray-500">Chọn đơn vị tiền tệ để hiển thị giá</p>
-                    </div>
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">Đơn vị tiền tệ</Label>
+                        <select
+                          name="currency"
+                          value={preferencesForm.currency}
+                          onChange={handlePreferencesChange}
+                          className="w-full h-11 px-3 border rounded-lg bg-white"
+                        >
+                          <option value="vnd">VND - Đồng Việt Nam (₫)</option>
+                          <option value="usd">USD - Dollar Mỹ ($)</option>
+                          <option value="eur">EUR - Euro (€)</option>
+                          <option value="jpy">JPY - Yên Nhật (¥)</option>
+                          <option value="krw">KRW - Won Hàn Quốc (₩)</option>
+                          <option value="thb">THB - Baht Thái (฿)</option>
+                        </select>
+                        <p className="text-xs text-gray-500">Chọn đơn vị tiền tệ để hiển thị giá</p>
+                      </div>
 
-                    <Separator />
+                      <Separator />
 
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium">Múi giờ</Label>
-                      <select className="w-full h-11 px-3 border rounded-lg bg-white">
-                        <option value="asia/ho_chi_minh">(GMT+7) Hà Nội, TP. Hồ Chí Minh</option>
-                        <option value="asia/bangkok">(GMT+7) Bangkok</option>
-                        <option value="asia/singapore">(GMT+8) Singapore</option>
-                        <option value="asia/tokyo">(GMT+9) Tokyo</option>
-                        <option value="asia/seoul">(GMT+9) Seoul</option>
-                      </select>
-                    </div>
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">Múi giờ</Label>
+                        <select
+                          name="timezone"
+                          value={preferencesForm.timezone}
+                          onChange={handlePreferencesChange}
+                          className="w-full h-11 px-3 border rounded-lg bg-white"
+                        >
+                          <option value="asia/ho_chi_minh">(GMT+7) Hà Nội, TP. Hồ Chí Minh</option>
+                          <option value="asia/bangkok">(GMT+7) Bangkok</option>
+                          <option value="asia/singapore">(GMT+8) Singapore</option>
+                          <option value="asia/tokyo">(GMT+9) Tokyo</option>
+                          <option value="asia/seoul">(GMT+9) Seoul</option>
+                        </select>
+                      </div>
 
-                    <div className="flex justify-end pt-4 border-t">
-                      <Button className="bg-primary hover:bg-primary/90 px-8">Lưu tùy chọn</Button>
-                    </div>
+                      <div className="flex justify-end pt-4 border-t">
+                        <Button type="submit" className="bg-primary hover:bg-primary/90 px-8">
+                          Lưu tùy chọn
+                        </Button>
+                      </div>
+                    </form>
                   </CardContent>
                 </Card>
               )}

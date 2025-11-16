@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -40,6 +40,7 @@ import {
   type CreateBookingPayload,
 } from "@/services/bookingApi";
 import { fetchTourDetail, type PublicTour, type PublicTourPackage, type PublicTourSchedule } from "@/services/publicApi";
+import { fetchProfile, PROFILE_QUERY_KEY } from "@/services/profileApi";
 import { deduceSepayQrImage, deriveQrFromPaymentUrl } from "@/lib/sepay";
 import { applyAutoPromotionToPrice, getTourPriceInfo } from "@/lib/tour-utils";
 import {
@@ -79,6 +80,7 @@ interface SepayPanelState {
 const normalizeStatus = (status?: string | null) => (status ?? "").toString().trim().toLowerCase();
 const SUCCESS_STATUSES = new Set(["success", "paid", "completed"]);
 const PENDING_STATUSES = new Set(["pending", "processing", "waiting"]);
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
 
 
 const formatCurrency = (value?: number | null, currency = "VND") => {
@@ -343,12 +345,19 @@ const bookingSchema = z.object({
   schedule_id: z.string().min(1, "Yêu cầu chọn lịch khởi hành"),
   adults: z.number().int().min(1, "Cần ít nhất 1 người lớn"),
   children: z.number().int().min(0),
-  contact_name: z.string().min(1, "Yêu cầu họ tên người liên hệ"),
-  contact_email: z.string().email("Email không hợp lệ"),
+  contact_name: z
+    .string()
+    .optional()
+    .refine((value) => !value || value.trim().length > 0, "Yêu cầu họ tên người liên hệ"),
+  contact_email: z
+    .string()
+    .optional()
+    .refine((value) => !value || emailRegex.test(value), "Email không hợp lệ"),
   contact_phone: z
     .string()
-    .min(6, "Số điện thoại chưa hợp lệ")
-    .refine(isValidVietnamPhone, "Số điện thoại không hợp lệ"),
+    .optional()
+    .refine((value) => !value || value.length >= 6, "Số điện thoại chưa hợp lệ")
+    .refine((value) => !value || isValidVietnamPhone(value), "Số điện thoại không hợp lệ"),
   notes: z.string().optional(),
   promotion_code: z.string().optional(),
   payment_method: z.enum(["offline", "sepay"]),
@@ -367,6 +376,17 @@ const BookingCheckout = () => {
   const [searchParams] = useSearchParams();
   const [sepayPanel, setSepayPanel] = useState<SepayPanelState | null>(null);
   const [shouldPollSepayStatus, setShouldPollSepayStatus] = useState(false);
+  const {
+    data: profile,
+    isLoading: isProfileLoading,
+    isFetching: isProfileFetching,
+    error: profileError,
+  } = useQuery({
+    queryKey: PROFILE_QUERY_KEY,
+    queryFn: fetchProfile,
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
 
   const tourId = searchParams.get("tourId") ?? "";
   const cartItemId = searchParams.get("cartItemId") ?? "";
@@ -394,6 +414,23 @@ const BookingCheckout = () => {
 
   const { setValue, getValues } = form;
 
+  useEffect(() => {
+    if (!profile) return;
+    const defaultName = profile.name?.trim() ?? "";
+    const defaultEmail = profile.email?.trim() ?? "";
+    const defaultPhone = profile.phone?.trim() ?? "";
+
+    if (defaultName && !form.getValues("contact_name")) {
+      form.setValue("contact_name", defaultName, { shouldDirty: false });
+    }
+    if (defaultEmail && !form.getValues("contact_email")) {
+      form.setValue("contact_email", defaultEmail, { shouldDirty: false });
+    }
+    if (defaultPhone && !form.getValues("contact_phone")) {
+      form.setValue("contact_phone", defaultPhone, { shouldDirty: false });
+    }
+  }, [profile, form]);
+
   const adults = form.watch("adults");
   const children = form.watch("children");
   const packageId = form.watch("package_id");
@@ -405,6 +442,17 @@ const BookingCheckout = () => {
     enabled: Boolean(tourId),
   });
   const tourPriceInfo = useMemo(() => (tour ? getTourPriceInfo(tour) : null), [tour]);
+  const profileContactName = profile?.name?.trim() ?? "";
+  const profileContactEmail = profile?.email?.trim() ?? "";
+  const profileContactPhone = profile?.phone?.trim() ?? "";
+  const profileMissingContactFields = useMemo(() => {
+    const missing: string[] = [];
+    if (!profileContactName) missing.push("họ và tên");
+    if (!profileContactEmail) missing.push("email");
+    if (!profileContactPhone) missing.push("số điện thoại");
+    return missing;
+  }, [profileContactName, profileContactEmail, profileContactPhone]);
+  const profileHasCompleteContact = profileMissingContactFields.length === 0;
 
   const packages = useMemo(() => tour?.packages ?? [], [tour?.packages]);
   const schedules = useMemo(() => tour?.schedules ?? [], [tour?.schedules]);
@@ -1117,6 +1165,32 @@ const BookingCheckout = () => {
       return;
     }
 
+    const trimmedContactName = (values.contact_name ?? "").trim();
+    const trimmedContactEmail = (values.contact_email ?? "").trim();
+    const trimmedContactPhoneRaw = (values.contact_phone ?? "").trim();
+    const contactFieldsFilled = [trimmedContactName, trimmedContactEmail, trimmedContactPhoneRaw].filter(
+      (field) => field.length > 0,
+    ).length;
+
+    if (contactFieldsFilled > 0 && contactFieldsFilled < 3) {
+      toast({
+        title: "Thiếu thông tin liên hệ",
+        description: "Vui lòng nhập đầy đủ họ tên, email và số điện thoại người liên hệ.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (contactFieldsFilled === 0 && !profileHasCompleteContact) {
+      toast({
+        title: "Cần bổ sung hồ sơ",
+        description: `Hồ sơ hiện thiếu ${profileMissingContactFields.join(", ")}. Vui lòng cập nhật trước khi đặt tour.`,
+        variant: "destructive",
+      });
+      navigate("/account-settings");
+      return;
+    }
+
     const payloadPassengers = values.passengers.map((passenger) => ({
       type: passenger.type,
       full_name: passenger.full_name.trim(),
@@ -1126,14 +1200,23 @@ const BookingCheckout = () => {
         : undefined,
     }));
 
+    const finalContactName =
+      contactFieldsFilled === 3 ? trimmedContactName : profileContactName;
+    const finalContactEmail =
+      contactFieldsFilled === 3 ? trimmedContactEmail : profileContactEmail;
+    const finalContactPhone =
+      contactFieldsFilled === 3
+        ? normalizeVietnamPhone(trimmedContactPhoneRaw)
+        : profileContactPhone;
+
     const payload: CreateBookingPayload = {
       tour_id: tourId || String(tour?.uuid ?? tour?.id ?? ""),
       package_id: String(values.package_id).trim(),
       schedule_id: String(values.schedule_id).trim(),
       adults: values.adults,
-      contact_name: values.contact_name.trim(),
-      contact_email: values.contact_email.trim(),
-      contact_phone: normalizeVietnamPhone(values.contact_phone.trim()),
+      contact_name: finalContactName,
+      contact_email: finalContactEmail,
+      contact_phone: finalContactPhone ? normalizeVietnamPhone(finalContactPhone) : finalContactPhone,
       notes: values.notes?.trim() ? values.notes.trim() : undefined,
       payment_method: values.payment_method,
       passengers: payloadPassengers,
@@ -1530,7 +1613,33 @@ const BookingCheckout = () => {
                     <CardHeader>
                       <CardTitle>Thông tin liên hệ</CardTitle>
                     </CardHeader>
-                    <CardContent className="grid gap-4 md:grid-cols-2">
+                    <CardContent>
+                      {!profileHasCompleteContact && (
+                        <Alert className="mb-4 border-amber-200 bg-amber-50 text-amber-900">
+                          <AlertTitle>Hồ sơ chưa đầy đủ</AlertTitle>
+                          <AlertDescription className="text-sm">
+                            Vui lòng cập nhật {profileMissingContactFields.join(", ")} tại{" "}
+                            <Link to="/account-settings" className="font-semibold text-primary underline">
+                              trang hồ sơ
+                            </Link>{" "}
+                            để hệ thống có thể liên hệ khi cần.
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                      {profileError && !profile && (
+                        <Alert variant="destructive" className="mb-4">
+                          <AlertTitle>Không thể tải thông tin hồ sơ</AlertTitle>
+                          <AlertDescription>
+                            {profileError instanceof Error
+                              ? profileError.message
+                              : "Vui lòng thử tải lại trang hoặc kiểm tra kết nối."}
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                      {(isProfileLoading || isProfileFetching) && (
+                        <p className="mb-4 text-sm text-gray-500">Đang đồng bộ dữ liệu hồ sơ...</p>
+                      )}
+                      <div className="grid gap-4 md:grid-cols-2">
                       <FormField
                         control={form.control}
                         name="contact_name"
@@ -1583,6 +1692,7 @@ const BookingCheckout = () => {
                           </FormItem>
                         )}
                       />
+                      </div>
                     </CardContent>
                   </Card>
 

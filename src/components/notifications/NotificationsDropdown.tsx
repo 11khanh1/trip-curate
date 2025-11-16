@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Bell, Loader2, CheckCircle2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -22,6 +22,7 @@ import { Separator } from "@/components/ui/separator";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { getNotificationCopy } from "@/lib/notification-utils";
+import { useUser } from "@/context/UserContext";
 
 const MAX_ITEMS = 8;
 
@@ -36,20 +37,31 @@ const NotificationDropdown = () => {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { currentUser } = useUser();
+  const userScope = useMemo(() => {
+    if (!currentUser) return "guest";
+    if (currentUser.id !== undefined && currentUser.id !== null) {
+      return `user:${currentUser.id}`;
+    }
+    if (currentUser.email) {
+      return `email:${currentUser.email}`;
+    }
+    return currentUser.name ? `name:${currentUser.name}` : "guest";
+  }, [currentUser]);
 
   const unreadQuery = useQuery({
-    queryKey: ["notifications-unread"],
+    queryKey: ["notifications-unread", userScope],
     queryFn: fetchUnreadCount,
     refetchInterval: 60000,
   });
 
   const settingsQuery = useQuery({
-    queryKey: ["notifications-settings"],
+    queryKey: ["notifications-settings", userScope],
     queryFn: fetchNotificationSettings,
   });
 
   const notificationsQuery = useQuery({
-    queryKey: ["notifications", { page: 1 }],
+    queryKey: ["notifications", userScope, { page: 1 }],
     queryFn: () => fetchNotifications({ per_page: MAX_ITEMS }),
     enabled: open,
   });
@@ -57,23 +69,23 @@ const NotificationDropdown = () => {
   const markReadMutation = useMutation({
     mutationFn: (id: string | number) => markNotificationRead(id),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["notifications"] });
-      void queryClient.invalidateQueries({ queryKey: ["notifications-unread"] });
+      void queryClient.invalidateQueries({ queryKey: ["notifications", userScope] });
+      void queryClient.invalidateQueries({ queryKey: ["notifications-unread", userScope] });
     },
   });
 
   const markAllMutation = useMutation({
     mutationFn: markAllNotificationsRead,
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["notifications"] });
-      void queryClient.invalidateQueries({ queryKey: ["notifications-unread"] });
+      void queryClient.invalidateQueries({ queryKey: ["notifications", userScope] });
+      void queryClient.invalidateQueries({ queryKey: ["notifications-unread", userScope] });
     },
   });
 
   const toggleMutation = useMutation({
     mutationFn: (enabled: boolean) => toggleNotifications(enabled),
     onSuccess: (data) => {
-      queryClient.setQueryData(["notifications-settings"], data);
+      queryClient.setQueryData(["notifications-settings", userScope], data);
     },
   });
 

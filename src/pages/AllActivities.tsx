@@ -26,6 +26,30 @@ import { getTourPriceInfo, buildPromotionLabel } from "@/lib/tour-utils";
 
 const PER_PAGE = 50;
 
+type CategoryPreset = {
+  slug: string;
+  label: string;
+};
+
+type CategoryTab = {
+  value: string;
+  label: string;
+  categoryId?: string;
+};
+
+const CATEGORY_FILTERS: CategoryPreset[] = [
+  { slug: "all", label: "Tất cả" },
+  { slug: "am-thuc", label: "Ẩm thực" },
+  { slug: "bien", label: "Biển" },
+  { slug: "nui", label: "Núi" },
+  { slug: "city", label: "Thành phố" },
+  { slug: "tour-bien-dao", label: "Tour biển đảo" },
+  { slug: "tour-mien-nui", label: "Tour miền núi" },
+  { slug: "tour-trong-nuoc", label: "Tour trong nước" },
+];
+
+const DEFAULT_CATEGORY = CATEGORY_FILTERS[0]?.slug ?? "all";
+
 const DEFAULT_TOUR_IMAGE =
   "https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?w=800&h=600&fit=crop";
 
@@ -159,19 +183,29 @@ const mapTourToCard = (tour: PublicTour) => {
   };
 };
 
-const buildCategoryTabs = (categories: HomeCategory[] | undefined) => {
-  const base = [{ id: "all", label: "Tất cả" }];
-  if (!categories || categories.length === 0) return base;
-  return base.concat(
-    categories.map((category) => ({
-      id: String(category.id),
-      label: category.name ?? "Danh mục",
-    })),
-  );
+const buildCategoryTabs = (categories: HomeCategory[] | undefined): CategoryTab[] => {
+  const slugLookup = new Map<string, HomeCategory>();
+  categories?.forEach((category) => {
+    const slug = category.slug?.trim();
+    if (!slug) return;
+    slugLookup.set(slug, category);
+  });
+
+  return CATEGORY_FILTERS.map((preset) => {
+    if (preset.slug === "all") {
+      return { value: "all", label: preset.label };
+    }
+    const matched = slugLookup.get(preset.slug);
+    return {
+      value: preset.slug,
+      label: matched?.name ?? preset.label,
+      categoryId: matched?.id ? String(matched.id) : undefined,
+    };
+  });
 };
 
 const AllActivities = () => {
-  const [activeCategory, setActiveCategory] = useState("all");
+  const [activeCategory, setActiveCategory] = useState(DEFAULT_CATEGORY);
   const [page, setPage] = useState(1);
 
   const highlightCategoriesQuery = useQuery({
@@ -185,78 +219,76 @@ const AllActivities = () => {
     [highlightCategoriesQuery.data],
   );
 
-  useEffect(() => {
-    setPage(1);
-  }, [activeCategory]);
+  const selectedCategory = useMemo(
+    () => categoryTabs.find((category) => category.value === activeCategory),
+    [categoryTabs, activeCategory],
+  );
+  const categorySlugFilter = activeCategory === DEFAULT_CATEGORY ? undefined : activeCategory;
+  const categoryIdFilter = selectedCategory?.categoryId;
 
   const trendingToursQuery = useQuery({
     queryKey: ["public-tours-trending", { limit: PER_PAGE, days: 60 }],
     queryFn: () => fetchTrendingTours({ limit: PER_PAGE, days: 60 }),
-    enabled: activeCategory === "all",
+    enabled: activeCategory === DEFAULT_CATEGORY,
     staleTime: 2 * 60 * 1000,
   });
 
+  useEffect(() => {
+    setPage(1);
+  }, [activeCategory]);
+
   const toursQuery = useQuery({
-    queryKey: ["public-tours", activeCategory, page],
+    queryKey: [
+      "public-tours",
+      { categoryId: categoryIdFilter ?? null, slug: categorySlugFilter ?? "all", page },
+    ],
     queryFn: () =>
       fetchTours({
         status: "approved",
         page,
         per_page: PER_PAGE,
-        ...(activeCategory !== "all" ? { category_id: activeCategory } : {}),
         sort: "created_desc",
+        ...(categoryIdFilter ? { category_id: categoryIdFilter } : {}),
+        ...(categorySlugFilter ? { category_slug: categorySlugFilter } : {}),
       }),
     placeholderData: keepPreviousData,
     staleTime: 60 * 1000,
-    enabled: activeCategory !== "all",
   });
 
-  const isLoading = activeCategory === "all" ? trendingToursQuery.isLoading : toursQuery.isLoading;
-  const toursData =
-    activeCategory === "all"
-      ? trendingToursQuery.data ?? []
-      : toursQuery.data?.data ?? [];
-  const toursMeta =
-    activeCategory === "all" ? undefined : toursQuery.data?.meta ?? {};
+  const trendingData = trendingToursQuery.data ?? [];
+  const shouldUseTrending = activeCategory === DEFAULT_CATEGORY && trendingData.length > 0;
+  const isLoading = shouldUseTrending ? trendingToursQuery.isLoading : toursQuery.isLoading;
+  const toursData = shouldUseTrending ? trendingData : toursQuery.data?.data ?? [];
+  const toursMeta = shouldUseTrending ? {} : toursQuery.data?.meta ?? {};
 
   const mappedTours = toursData.length > 0 ? toursData.map(mapTourToCard) : [];
 
   const currentPage =
-    activeCategory === "all"
-      ? 1
-      : Number(((toursMeta?.current_page as number | undefined) ?? page)) || 1;
-  const lastPage =
-    activeCategory === "all"
-      ? 1
-      : Number(
-          (toursMeta?.last_page as number | undefined) ??
-            (toursData.length === 0
-              ? 1
-              : Math.ceil(
-                  ((toursMeta?.total as number | undefined) ?? PER_PAGE) / PER_PAGE,
-                )),
-        ) || 1;
-  const totalResults =
-    activeCategory === "all"
-      ? toursData.length
-      : Number((toursMeta?.total as number | undefined) ?? toursData.length) || toursData.length;
-  const rangeStart =
-    activeCategory === "all"
-      ? totalResults === 0 ? 0 : 1
-      : Number(
-          (toursMeta?.from as number | undefined) ??
-            (totalResults === 0 ? 0 : (currentPage - 1) * PER_PAGE + 1),
-        ) || 0;
-  const rangeEnd =
-    activeCategory === "all"
-      ? totalResults
-      : Number(
-          (toursMeta?.to as number | undefined) ??
-            (totalResults === 0 ? 0 : Math.min(totalResults, currentPage * PER_PAGE)),
-        ) || 0;
+    shouldUseTrending ? 1 : Number(((toursMeta?.current_page as number | undefined) ?? page)) || 1;
+  const totalResults = shouldUseTrending
+    ? toursData.length
+    : Number((toursMeta?.total as number | undefined) ?? toursData.length) || toursData.length;
+  const lastPage = shouldUseTrending
+    ? 1
+    : Number(
+        (toursMeta?.last_page as number | undefined) ??
+          (toursData.length === 0 ? 1 : Math.ceil(totalResults / PER_PAGE)),
+      ) || 1;
+  const rangeStart = shouldUseTrending
+    ? totalResults === 0 ? 0 : 1
+    : Number(
+        (toursMeta?.from as number | undefined) ??
+          (totalResults === 0 ? 0 : (currentPage - 1) * PER_PAGE + 1),
+      ) || 0;
+  const rangeEnd = shouldUseTrending
+    ? totalResults
+    : Number(
+        (toursMeta?.to as number | undefined) ??
+          (totalResults === 0 ? 0 : Math.min(totalResults, currentPage * PER_PAGE)),
+      ) || 0;
   const isFirstPage = currentPage <= 1;
   const isLastPage = currentPage >= lastPage;
-  const shouldRenderPagination = activeCategory !== "all" && totalResults > 0;
+  const shouldRenderPagination = !shouldUseTrending && totalResults > 0 && lastPage > 1;
 
   const paginationRange = useMemo<(number | "ellipsis")[]>(() => {
     const totalPages = Math.max(1, lastPage);
@@ -311,8 +343,8 @@ const AllActivities = () => {
             <TabsList className="bg-background border-b w-full justify-start rounded-none h-auto p-0 overflow-x-auto">
               {categoryTabs.map((category) => (
                 <TabsTrigger
-                  key={category.id}
-                  value={category.id}
+                  key={category.value}
+                  value={category.value}
                   className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-6 py-3 data-[state=active]:bg-transparent whitespace-nowrap"
                 >
                   {category.label}

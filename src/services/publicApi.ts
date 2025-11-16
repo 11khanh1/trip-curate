@@ -224,6 +224,7 @@ export interface ToursQueryParams {
   destinations?: string[];
   search?: string;
   category_id?: string | number | Array<string | number>;
+  category_slug?: string | string[];
   tags?: string[];
   price_min?: number;
   price_max?: number;
@@ -282,6 +283,13 @@ const buildQueryString = (params: ToursQueryParams = {}) => {
     category.forEach((value) => appendValue("category_id[]", value));
   } else {
     appendValue("category_id", category);
+  }
+
+  const categorySlug = params.category_slug;
+  if (Array.isArray(categorySlug)) {
+    categorySlug.forEach((value) => appendValue("category_slug[]", value));
+  } else {
+    appendValue("category_slug", categorySlug);
   }
 
   const destinations = params.destinations;

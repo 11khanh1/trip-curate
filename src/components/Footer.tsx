@@ -24,16 +24,6 @@ const Footer = () => {
       ]
     },
     {
-      title: "Điểm đến phổ biến",
-      links: [
-        { name: "Du lịch Việt Nam", url: "/regions/vietnam" },
-        { name: "Du lịch Nhật Bản", url: "/regions/japan" },
-        { name: "Du lịch Thái Lan", url: "/regions/thailand" },
-        { name: "Du lịch Singapore", url: "/regions/singapore" },
-        { name: "Du lịch Hàn Quốc", url: "/regions/south-korea" }
-      ]
-    },
-    {
       title: "Sản phẩm",
       links: [
         { name: "Vé tham quan", url: "/activities" },
@@ -49,7 +39,7 @@ const Footer = () => {
     <footer className="bg-gray-900 text-white">
       {/* Main Footer Content */}
       <div className="container mx-auto px-4 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           {/* Company Info */}
           <div className="lg:col-span-1">
             <div className="text-2xl font-bold text-primary mb-4">

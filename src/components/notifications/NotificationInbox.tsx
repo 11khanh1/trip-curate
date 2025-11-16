@@ -21,6 +21,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useUser } from "@/context/UserContext";
 
 interface NotificationInboxProps {
   variant: "admin" | "partner";
@@ -46,15 +47,26 @@ const variantLabel: Record<NotificationInboxProps["variant"], { title: string; e
 
 const NotificationInbox = ({ variant }: NotificationInboxProps) => {
   const queryClient = useQueryClient();
+  const { currentUser } = useUser();
+  const userScope = useMemo(() => {
+    if (!currentUser) return "guest";
+    if (currentUser.id !== undefined && currentUser.id !== null) {
+      return `user:${currentUser.id}`;
+    }
+    if (currentUser.email) {
+      return `email:${currentUser.email}`;
+    }
+    return currentUser.name ? `name:${currentUser.name}` : "guest";
+  }, [currentUser]);
 
   const unreadQuery = useQuery({
-    queryKey: ["notifications-unread", variant],
+    queryKey: ["notifications-unread", variant, userScope],
     queryFn: fetchUnreadCount,
     refetchInterval: 60000,
   });
 
   const notificationsQuery = useQuery({
-    queryKey: ["notifications", { scope: variant, per_page: 6 }],
+    queryKey: ["notifications", userScope, variant, { per_page: 6 }],
     queryFn: () => fetchNotifications({ per_page: 6 }),
     staleTime: 30000,
   });
@@ -62,16 +74,24 @@ const NotificationInbox = ({ variant }: NotificationInboxProps) => {
   const markReadMutation = useMutation({
     mutationFn: (id: string | number) => markNotificationRead(id),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["notifications", { scope: variant }] });
-      void queryClient.invalidateQueries({ queryKey: ["notifications-unread", variant] });
+      void queryClient.invalidateQueries({
+        queryKey: ["notifications", userScope, variant],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["notifications-unread", variant, userScope],
+      });
     },
   });
 
   const markAllMutation = useMutation({
     mutationFn: markAllNotificationsRead,
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["notifications", { scope: variant }] });
-      void queryClient.invalidateQueries({ queryKey: ["notifications-unread", variant] });
+      void queryClient.invalidateQueries({
+        queryKey: ["notifications", userScope, variant],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["notifications-unread", variant, userScope],
+      });
     },
   });
 
