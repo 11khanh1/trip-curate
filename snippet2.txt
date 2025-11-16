@@ -1,0 +1,9 @@
+                  <th className="py-3 pr-4 font-medium">Ngày tạo</th>
+                  <th className="py-3 pr-4 font-medium">Duyệt</th>
+                  <th className="py-3 pr-4 font-medium text-right">Trạng thái</th>
+                </tr>
+              </thead>
+              <tbody>
+                {partners.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="

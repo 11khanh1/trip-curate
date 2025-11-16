@@ -1,11 +1,32 @@
-1049:   // FIX: Khai báo biến currentImage trước khi sử dụng
-1050:   const currentImage = mediaList[selectedImageIndex];
-1051: 
-1052:   // ---------------------------- RENDER ----------------------------
-1053:   return (
-1054:     <div className="space-y-6">
-1055:       <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between md:gap-4">
-1056:         <div>
-1057:           <h1 className="text-2xl font-bold">Quản lý Tour</h1>
-1058:           <p className="text-sm text-muted-foreground">
-1059:             Tạo mới hoặc chỉnh sửa tour trước khi gửi duyệt.
+                <tr className="text-left text-xs uppercase text-muted-foreground">
+                  <th className="py-3 pr-4 font-medium">Công ty</th>
+                  <th className="py-3 pr-4 font-medium">Loại hình</th>
+                  <th className="py-3 pr-4 font-medium">Liên hệ</th>
+                  <th className="py-3 pr-4 font-medium">Ngày tạo</th>
+                  <th className="py-3 pr-4 font-medium">Duyệt</th>
+                  <th className="py-3 pr-4 font-medium text-right">Thao tác</th>
+                  <th className="py-3 pl-4 font-medium text-right">Trạng thái</th>
+                </tr>
+              </thead>
+              <tbody>
+                {partners.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-8 text-center text-muted-foreground">
+                      {partnersQuery.isLoading ? "Đang tải dữ liệu..." : "Chưa có hồ sơ nào."}
+                    </td>
+                  </tr>
+                ) : (
+                  partners.map((partner) => (
+                    <tr key={partner.id} className="border-t">
+                      <td className="py-3 pr-4">
+                        <p className="font-semibold">{partner.companyName}</p>
+                        {partner.taxCode && <p className="text-xs text-muted-foreground">MST: {partner.taxCode}</p>}
+                      </td>
+                      <td className="py-3 pr-4">{partner.businessType}</td>
+                      <td className="py-3 pr-4">
+                        <p>{partner.contactName || "—"}</p>
+                        <p className="text-xs text-muted-foreground">{partner.contactEmail || "—"}</p>
+                        <p className="text-xs text-muted-foreground">{partner.contactPhone || "—"}</p>
+                      </td>
+                      <td className="py-3 pr-4 text-muted-foreground">{formatDateTime(partner.createdAt)}</td>
+                      <td className="py-3 pr-4 text-muted-foreground">{formatDateTime(partner.approvedAt)}<

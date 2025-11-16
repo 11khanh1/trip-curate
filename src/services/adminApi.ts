@@ -94,36 +94,27 @@ export type PartnerStatus = "pending" | "approved" | "rejected";
 export interface AdminPartner {
   id: string | number;
   company_name: string;
+  business_type?: string | null;
   tax_code?: string | null;
   address?: string | null;
+  description?: string | null;
+  contact_name?: string | null;
+  contact_email?: string | null;
+  contact_phone?: string | null;
   status?: PartnerStatus | string;
-  user?: {
-    id: string | number;
-    name: string;
-    email: string;
-    phone?: string | null;
-    status?: string;
-  };
+  approved_at?: string | null;
+  created_at?: string | null;
   stats?: {
     tours_count?: number;
     bookings_count?: number;
   };
   tours_count?: number;
   bookings_count?: number;
-  created_at?: string;
+  user?: {
+    id?: string | number;
+    status?: string;
+  } | null;
   [key: string]: unknown;
-}
-
-export interface PartnerPayload {
-  name: string;
-  email: string;
-  phone?: string;
-  password: string;
-  password_confirmation: string;
-  company_name: string;
-  tax_code?: string | null;
-  address?: string | null;
-  status: PartnerStatus;
 }
 
 export interface AdminPartnersParams {
@@ -135,12 +126,14 @@ export interface AdminPartnersParams {
 
 export interface PartnerUpdatePayload {
   company_name?: string;
+  business_type?: string | null;
   tax_code?: string | null;
   address?: string | null;
+  description?: string | null;
+  contact_name?: string;
+  contact_email?: string;
+  contact_phone?: string;
   status?: PartnerStatus;
-  name?: string;
-  email?: string;
-  phone?: string;
 }
 
 // Tours
@@ -334,28 +327,6 @@ const sanitizeOptionalString = (value: string | null | undefined) => {
   return trimmed.length > 0 ? trimmed : null;
 };
 
-const sanitizeRequiredString = (value: string) => value.trim();
-
-export async function createAdminPartner(payload: PartnerPayload) {
-  const body: Record<string, unknown> = {
-    name: sanitizeRequiredString(payload.name),
-    email: sanitizeRequiredString(payload.email),
-    password: payload.password,
-    password_confirmation: payload.password_confirmation,
-    company_name: sanitizeRequiredString(payload.company_name),
-    status: payload.status,
-  };
-
-  const phone = sanitizeOptionalString(payload.phone);
-  if (phone !== undefined) body.phone = phone;
-
-  body.tax_code = sanitizeOptionalString(payload.tax_code) ?? null;
-  body.address = sanitizeOptionalString(payload.address) ?? null;
-
-  const res = await apiClient.post("/admin/partners", body);
-  return extractData(res);
-}
-
 export async function updateAdminPartner(id: string | number, payload: PartnerUpdatePayload) {
   const body: Record<string, unknown> = {};
 
@@ -363,31 +334,33 @@ export async function updateAdminPartner(id: string | number, payload: PartnerUp
     const companyName = sanitizeOptionalString(payload.company_name);
     body.company_name = companyName ?? null;
   }
+  if (payload.business_type !== undefined) {
+    body.business_type = sanitizeOptionalString(payload.business_type) ?? null;
+  }
   if (payload.tax_code !== undefined) {
     body.tax_code = sanitizeOptionalString(payload.tax_code) ?? null;
   }
   if (payload.address !== undefined) {
     body.address = sanitizeOptionalString(payload.address) ?? null;
   }
+  if (payload.description !== undefined) {
+    body.description = sanitizeOptionalString(payload.description) ?? null;
+  }
+  if (payload.contact_name !== undefined) {
+    body.contact_name = sanitizeOptionalString(payload.contact_name);
+  }
+  if (payload.contact_email !== undefined) {
+    body.contact_email = sanitizeOptionalString(payload.contact_email);
+  }
+  if (payload.contact_phone !== undefined) {
+    body.contact_phone = sanitizeOptionalString(payload.contact_phone);
+  }
   if (payload.status !== undefined) {
     body.status = payload.status;
-  }
-  if (payload.name !== undefined) {
-    body.name = sanitizeOptionalString(payload.name);
-  }
-  if (payload.email !== undefined) {
-    body.email = sanitizeOptionalString(payload.email);
-  }
-  if (payload.phone !== undefined) {
-    body.phone = sanitizeOptionalString(payload.phone);
   }
 
   const res = await apiClient.patch(`/admin/partners/${id}`, body);
   return extractData(res);
-}
-
-export async function updateAdminPartnerStatus(id: string | number, status: PartnerStatus) {
-  return updateAdminPartner(id, { status });
 }
 
 export interface AdminTourSchedule {
