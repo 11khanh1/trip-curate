@@ -9,6 +9,7 @@ import { UserProvider } from "./context/UserContext";
 import App from "./App.tsx";
 import "./index.css";
 import { CartProvider } from "./context/CartContext";
+import { AnalyticsProvider } from "./context/AnalyticsContext";
 
 // --- BẮT ĐẦU SỬA LỖI 419 ---
 // Import hàm "mồi" token từ file api-client
@@ -75,19 +76,23 @@ const Root = persister ? (
       });
     }}
   >
-    <UserProvider>
-      <CartProvider>
-        <AppWrapper /> {/* <-- Thay <App /> bằng <AppWrapper /> */}
-      </CartProvider>
-    </UserProvider>
+    <AnalyticsProvider>
+      <UserProvider>
+        <CartProvider>
+          <AppWrapper /> {/* <-- Thay <App /> bằng <AppWrapper /> */}
+        </CartProvider>
+      </UserProvider>
+    </AnalyticsProvider>
   </PersistQueryClientProvider>
 ) : (
   <QueryClientProvider client={queryClient}>
-    <UserProvider>
-      <CartProvider>
-        <AppWrapper /> {/* <-- Thay <App /> bằng <AppWrapper /> */}
-      </CartProvider>
-    </UserProvider>
+    <AnalyticsProvider>
+      <UserProvider>
+        <CartProvider>
+          <AppWrapper /> {/* <-- Thay <App /> bằng <AppWrapper /> */}
+        </CartProvider>
+      </UserProvider>
+    </AnalyticsProvider>
   </QueryClientProvider>
 );
 
