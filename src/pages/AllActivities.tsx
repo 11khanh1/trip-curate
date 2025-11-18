@@ -24,7 +24,7 @@ import {
 import { apiClient } from "@/lib/api-client";
 import { getTourPriceInfo, buildPromotionLabel } from "@/lib/tour-utils";
 
-const PER_PAGE = 50;
+const PER_PAGE =20;
 
 type CategoryPreset = {
   slug: string;
@@ -288,7 +288,7 @@ const AllActivities = () => {
       ) || 0;
   const isFirstPage = currentPage <= 1;
   const isLastPage = currentPage >= lastPage;
-  const shouldRenderPagination = !shouldUseTrending && totalResults > 0 && lastPage > 1;
+  const shouldRenderPagination = !shouldUseTrending && totalResults > 0;
 
   const paginationRange = useMemo<(number | "ellipsis")[]>(() => {
     const totalPages = Math.max(1, lastPage);
@@ -372,11 +372,8 @@ const AllActivities = () => {
               </div>
 
               {shouldRenderPagination ? (
-                <div className="flex flex-col gap-4 px-2 pb-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
-                  <span>
-                    Hiển thị {rangeStart}-{rangeEnd} trên tổng {totalResults} tour
-                  </span>
-                  <Pagination className="w-auto gap-2 md:mx-0 md:justify-end">
+                <div className="flex w-full justify-center px-2 pb-4">
+                  <Pagination className="w-full justify-center gap-2 md:w-auto">
                     <PaginationContent>
                       <PaginationItem>
                         <PaginationPrevious

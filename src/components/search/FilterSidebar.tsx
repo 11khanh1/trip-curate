@@ -22,7 +22,6 @@ export interface SearchFilterState {
   departureDate: string | null;
   startDate: string | null;
   durationRange: [number | null, number | null];
-  statsDays: number | null;
 }
 
 interface FilterSidebarProps {
@@ -39,7 +38,6 @@ export const FilterSidebarKlook = ({ filters, onFiltersChange, onReset }: Filter
   const departureDate = filters.departureDate ?? "";
   const startDate = filters.startDate ?? "";
   const [durationMin, durationMax] = filters.durationRange;
-  const statsDaysValue = filters.statsDays ?? "";
 
   const handleDateSelect = (value: QuickDateFilter) => {
     const nextValue = selectedDate === value ? null : value;
@@ -70,11 +68,6 @@ export const FilterSidebarKlook = ({ filters, onFiltersChange, onReset }: Filter
     const currentRange: [number | null, number | null] = [...filters.durationRange];
     currentRange[index] = normalized;
     onFiltersChange({ durationRange: currentRange });
-  };
-
-  const handleStatsDaysChange = (value: string) => {
-    const parsed = Number(value);
-    onFiltersChange({ statsDays: Number.isFinite(parsed) && parsed > 0 ? parsed : null });
   };
 
   return (
@@ -227,42 +220,6 @@ export const FilterSidebarKlook = ({ filters, onFiltersChange, onReset }: Filter
             </div>
           </section>
 
-          <section className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-semibold text-foreground">Thống kê đặt chỗ</div>
-              <span className="text-xs text-muted-foreground">stats_days</span>
-            </div>
-            <div className="space-y-2">
-              <p className="text-xs text-muted-foreground">
-                Chỉ tính lượt đặt trong khoảng ngày gần nhất (ví dụ 90 ngày)
-              </p>
-              <Input
-                type="number"
-                min={1}
-                placeholder="90"
-                value={statsDaysValue}
-                onChange={(event) => handleStatsDaysChange(event.target.value)}
-              />
-            </div>
-          </section>
-
-          <section className="space-y-3">
-            <h4 className="text-sm font-semibold text-foreground">Tiện ích ưa thích</h4>
-            <div className="grid gap-2">
-              <Button variant="outline" size="sm" className="justify-start gap-2 text-sm">
-                <Badge variant="secondary" className="bg-emerald-100 text-emerald-700">
-                  HOT
-                </Badge>
-                Xác nhận tức thời
-              </Button>
-              <Button variant="outline" size="sm" className="justify-start gap-2 text-sm">
-                Miễn phí huỷ
-              </Button>
-              <Button variant="outline" size="sm" className="justify-start gap-2 text-sm">
-                Đón tại khách sạn
-              </Button>
-            </div>
-          </section>
         </div>
       </div>
     </aside>

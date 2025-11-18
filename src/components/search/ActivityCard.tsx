@@ -1,3 +1,5 @@
+import type { KeyboardEvent } from "react";
+import { useNavigate } from "react-router-dom";
 import { Star, Heart, ArrowUpRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +16,8 @@ interface ActivityCardKlookProps {
   booked?: string;
   price: number;
   discount?: number;
+  href?: string;
+  onNavigate?: () => void;
 }
 
 export const ActivityCardKlook = ({
@@ -27,12 +31,38 @@ export const ActivityCardKlook = ({
   booked,
   price,
   discount,
+  href,
+  onNavigate,
 }: ActivityCardKlookProps) => {
+  const navigate = useNavigate();
   const finalPrice = discount ? price * (1 - discount / 100) : price;
   const formattedPrice = finalPrice.toLocaleString("vi-VN");
+  const isNavigable = Boolean(href);
+
+  const handleNavigate = () => {
+    if (!href) return;
+    onNavigate?.();
+    navigate(href);
+  };
+
+  const handleCardKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!href) return;
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      handleNavigate();
+    }
+  };
 
   return (
-    <Card className="group flex h-full flex-col overflow-hidden border bg-card/95 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
+    <Card
+      className={`group flex h-full flex-col overflow-hidden border bg-card/95 shadow-sm transition-all duration-300 ${
+        isNavigable ? "cursor-pointer hover:-translate-y-1 hover:shadow-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" : "hover:-translate-y-1 hover:shadow-xl"
+      }`}
+      role={isNavigable ? "link" : undefined}
+      tabIndex={isNavigable ? 0 : undefined}
+      onClick={isNavigable ? handleNavigate : undefined}
+      onKeyDown={isNavigable ? handleCardKeyDown : undefined}
+    >
       <div className="relative aspect-[4/3] overflow-hidden">
         <img
           src={image}
@@ -54,6 +84,7 @@ export const ActivityCardKlook = ({
         <button
           type="button"
           className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow-sm transition-all hover:bg-white"
+          onClick={(event) => event.stopPropagation()}
         >
           <Heart className="h-4 w-4" />
         </button>
@@ -88,7 +119,15 @@ export const ActivityCardKlook = ({
               <p className="text-xs text-muted-foreground">Từ</p>
               <p className="text-lg font-bold text-primary">₫ {formattedPrice}</p>
             </div>
-            <Button size="sm" variant="outline" className="rounded-full">
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-full"
+              onClick={(event) => {
+                event.stopPropagation();
+                handleNavigate();
+              }}
+            >
               Xem chi tiết
               <ArrowUpRight className="ml-1 h-4 w-4" />
             </Button>

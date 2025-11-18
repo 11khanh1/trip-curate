@@ -25,10 +25,12 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { Skeleton } from "@/components/ui/skeleton";
+import { apiClient } from "@/lib/api-client";
 import { fetchTours, type PublicTour, type TourSortOption, type ToursQueryParams } from "@/services/publicApi";
 import { getTourStartingPrice } from "@/lib/tour-utils";
 
 const PER_PAGE = 12;
+const DEFAULT_TOUR_IMAGE = "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=800&h=600&fit=crop";
 
 const sortOptions = [
   { value: "recommended", label: "Gợi ý hàng đầu" },
@@ -78,7 +80,6 @@ const createDefaultFilters = (params?: URLSearchParams): SearchFilterState => {
   const startDate = params?.get("start_date") ?? null;
   const durationMin = parseNumberParam(params?.get("duration_min"));
   const durationMax = parseNumberParam(params?.get("duration_max"));
-  const statsDays = parseNumberParam(params?.get("stats_days"));
 
   return {
     quickDate,
@@ -91,7 +92,6 @@ const createDefaultFilters = (params?: URLSearchParams): SearchFilterState => {
     departureDate: departureDate && departureDate.trim().length > 0 ? departureDate : null,
     startDate: startDate && startDate.trim().length > 0 ? startDate : null,
     durationRange: [durationMin, durationMax],
-    statsDays,
   };
 };
 
@@ -148,13 +148,49 @@ const formatDateLabel = (value: string): string => {
   return parsed.toLocaleDateString("vi-VN");
 };
 
+const resolveTourImage = (tour: PublicTour): string => {
+  const pickFirstString = (value: unknown): string | null => {
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+    return null;
+  };
+
+  const pickFromArray = (items?: unknown): string | null => {
+    if (!Array.isArray(items)) return null;
+    for (const entry of items) {
+      const candidate = pickFirstString(entry);
+      if (candidate) return candidate;
+    }
+    return null;
+  };
+
+  const candidates: Array<string | null> = [
+    pickFirstString(tour.thumbnail_url),
+    pickFirstString((tour as Record<string, unknown>)?.thumbnail),
+    pickFromArray(tour.media),
+    pickFromArray(tour.gallery),
+  ];
+
+  const raw = candidates.find((value) => typeof value === "string" && value.length > 0);
+  if (!raw) return DEFAULT_TOUR_IMAGE;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  const baseURL = apiClient.defaults.baseURL ?? "";
+  if (!baseURL) return raw;
+  const normalizedBase = baseURL.replace(/\/api\/?$/, "/");
+  return `${normalizedBase}${raw.startsWith("/") ? raw.slice(1) : raw}`;
+};
+
 const mapTourToActivityCard = (tour: PublicTour) => {
   const title = tour.title ?? tour.name ?? "Tour du lịch";
   const location = tour.destination ?? tour.partner?.company_name ?? "Việt Nam";
-  const image =
-    (tour.thumbnail_url && tour.thumbnail_url.length > 0 ? tour.thumbnail_url : undefined) ??
-    "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=800&h=600&fit=crop";
+  const image = resolveTourImage(tour);
   const price = getTourStartingPrice(tour);
+  const identifier = (tour.id ?? tour.uuid ?? tour.slug ?? tour.name) as string | undefined;
+  const href =
+    identifier && typeof identifier === "string" && identifier.trim().length > 0
+      ? `/activity/${encodeURIComponent(identifier)}`
+      : undefined;
   const category =
     tour.categories && tour.categories.length > 0
       ? tour.categories[0]?.name ?? "Tour"
@@ -179,6 +215,7 @@ const mapTourToActivityCard = (tour: PublicTour) => {
     booked: bookedCount,
     price,
     discount: undefined,
+    href,
   };
 };
 
@@ -208,7 +245,7 @@ type PaginationMeta = {
 };
 
 const ResultSearch = () => {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const keyword = (searchParams.get("keyword") ?? "").trim();
 
   const [showFilters, setShowFilters] = useState(false);
@@ -252,7 +289,12 @@ const ResultSearch = () => {
   const handleResetFilters = useCallback(() => {
     setFilters(createDefaultFilters());
     setPage(1);
-  }, []);
+    if (searchParams.get("keyword")) {
+      const params = new URLSearchParams(searchParams);
+      params.delete("keyword");
+      setSearchParams(params, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     setPage(1);
@@ -270,7 +312,6 @@ const ResultSearch = () => {
     filters.startDate,
     filters.durationRange[0],
     filters.durationRange[1],
-    filters.statsDays,
   ]);
 
   const queryPayload = useMemo(() => {
@@ -293,7 +334,6 @@ const ResultSearch = () => {
       price_max: priceMax < PRICE_RANGE_DEFAULT[1] ? priceMax : undefined,
       duration_min: durationMin ?? undefined,
       duration_max: durationMax ?? undefined,
-      stats_days: filters.statsDays ?? undefined,
       sort: sortMapping[sortBy],
       page,
       per_page: PER_PAGE,
@@ -388,9 +428,6 @@ const ResultSearch = () => {
     }
     if (filters.durationRange[1] !== null) {
       chips.push(`Tối đa: ${filters.durationRange[1]} ngày`);
-    }
-    if (filters.statsDays) {
-      chips.push(`Thống kê ${filters.statsDays} ngày`);
     }
     if (filters.quickDate) {
       chips.push(QUICK_DATE_LABELS[filters.quickDate]);

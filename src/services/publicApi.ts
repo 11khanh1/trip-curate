@@ -245,6 +245,49 @@ export interface Paginated<T> {
   meta?: Record<string, unknown>;
 }
 
+const extractPaginationMeta = (payload: any): Record<string, unknown> | undefined => {
+  if (payload?.meta && typeof payload.meta === "object") {
+    return payload.meta as Record<string, unknown>;
+  }
+
+  const metaFields = ["current_page", "last_page", "per_page", "total", "from", "to"];
+  const meta: Record<string, unknown> = {};
+  metaFields.forEach((key) => {
+    if (payload?.[key] !== undefined && payload?.[key] !== null) {
+      meta[key] = payload[key];
+    }
+  });
+  return Object.keys(meta).length > 0 ? meta : undefined;
+};
+
+const extractPaginationLinks = (payload: any): Record<string, unknown> | undefined => {
+  if (payload?.links) {
+    return payload.links as Record<string, unknown>;
+  }
+  const linkFields = ["first_page_url", "last_page_url", "next_page_url", "prev_page_url", "path"];
+  const links: Record<string, unknown> = {};
+  linkFields.forEach((key) => {
+    if (payload?.[key] !== undefined && payload?.[key] !== null) {
+      links[key] = payload[key];
+    }
+  });
+  return Object.keys(links).length > 0 ? links : undefined;
+};
+
+const normalizePaginatedTours = <T>(payload: any): Paginated<T> => {
+  if (!payload || typeof payload !== "object") {
+    return { data: [] };
+  }
+
+  const data = Array.isArray(payload.data) ? (payload.data as T[]) : [];
+
+  return {
+    data,
+    meta: extractPaginationMeta(payload),
+    links: extractPaginationLinks(payload),
+  };
+};
+
 const buildQueryString = (params: ToursQueryParams = {}) => {
   const searchParams = new URLSearchParams();
 
@@ -321,7 +364,7 @@ export async function fetchTours(params: ToursQueryParams = {}): Promise<Paginat
   const queryString = buildQueryString(params);
   const url = queryString.length > 0 ? `/tours?${queryString}` : "/tours";
   const res = await apiClient.get(url);
-  return extractData<Paginated<PublicTour>>(res);
+  return normalizePaginatedTours<PublicTour>(res.data);
 }
 
 export async function fetchTourDetail(id: string | number): Promise<PublicTour> {
