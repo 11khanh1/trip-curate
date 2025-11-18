@@ -164,9 +164,9 @@ const FloatingChatWidget = () => {
           position="floating"
           hideCloseButton
           overlayClassName="bg-transparent"
-          className="bottom-24 right-6 w-full max-w-sm border-none bg-transparent p-0 shadow-none"
+          className="left-4 right-4 bottom-20 sm:bottom-24 sm:left-auto sm:right-6 w-[min(100%,360px)] border-none bg-transparent p-0 shadow-none"
         >
-          <div className="flex h-[560px] w-[360px] max-h-[80vh] flex-col overflow-hidden rounded-[28px] bg-white shadow-2xl shadow-orange-500/25 sm:h-[620px]">
+          <div className="flex h-[70vh] max-h-[600px] w-full flex-col overflow-hidden rounded-[28px] bg-white shadow-2xl shadow-orange-500/25 sm:h-[620px] sm:w-[360px]">
             <div className="flex items-center justify-between bg-gradient-to-r from-[#f97316] to-[#fb923c] px-4 py-3 text-white">
               <div>
                 <p className="text-base font-semibold leading-tight">VietTravel</p>

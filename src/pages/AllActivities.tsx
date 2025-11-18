@@ -34,6 +34,19 @@ type CategoryTab = {
   value: string;
   label: string;
   categoryId?: string;
+  apiSlug?: string;
+};
+
+const normalizeText = (value?: string | null) => {
+  if (typeof value !== "string") return null;
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return normalized.length > 0 ? normalized : null;
 };
 
 const CATEGORY_FILTERS: CategoryPreset[] = [
@@ -184,21 +197,38 @@ const mapTourToCard = (tour: PublicTour) => {
 
 const buildCategoryTabs = (categories: HomeCategory[] | undefined): CategoryTab[] => {
   const slugLookup = new Map<string, HomeCategory>();
+  const nameLookup = new Map<string, HomeCategory>();
+
   categories?.forEach((category) => {
     const slug = category.slug?.trim();
-    if (!slug) return;
-    slugLookup.set(slug, category);
+    const normalizedSlug = normalizeText(slug);
+    if (slug) {
+      slugLookup.set(slug, category);
+    }
+    if (normalizedSlug && !slugLookup.has(normalizedSlug)) {
+      slugLookup.set(normalizedSlug, category);
+    }
+    const normalizedName = normalizeText(category.name);
+    if (normalizedName) {
+      nameLookup.set(normalizedName, category);
+    }
   });
 
   return CATEGORY_FILTERS.map((preset) => {
     if (preset.slug === "all") {
       return { value: "all", label: preset.label };
     }
-    const matched = slugLookup.get(preset.slug);
+    const normalizedPresetSlug = normalizeText(preset.slug);
+    const normalizedPresetLabel = normalizeText(preset.label);
+    const matched =
+      slugLookup.get(preset.slug) ??
+      (normalizedPresetSlug ? slugLookup.get(normalizedPresetSlug) : undefined) ??
+      (normalizedPresetLabel ? nameLookup.get(normalizedPresetLabel) : undefined);
     return {
       value: preset.slug,
       label: matched?.name ?? preset.label,
       categoryId: matched?.id ? String(matched.id) : undefined,
+      apiSlug: matched?.slug ?? preset.slug,
     };
   });
 };
@@ -222,7 +252,8 @@ const AllActivities = () => {
     () => categoryTabs.find((category) => category.value === activeCategory),
     [categoryTabs, activeCategory],
   );
-  const categorySlugFilter = activeCategory === DEFAULT_CATEGORY ? undefined : activeCategory;
+  const categorySlugFilter =
+    activeCategory === DEFAULT_CATEGORY ? undefined : selectedCategory?.apiSlug ?? activeCategory;
   const categoryIdFilter = selectedCategory?.categoryId;
 
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type MouseEvent } from "react";
 import { Bell, Loader2, CheckCircle2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -9,7 +9,9 @@ import {
   markNotificationRead,
   markAllNotificationsRead,
   toggleNotifications,
+  resolveNotificationAudience,
   type NotificationPayload,
+  type NotificationAudience,
 } from "@/services/notificationApi";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,6 +40,13 @@ const NotificationDropdown = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { currentUser } = useUser();
+  const notificationAudience: NotificationAudience = useMemo(() => {
+    if (currentUser?.role) {
+      return resolveNotificationAudience(currentUser.role);
+    }
+    return "customer";
+  }, [currentUser?.role]);
+
   const userScope = useMemo(() => {
     if (!currentUser) return "guest";
     if (currentUser.id !== undefined && currentUser.id !== null) {
@@ -52,23 +61,23 @@ const NotificationDropdown = () => {
   const canFetchNotifications = Boolean(currentUser?.id || currentUser?.email);
 
   const unreadQuery = useQuery({
-    queryKey: ["notifications-unread", userScope],
-    queryFn: fetchUnreadCount,
+    queryKey: ["notifications-unread", userScope, notificationAudience],
+    queryFn: () => fetchUnreadCount(notificationAudience),
     refetchInterval: 60000,
     enabled: canFetchNotifications,
     retry: false,
   });
 
   const settingsQuery = useQuery({
-    queryKey: ["notifications-settings", userScope],
-    queryFn: fetchNotificationSettings,
+    queryKey: ["notifications-settings", userScope, notificationAudience],
+    queryFn: () => fetchNotificationSettings(notificationAudience),
     enabled: canFetchNotifications,
     retry: false,
   });
 
   const notificationsQuery = useQuery({
-    queryKey: ["notifications", userScope, { page: 1 }],
-    queryFn: () => fetchNotifications({ per_page: MAX_ITEMS }),
+    queryKey: ["notifications", userScope, { page: 1, audience: notificationAudience }],
+    queryFn: () => fetchNotifications({ per_page: MAX_ITEMS, audience: notificationAudience }),
     enabled: open && canFetchNotifications,
     retry: false,
   });
@@ -76,23 +85,34 @@ const NotificationDropdown = () => {
   const markReadMutation = useMutation({
     mutationFn: (id: string | number) => markNotificationRead(id),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["notifications", userScope] });
-      void queryClient.invalidateQueries({ queryKey: ["notifications-unread", userScope] });
+      void queryClient.invalidateQueries({
+        queryKey: ["notifications", userScope, { page: 1, audience: notificationAudience }],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["notifications-unread", userScope, notificationAudience],
+      });
     },
   });
 
   const markAllMutation = useMutation({
-    mutationFn: markAllNotificationsRead,
+    mutationFn: () => markAllNotificationsRead(notificationAudience),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["notifications", userScope] });
-      void queryClient.invalidateQueries({ queryKey: ["notifications-unread", userScope] });
+      void queryClient.invalidateQueries({
+        queryKey: ["notifications", userScope, { page: 1, audience: notificationAudience }],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["notifications-unread", userScope, notificationAudience],
+      });
     },
   });
 
   const toggleMutation = useMutation({
-    mutationFn: (enabled: boolean) => toggleNotifications(enabled),
+    mutationFn: (enabled: boolean) => toggleNotifications(enabled, notificationAudience),
     onSuccess: (data) => {
-      queryClient.setQueryData(["notifications-settings", userScope], data);
+      queryClient.setQueryData(
+        ["notifications-settings", userScope, notificationAudience],
+        data,
+      );
     },
   });
 
@@ -147,7 +167,8 @@ const NotificationDropdown = () => {
   );
 
   const apiNotifications = notificationsQuery.data?.data ?? [];
-  const shouldUseFallback = !notificationsQuery.isFetching && apiNotifications.length === 0;
+  const shouldUseFallback =
+    !canFetchNotifications && !notificationsQuery.isFetching && apiNotifications.length === 0;
   const notifications = shouldUseFallback ? fallbackNotifications : apiNotifications;
   const unread = shouldUseFallback ? fallbackNotifications.length : unreadQuery.data?.unread ?? 0;
   const notificationsEnabled =
@@ -178,6 +199,19 @@ const NotificationDropdown = () => {
       navigate(fallbackLink);
       setOpen(false);
     }
+  };
+
+  const handleMarkReadOnly = (event: MouseEvent, notification: NotificationPayload) => {
+    event.stopPropagation();
+    event.preventDefault();
+    if (!notification.id || markReadMutation.isPending) return;
+    if (notification.read_at) return;
+    markReadMutation.mutate(notification.id);
+  };
+
+  const handleViewAll = () => {
+    setOpen(false);
+    navigate("/notifications");
   };
 
   return (
@@ -239,9 +273,21 @@ const NotificationDropdown = () => {
                   >
                     <p className="text-sm font-semibold text-foreground">{title}</p>
                     <p className="text-xs text-muted-foreground line-clamp-2">{message}</p>
-                    <p className="mt-1 text-[11px] text-muted-foreground">
-                      {renderTime(notification.created_at)}
-                    </p>
+                    <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
+                      <span>{renderTime(notification.created_at)}</span>
+                      {!isRead && notification.id ? (
+                        <button
+                          type="button"
+                          onClick={(event) => handleMarkReadOnly(event, notification)}
+                          className="text-primary hover:underline"
+                          disabled={markReadMutation.isPending}
+                        >
+                          Đánh dấu đã đọc
+                        </button>
+                      ) : (
+                        <span>Đã đọc</span>
+                      )}
+                    </div>
                   </li>
                 );
               })}
@@ -258,7 +304,7 @@ const NotificationDropdown = () => {
           >
             Đánh dấu đã đọc
           </Button>
-          <Button variant="link" size="sm" onClick={() => navigate("/notifications")}>
+          <Button variant="link" size="sm" onClick={handleViewAll}>
             Xem tất cả
           </Button>
         </div>

@@ -485,7 +485,7 @@ const CartPage = () => {
               </Alert>
             )}
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
+              <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
                   <Checkbox
                     id="select-all"
@@ -502,7 +502,7 @@ const CartPage = () => {
                   size="sm"
                   onClick={handleDeleteSelected}
                   disabled={selectedIds.size === 0 || isSyncing}
-                  className="text-red-600 hover:text-red-700"
+                  className="text-red-600 hover:text-red-700 self-end sm:self-auto"
                 >
                   {isSyncing ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -569,7 +569,7 @@ const CartPage = () => {
                           key={item.id}
                           className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm transition hover:-translate-y-1 hover:shadow-md"
                         >
-                          <div className="flex flex-col gap-4 md:flex-row">
+                          <div className="flex flex-col gap-4 md:flex-row md:items-start">
                             <div className="flex items-start gap-3">
                               <Checkbox
                                 checked={selectedIds.has(item.id)}
@@ -577,7 +577,7 @@ const CartPage = () => {
                                 className="mt-1 h-5 w-5 rounded-full border-slate-300 data-[state=checked]:border-primary data-[state=checked]:bg-primary"
                                 disabled={isSyncing}
                               />
-                              <div className="relative h-28 w-28 flex-shrink-0 overflow-hidden rounded-2xl border bg-slate-50">
+                              <div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-2xl border bg-slate-50 sm:h-28 sm:w-28">
                                 <img
                                   src={item.thumbnail ?? "https://via.placeholder.com/200"}
                                   alt={item.tourTitle}
@@ -613,7 +613,7 @@ const CartPage = () => {
                                     Số lượng: <span className="font-medium text-foreground">{quantityLabel}</span>
                                   </p>
                                 </div>
-                                <div className="text-right">
+                                <div className="text-left md:text-right">
                                   <p className="text-lg font-semibold text-primary">
                                     {formatter.format(item.totalPrice)}
                                   </p>
@@ -634,7 +634,7 @@ const CartPage = () => {
 
                             <div className="flex flex-col gap-4 mt-4">
                               <div className="grid gap-3 sm:grid-cols-2">
-                                <div className="flex items-center justify-between rounded-lg border px-3 py-2">
+                                <div className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm">
                                   <span className="text-sm text-muted-foreground">Người lớn</span>
                                   <div className="flex items-center gap-2">
                                     <Button
@@ -668,7 +668,7 @@ const CartPage = () => {
                                     </Button>
                                   </div>
                                 </div>
-                                <div className="flex items-center justify-between rounded-lg border px-3 py-2">
+                                <div className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm">
                                   <span className="text-sm text-muted-foreground">Trẻ em</span>
                                   <div className="flex items-center gap-2">
                                     <Button
@@ -799,7 +799,7 @@ const CartPage = () => {
               <CardHeader>
                 <CardTitle>Tóm tắt</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 text-sm">
                 <div className="flex justify-between text-muted-foreground">
                   <span>Tổng cộng ({selectedItems.length} dịch vụ)</span>
                   <span className="font-semibold text-foreground">{formatter.format(totalSelectedAmount)}</span>

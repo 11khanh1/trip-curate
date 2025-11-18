@@ -15,13 +15,16 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
   toggleNotifications,
+  resolveNotificationAudience,
   type NotificationPayload,
+  type NotificationAudience,
 } from "@/services/notificationApi";
 import { Loader2, BellRing, BellOff, ArrowRight, Inbox, CheckCircle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { vi } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { getNotificationCopy, getNotificationTypeLabel } from "@/lib/notification-utils";
+import { useUser } from "@/context/UserContext";
 
 const PER_PAGE = 20;
 
@@ -36,44 +39,58 @@ const NotificationsPage = () => {
   const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { currentUser } = useUser();
+
+  const notificationAudience: NotificationAudience = useMemo(() => {
+    if (!currentUser?.role) return "customer";
+    return resolveNotificationAudience(currentUser.role);
+  }, [currentUser?.role]);
 
   const notificationsQuery = useQuery({
-    queryKey: ["notifications", { page }],
-    queryFn: () => fetchNotifications({ page, per_page: PER_PAGE }),
+    queryKey: ["notifications", { page, audience: notificationAudience }],
+    queryFn: () => fetchNotifications({ page, per_page: PER_PAGE, audience: notificationAudience }),
     keepPreviousData: true,
   });
 
   const unreadQuery = useQuery({
-    queryKey: ["notifications-unread"],
-    queryFn: fetchUnreadCount,
+    queryKey: ["notifications-unread", notificationAudience],
+    queryFn: () => fetchUnreadCount(notificationAudience),
     refetchInterval: 60000,
   });
 
   const settingsQuery = useQuery({
-    queryKey: ["notifications-settings"],
-    queryFn: fetchNotificationSettings,
+    queryKey: ["notifications-settings", notificationAudience],
+    queryFn: () => fetchNotificationSettings(notificationAudience),
   });
 
   const markReadMutation = useMutation({
     mutationFn: (id: string | number) => markNotificationRead(id),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["notifications"] });
-      void queryClient.invalidateQueries({ queryKey: ["notifications-unread"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["notifications", { page, audience: notificationAudience }],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["notifications-unread", notificationAudience],
+      });
     },
   });
 
   const markAllMutation = useMutation({
-    mutationFn: markAllNotificationsRead,
+    mutationFn: () => markAllNotificationsRead(notificationAudience),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["notifications"] });
-      void queryClient.invalidateQueries({ queryKey: ["notifications-unread"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["notifications", { page, audience: notificationAudience }],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["notifications-unread", notificationAudience],
+      });
     },
   });
 
   const toggleMutation = useMutation({
-    mutationFn: (enabled: boolean) => toggleNotifications(enabled),
+    mutationFn: (enabled: boolean) => toggleNotifications(enabled, notificationAudience),
     onSuccess: (data) => {
-      queryClient.setQueryData(["notifications-settings"], data);
+      queryClient.setQueryData(["notifications-settings", notificationAudience], data);
     },
   });
 

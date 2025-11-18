@@ -10,7 +10,9 @@ import {
   fetchUnreadCount,
   markNotificationRead,
   markAllNotificationsRead,
+  resolveNotificationAudience,
   type NotificationPayload,
+  type NotificationAudience,
 } from "@/services/notificationApi";
 import { getNotificationCopy, getNotificationTypeLabel } from "@/lib/notification-utils";
 import { Button } from "@/components/ui/button";
@@ -48,6 +50,15 @@ const variantLabel: Record<NotificationInboxProps["variant"], { title: string; e
 const NotificationInbox = ({ variant }: NotificationInboxProps) => {
   const queryClient = useQueryClient();
   const { currentUser } = useUser();
+  const notificationAudience: NotificationAudience = useMemo(() => {
+    if (variant === "partner") return "partner";
+    if (variant === "admin") return "admin";
+    if (currentUser?.role) {
+      return resolveNotificationAudience(currentUser.role, "admin");
+    }
+    return variant === "partner" ? "partner" : "admin";
+  }, [currentUser?.role, variant]);
+
   const userScope = useMemo(() => {
     if (!currentUser) return "guest";
     if (currentUser.id !== undefined && currentUser.id !== null) {
@@ -60,14 +71,14 @@ const NotificationInbox = ({ variant }: NotificationInboxProps) => {
   }, [currentUser]);
 
   const unreadQuery = useQuery({
-    queryKey: ["notifications-unread", variant, userScope],
-    queryFn: fetchUnreadCount,
+    queryKey: ["notifications-unread", variant, userScope, notificationAudience],
+    queryFn: () => fetchUnreadCount(notificationAudience),
     refetchInterval: 60000,
   });
 
   const notificationsQuery = useQuery({
-    queryKey: ["notifications", userScope, variant, { per_page: 6 }],
-    queryFn: () => fetchNotifications({ per_page: 6 }),
+    queryKey: ["notifications", userScope, variant, { per_page: 6, audience: notificationAudience }],
+    queryFn: () => fetchNotifications({ per_page: 6, audience: notificationAudience }),
     staleTime: 30000,
   });
 
@@ -78,19 +89,19 @@ const NotificationInbox = ({ variant }: NotificationInboxProps) => {
         queryKey: ["notifications", userScope, variant],
       });
       void queryClient.invalidateQueries({
-        queryKey: ["notifications-unread", variant, userScope],
+        queryKey: ["notifications-unread", variant, userScope, notificationAudience],
       });
     },
   });
 
   const markAllMutation = useMutation({
-    mutationFn: markAllNotificationsRead,
+    mutationFn: () => markAllNotificationsRead(notificationAudience),
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: ["notifications", userScope, variant],
       });
       void queryClient.invalidateQueries({
-        queryKey: ["notifications-unread", variant, userScope],
+        queryKey: ["notifications-unread", variant, userScope, notificationAudience],
       });
     },
   });

@@ -57,6 +57,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useCart } from "@/context/CartContext";
 import { useUser } from "@/context/UserContext";
+import { useChatWidget } from "@/context/ChatWidgetContext";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { useRecommendationRealtimeRefresh } from "@/hooks/useRecommendationRealtimeRefresh";
 import { applyAutoPromotionToPrice, getTourPriceInfo, getTourStartingPrice } from "@/lib/tour-utils";
@@ -817,6 +818,7 @@ const ActivityDetail = () => {
   const { addItem } = useCart();
   const { toast } = useToast();
   const { currentUser } = useUser();
+  const { openChat } = useChatWidget();
   const { trackEvent } = useAnalytics();
   const scheduleRecommendationRefresh = useRecommendationRealtimeRefresh();
   const queryClient = useQueryClient();
@@ -1861,40 +1863,40 @@ useEffect(() => {
             </div>
 
             <Tabs value={activeTab} onValueChange={handleTabChange} ref={tabsRef} className="w-full">
-              <TabsList className="w-full justify-start border-b rounded-none h-auto p-0 bg-transparent">
+              <TabsList className="w-full justify-start border-b rounded-none h-auto p-0 bg-transparent overflow-x-auto scrollbar-thin scrollbar-thumb-muted">
                 <TabsTrigger
                   value="overview"
-                  className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-6 py-3"
+                  className="rounded-none px-6 py-3 text-sm font-medium text-muted-foreground transition data-[state=active]:text-primary data-[state=active]:shadow-none border-b-2 border-transparent data-[state=active]:border-orange-500 whitespace-nowrap"
                 >
                   Tổng quan
                 </TabsTrigger>
                 <TabsTrigger
                   value="packages"
-                  className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-6 py-3"
+                  className="rounded-none px-6 py-3 text-sm font-medium text-muted-foreground transition data-[state=active]:text-primary data-[state=active]:shadow-none border-b-2 border-transparent data-[state=active]:border-orange-500 whitespace-nowrap"
                 >
                   Các gói dịch vụ
                 </TabsTrigger>
                 <TabsTrigger
                   value="details"
-                  className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-6 py-3"
+                  className="rounded-none px-6 py-3 text-sm font-medium text-muted-foreground transition data-[state=active]:text-primary data-[state=active]:shadow-none border-b-2 border-transparent data-[state=active]:border-orange-500 whitespace-nowrap"
                 >
                   Về dịch vụ này
                 </TabsTrigger>
                 <TabsTrigger
                   value="notes"
-                  className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-6 py-3"
+                  className="rounded-none px-6 py-3 text-sm font-medium text-muted-foreground transition data-[state=active]:text-primary data-[state=active]:shadow-none border-b-2 border-transparent data-[state=active]:border-orange-500 whitespace-nowrap"
                 >
                   Những điều cần lưu ý
                 </TabsTrigger>
                 <TabsTrigger
                   value="terms"
-                  className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-6 py-3"
+                  className="rounded-none px-6 py-3 text-sm font-medium text-muted-foreground transition data-[state=active]:text-primary data-[state=active]:shadow-none border-b-2 border-transparent data-[state=active]:border-orange-500 whitespace-nowrap"
                 >
                   Điều khoản
                 </TabsTrigger>
                 <TabsTrigger
                   value="reviews"
-                  className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-6 py-3"
+                  className="rounded-none px-6 py-3 text-sm font-medium text-muted-foreground transition data-[state=active]:text-primary data-[state=active]:shadow-none border-b-2 border-transparent data-[state=active]:border-orange-500 whitespace-nowrap"
                 >
                   Đánh giá
                 </TabsTrigger>
@@ -2631,9 +2633,6 @@ useEffect(() => {
                         </div>
                       )}
                     </div>
-                    <Button variant="outline" className="w-full">
-                      Liên hệ đối tác
-                    </Button>
                   </CardContent>
                 </Card>
               )}
@@ -2654,7 +2653,9 @@ useEffect(() => {
                       <span className="break-all">support@example.com</span>
                     </div>
                   </div>
-                  <Button className="w-full">Trò chuyện với chúng tôi</Button>
+                  <Button className="w-full" onClick={openChat}>
+                    Trò chuyện với chúng tôi
+                  </Button>
                 </CardContent>
               </Card>
             </div>

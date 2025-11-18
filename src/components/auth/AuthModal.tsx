@@ -29,16 +29,16 @@ const AuthModal = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-3">
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6">
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.9, y: 20 }}
         transition={{ duration: 0.25 }}
-        className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden border border-orange-100"
+        className="bg-white rounded-2xl shadow-xl w-full max-w-md sm:max-w-lg overflow-hidden border border-orange-100 max-h-[90vh] flex flex-col"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b bg-gradient-to-r from-orange-50 to-white">
+        <div className="flex items-center justify-between px-5 py-3 sm:px-6 sm:py-4 border-b bg-gradient-to-r from-orange-50 to-white">
   
           <div className="w-5 h-5" /> 
 
@@ -62,7 +62,7 @@ const AuthModal = ({
         </div>
 
         {/* Body */}
-        <div className="px-6 py-6 sm:px-8">
+        <div className="px-4 py-5 sm:px-8 flex-1 overflow-y-auto">
           <AnimatePresence mode="wait">
             {mode === "login" && (
               <motion.div
