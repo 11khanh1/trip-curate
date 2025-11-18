@@ -55,6 +55,7 @@ import {
   type RefundRequestStatus,
 } from "@/services/bookingApi";
 import { useToast } from "@/hooks/use-toast";
+import { useAnalytics } from "@/hooks/useAnalytics";
 import {
   coalesceString,
   extractPaymentIntentUrl,
@@ -164,6 +165,41 @@ const getRefundStepIndex = (status?: RefundRequestStatus): number => {
     default:
       return -1;
   }
+};
+
+const resolveBookingTourId = (booking?: Booking | null) => {
+  if (!booking) return null;
+  const record = booking as Record<string, unknown>;
+  const candidates: Array<unknown> = [
+    record?.["tour_id"],
+    record?.["tour_uuid"],
+    booking.tour?.uuid,
+    booking.tour?.id,
+  ];
+  const candidate = candidates.find(
+    (value) => typeof value === "string" || typeof value === "number",
+  );
+  return candidate !== undefined && candidate !== null ? String(candidate) : null;
+};
+
+const resolveBookingPackageId = (booking?: Booking | null) => {
+  if (!booking) return undefined;
+  const record = booking as Record<string, unknown>;
+  const candidates: Array<unknown> = [booking.package?.id, record?.["package_id"]];
+  const candidate = candidates.find(
+    (value) => typeof value === "string" || typeof value === "number",
+  );
+  return candidate !== undefined && candidate !== null ? String(candidate) : undefined;
+};
+
+const resolveBookingScheduleId = (booking?: Booking | null) => {
+  if (!booking) return undefined;
+  const record = booking as Record<string, unknown>;
+  const candidates: Array<unknown> = [booking.schedule?.id, record?.["schedule_id"]];
+  const candidate = candidates.find(
+    (value) => typeof value === "string" || typeof value === "number",
+  );
+  return candidate !== undefined && candidate !== null ? String(candidate) : undefined;
 };
 
 const PAYMENT_SUCCESS_STATUSES = new Set(["paid", "success", "completed"]);
@@ -322,6 +358,7 @@ const BookingDetailPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { trackEvent } = useAnalytics();
   const [refundForm, setRefundForm] = useState({
     bank_account_name: "",
     bank_account_number: "",
@@ -379,6 +416,26 @@ const BookingDetailPage = () => {
         title: baseTitle,
         description,
       });
+      const resolvedTourId = resolveBookingTourId(booking);
+      if (resolvedTourId) {
+        trackEvent(
+          {
+            event_name: "booking_cancelled",
+            entity_type: "tour",
+            entity_id: resolvedTourId,
+            metadata: {
+              booking_id: booking?.id ? String(booking.id) : bookingActionId ?? undefined,
+              refund_amount: response?.refund?.amount,
+              refund_rate: response?.refund?.rate,
+            },
+            context: {
+              package_id: resolveBookingPackageId(booking),
+              schedule_id: resolveBookingScheduleId(booking),
+            },
+          },
+          { immediate: true },
+        );
+      }
       queryClient.invalidateQueries({ queryKey: ["booking-detail", id] });
       queryClient.invalidateQueries({ queryKey: ["bookings"] });
     },

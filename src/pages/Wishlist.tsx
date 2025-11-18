@@ -17,6 +17,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useUser } from "@/context/UserContext";
 import { useToast } from "@/hooks/use-toast";
+import { useAnalytics } from "@/hooks/useAnalytics";
 import CollectionTourCard from "@/components/CollectionTourCard";
 import PersonalizedRecommendations from "@/components/recommendations/PersonalizedRecommendations";
 import {
@@ -200,6 +201,7 @@ const WishlistPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { trackEvent } = useAnalytics();
   const [selectedTourIds, setSelectedTourIds] = useState<string[]>([]);
   const [comparedTours, setComparedTours] = useState<WishlistTour[]>([]);
 
@@ -215,10 +217,27 @@ const WishlistPage = () => {
     enabled: Boolean(currentUser?.id),
   });
 
-  const removeMutation = useMutation({
-    mutationFn: removeWishlistItem,
-    onSuccess: async () => {
+  const removeMutation = useMutation<
+    void,
+    unknown,
+    { itemId: string; tourId?: string | number | null }
+  >({
+    mutationFn: ({ itemId }) => removeWishlistItem(itemId),
+    onSuccess: async (_, variables) => {
       await queryClient.invalidateQueries({ queryKey: ["wishlist"] });
+      if (variables?.tourId) {
+        trackEvent(
+          {
+            event_name: "wishlist_remove",
+            entity_type: "tour",
+            entity_id: String(variables.tourId),
+            metadata: {
+              source: "wishlist_page",
+            },
+          },
+          { immediate: true },
+        );
+      }
       toast({
         title: "Đã xoá khỏi danh sách yêu thích",
         description: "Tour đã được cập nhật trong danh sách của bạn.",
@@ -296,7 +315,7 @@ const WishlistPage = () => {
 
   const handleRemove = (itemId: string, tourId: string) => {
     if (!itemId) return;
-    removeMutation.mutate(itemId);
+    removeMutation.mutate({ itemId, tourId });
     setSelectedTourIds((prev) => {
       if (!tourId) return prev;
       const next = prev.filter((id) => id !== tourId);

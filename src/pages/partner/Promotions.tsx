@@ -60,6 +60,12 @@ import {
   ListChecks,
 } from "lucide-react";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   formatPromotionDate,
   resolvePromotionTypeText,
   resolvePromotionValueText,
@@ -537,56 +543,85 @@ export default function PartnerPromotionsPage() {
                     </TableCell>
                     <TableCell className="text-sm font-medium">{promotion.usage_count ?? 0}</TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={Boolean(promotion.is_active)}
-                          onCheckedChange={(checked) => {
-                            void togglePromotion(promotion, checked);
-                          }}
-                          disabled={isSaving}
-                          aria-label="Bật/tắt khuyến mãi"
-                        />
-                        <Badge variant={promotion.is_active ? "default" : "secondary"}>
-                          {promotion.is_active ? "Đang bật" : "Tạm tắt"}
-                        </Badge>
-                      </div>
+                      <TooltipProvider delayDuration={200}>
+                        <div className="flex items-center gap-2">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Switch
+                                checked={Boolean(promotion.is_active)}
+                                onCheckedChange={(checked) => {
+                                  void togglePromotion(promotion, checked);
+                                }}
+                                disabled={isSaving}
+                                aria-label="Bật/tắt khuyến mãi"
+                              />
+                            </TooltipTrigger>
+                            <TooltipContent>{promotion.is_active ? "Tạm tắt khuyến mãi" : "Kích hoạt khuyến mãi"}</TooltipContent>
+                          </Tooltip>
+                          <Badge variant={promotion.is_active ? "default" : "secondary"}>
+                            {promotion.is_active ? "Đang bật" : "Tạm tắt"}
+                          </Badge>
+                        </div>
+                      </TooltipProvider>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleHistory(promotion)}
-                          aria-label="Xem lịch sử áp dụng"
-                        >
-                          <History className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleClone(promotion)}
-                          aria-label="Nhân bản khuyến mãi"
-                        >
-                          <Copy className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleEdit(promotion)}
-                          aria-label="Chỉnh sửa khuyến mãi"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="text-destructive"
-                          onClick={() => void handleDelete(promotion)}
-                          aria-label="Xoá khuyến mãi"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      <TooltipProvider delayDuration={200}>
+                        <div className="flex items-center justify-end gap-2">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleHistory(promotion)}
+                                aria-label="Xem lịch sử áp dụng"
+                              >
+                                <History className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Xem lịch sử áp dụng</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleClone(promotion)}
+                                aria-label="Nhân bản khuyến mãi"
+                              >
+                                <Copy className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Nhân bản khuyến mãi</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleEdit(promotion)}
+                                aria-label="Chỉnh sửa khuyến mãi"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Chỉnh sửa khuyến mãi</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-destructive"
+                                onClick={() => void handleDelete(promotion)}
+                                aria-label="Xoá khuyến mãi"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Xoá khuyến mãi</TooltipContent>
+                          </Tooltip>
+                        </div>
+                      </TooltipProvider>
                     </TableCell>
                   </TableRow>
                 ))}

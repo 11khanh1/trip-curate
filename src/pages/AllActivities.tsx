@@ -17,7 +17,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   fetchHighlightCategories,
   fetchTours,
-  fetchTrendingTours,
   type HomeCategory,
   type PublicTour,
 } from "@/services/publicApi";
@@ -226,13 +225,6 @@ const AllActivities = () => {
   const categorySlugFilter = activeCategory === DEFAULT_CATEGORY ? undefined : activeCategory;
   const categoryIdFilter = selectedCategory?.categoryId;
 
-  const trendingToursQuery = useQuery({
-    queryKey: ["public-tours-trending", { limit: PER_PAGE, days: 60 }],
-    queryFn: () => fetchTrendingTours({ limit: PER_PAGE, days: 60 }),
-    enabled: activeCategory === DEFAULT_CATEGORY,
-    staleTime: 2 * 60 * 1000,
-  });
-
   useEffect(() => {
     setPage(1);
   }, [activeCategory]);
@@ -255,40 +247,33 @@ const AllActivities = () => {
     staleTime: 60 * 1000,
   });
 
-  const trendingData = trendingToursQuery.data ?? [];
-  const shouldUseTrending = activeCategory === DEFAULT_CATEGORY && trendingData.length > 0;
-  const isLoading = shouldUseTrending ? trendingToursQuery.isLoading : toursQuery.isLoading;
-  const toursData = shouldUseTrending ? trendingData : toursQuery.data?.data ?? [];
-  const toursMeta = shouldUseTrending ? {} : toursQuery.data?.meta ?? {};
+  const isLoading = toursQuery.isLoading;
+  const toursData = toursQuery.data?.data ?? [];
+  const toursMeta = toursQuery.data?.meta ?? {};
 
   const mappedTours = toursData.length > 0 ? toursData.map(mapTourToCard) : [];
 
-  const currentPage =
-    shouldUseTrending ? 1 : Number(((toursMeta?.current_page as number | undefined) ?? page)) || 1;
-  const totalResults = shouldUseTrending
-    ? toursData.length
-    : Number((toursMeta?.total as number | undefined) ?? toursData.length) || toursData.length;
-  const lastPage = shouldUseTrending
-    ? 1
-    : Number(
-        (toursMeta?.last_page as number | undefined) ??
-          (toursData.length === 0 ? 1 : Math.ceil(totalResults / PER_PAGE)),
-      ) || 1;
-  const rangeStart = shouldUseTrending
-    ? totalResults === 0 ? 0 : 1
-    : Number(
-        (toursMeta?.from as number | undefined) ??
-          (totalResults === 0 ? 0 : (currentPage - 1) * PER_PAGE + 1),
-      ) || 0;
-  const rangeEnd = shouldUseTrending
-    ? totalResults
-    : Number(
-        (toursMeta?.to as number | undefined) ??
-          (totalResults === 0 ? 0 : Math.min(totalResults, currentPage * PER_PAGE)),
-      ) || 0;
+  const currentPage = Number(((toursMeta?.current_page as number | undefined) ?? page)) || 1;
+  const totalResults =
+    Number((toursMeta?.total as number | undefined) ?? toursData.length) || toursData.length;
+  const lastPage =
+    Number(
+      (toursMeta?.last_page as number | undefined) ??
+        (toursData.length === 0 ? 1 : Math.ceil(totalResults / PER_PAGE)),
+    ) || 1;
+  const rangeStart =
+    Number(
+      (toursMeta?.from as number | undefined) ??
+        (totalResults === 0 ? 0 : (currentPage - 1) * PER_PAGE + 1),
+    ) || 0;
+  const rangeEnd =
+    Number(
+      (toursMeta?.to as number | undefined) ??
+        (totalResults === 0 ? 0 : Math.min(totalResults, currentPage * PER_PAGE)),
+    ) || 0;
   const isFirstPage = currentPage <= 1;
   const isLastPage = currentPage >= lastPage;
-  const shouldRenderPagination = !shouldUseTrending && totalResults > 0;
+  const shouldRenderPagination = totalResults > 0;
 
   const paginationRange = useMemo<(number | "ellipsis")[]>(() => {
     const totalPages = Math.max(1, lastPage);

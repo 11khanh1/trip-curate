@@ -808,7 +808,7 @@ const BookingCheckout = () => {
       if (resolvedTourEntityId) {
         trackEvent(
           {
-            event_name: "booking_success",
+            event_name: "booking_created",
             entity_type: "tour",
             entity_id: resolvedTourEntityId,
             metadata: {

@@ -19,6 +19,7 @@ import {
 } from "@/services/cartApi";
 import type { AutoPromotion, CancellationPolicy, PublicTour, TourType } from "@/services/publicApi";
 import { applyAutoPromotionToPrice, getTourPriceInfo } from "@/lib/tour-utils";
+import { useAnalytics } from "@/hooks/useAnalytics";
 import { useUser } from "./UserContext";
 
 export interface CartItem {
@@ -436,6 +437,7 @@ const mapCartApiResponseToItems = (response?: CartApiResponse | null): CartItem[
 
 export const CartProvider = ({ children }: { children: ReactNode }) => {
   const { currentUser } = useUser();
+  const { trackEvent } = useAnalytics();
   const [items, setItems] = useState<CartItem[]>([]);
   const itemsRef = useRef<CartItem[]>([]);
   const [error, setError] = useState<Error | null>(null);
@@ -471,6 +473,26 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       return target?.apiId?.trim?.() ?? trimmed;
     },
     [],
+  );
+
+  const emitCartEvent = useCallback(
+    (
+      eventName: "cart_add" | "cart_update" | "cart_remove",
+      tourId?: string,
+      metadata?: Record<string, unknown>,
+    ) => {
+      if (!tourId) return;
+      trackEvent(
+        {
+          event_name: eventName,
+          entity_type: "tour",
+          entity_id: tourId,
+          metadata,
+        },
+        { immediate: eventName === "cart_add" },
+      );
+    },
+    [trackEvent],
   );
 
   const applyResource = useCallback(
@@ -628,6 +650,22 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
             return item;
           }),
         );
+        const matchedItem = itemsRef.current.find(
+          (item) =>
+            item.tourId === input.tourId &&
+            item.packageId === input.packageId &&
+            (item.scheduleId ?? null) === (input.scheduleId ?? null),
+        );
+        emitCartEvent("cart_add", matchedItem?.tourId ?? input.tourId, {
+          cart_item_id: matchedItem?.id,
+          package_id: input.packageId,
+          schedule_id: input.scheduleId ?? undefined,
+          adults: normalizedAdults,
+          children: normalizedChildren,
+          total_price: matchedItem?.totalPrice ?? fallbackTotal,
+          original_total_price: matchedItem?.originalTotalPrice ?? fallbackOriginal ?? undefined,
+          promotion_label: matchedItem?.promotionLabel ?? input.promotionLabel ?? undefined,
+        });
         setError(null);
       } catch (err) {
         const normalized =
@@ -639,7 +677,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         setIsSyncing(false);
       }
     },
-    [currentUser, applyResource],
+    [currentUser, applyResource, emitCartEvent],
   );
 
   const updateItemQuantity = useCallback(
@@ -691,6 +729,17 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         const apiId = resolveApiItemId(id);
         const resource = await updateCartItemRequest(apiId, payload);
         applyResource(resource);
+        const refreshedItem =
+          itemsRef.current.find(
+            (item) => item.id === id || item.apiId === id || item.apiId === apiId,
+          ) ?? targetItem;
+        emitCartEvent("cart_update", refreshedItem?.tourId ?? targetItem?.tourId, {
+          cart_item_id: refreshedItem?.id ?? targetItem?.id ?? id,
+          package_id: refreshedItem?.packageId ?? targetItem?.packageId,
+          schedule_id: refreshedItem?.scheduleId ?? targetItem?.scheduleId ?? undefined,
+          adults: normalizedAdults,
+          children: normalizedChildren,
+        });
         setError(null);
       } catch (err) {
         const normalized =
@@ -702,7 +751,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         setIsSyncing(false);
       }
     },
-    [currentUser, applyResource, resolveApiItemId],
+    [currentUser, applyResource, emitCartEvent, resolveApiItemId],
   );
 
   const removeItem = useCallback(
@@ -715,6 +764,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
       const apiId = resolveApiItemId(id);
       const snapshot = itemsRef.current;
+      const removedItem =
+        snapshot.find((item) => item.id === id || item.apiId === id || item.apiId === apiId) ?? null;
       const nextItems = snapshot.filter(
         (item) => item.id !== id && item.apiId !== id && item.apiId !== apiId,
       );
@@ -732,6 +783,13 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
           commitItems(reconciled);
         }
         setError(null);
+        emitCartEvent("cart_remove", removedItem?.tourId, {
+          cart_item_id: removedItem?.id ?? id,
+          package_id: removedItem?.packageId,
+          schedule_id: removedItem?.scheduleId ?? undefined,
+          adults: removedItem?.adultCount,
+          children: removedItem?.childCount,
+        });
       } catch (err) {
         const maybeResponse =
           err && typeof err === "object" && "response" in err
@@ -739,6 +797,13 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
             : null;
         if (maybeResponse?.status === 404) {
           setError(null);
+          emitCartEvent("cart_remove", removedItem?.tourId, {
+            cart_item_id: removedItem?.id ?? id,
+            package_id: removedItem?.packageId,
+            schedule_id: removedItem?.scheduleId ?? undefined,
+            adults: removedItem?.adultCount,
+            children: removedItem?.childCount,
+          });
           return;
         }
 
@@ -765,7 +830,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         setIsSyncing(false);
       }
     },
-    [currentUser, applyResource, commitItems, loadCart, resolveApiItemId],
+    [currentUser, applyResource, commitItems, emitCartEvent, loadCart, resolveApiItemId],
   );
 
   const clearCart = useCallback(
@@ -793,6 +858,13 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         for (const item of snapshot) {
           const apiId = resolveApiItemId(item.id);
           await deleteCartItemRequest(apiId);
+          emitCartEvent("cart_remove", item.tourId, {
+            cart_item_id: item.id,
+            package_id: item.packageId,
+            schedule_id: item.scheduleId ?? undefined,
+            adults: item.adultCount,
+            children: item.childCount,
+          });
         }
         await loadCart();
         setError(null);
@@ -806,7 +878,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         setIsSyncing(false);
       }
     },
-    [currentUser, loadCart, commitItems, resolveApiItemId],
+    [currentUser, emitCartEvent, loadCart, commitItems, resolveApiItemId],
   );
 
   const refetch = useCallback(async () => {

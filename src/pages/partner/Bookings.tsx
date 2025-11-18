@@ -4,6 +4,12 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -401,9 +407,17 @@ export default function PartnerBookings() {
             : updatedBooking;
 
         if (enrichedBooking) {
-          setBookings((prev) =>
-            prev.map((item) => (String(item.id) === String(bookingId) ? { ...item, ...enrichedBooking } : item)),
-          );
+          setBookings((prev) => {
+            const index = prev.findIndex((item) => String(item.id) === String(bookingId));
+            if (index === -1) {
+              // Nếu không thấy trong danh sách hiện tại (do bộ lọc), fallback reload
+              void loadBookings();
+              return prev;
+            }
+            const next = [...prev];
+            next[index] = { ...next[index], ...enrichedBooking };
+            return next;
+          });
           setSelectedBooking((prev) =>
             prev && String(prev.id) === String(bookingId) ? { ...prev, ...enrichedBooking } : prev,
           );
@@ -579,68 +593,90 @@ export default function PartnerBookings() {
                             <Badge variant={paymentBadge.variant}>{paymentBadge.label}</Badge>
                           </td>
                           <td className="p-3">
-                            <div className="flex gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-muted-foreground hover:bg-muted/30"
-                                aria-label="Xem chi tiết"
-                                onClick={() => handleViewDetail(booking)}
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
+                            <TooltipProvider delayDuration={200}>
+                              <div className="flex gap-1">
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-muted-foreground hover:bg-muted/30"
+                                      aria-label="Xem chi tiết"
+                                      onClick={() => handleViewDetail(booking)}
+                                    >
+                                      <Eye className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Xem chi tiết đơn</TooltipContent>
+                                </Tooltip>
 
-                              {normalizedStatus === "pending" && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-emerald-600 hover:bg-emerald-50"
-                                  aria-label="Xác nhận đơn"
-                                  onClick={() => handleStatusUpdate(booking.id, "confirmed")}
-                                  disabled={isRowUpdating}
-                                >
-                                  {isMutatingTo("confirmed") ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <Check className="h-4 w-4" />
-                                  )}
-                                </Button>
-                              )}
+                                {normalizedStatus === "pending" && (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 text-emerald-600 hover:bg-emerald-50"
+                                        aria-label="Xác nhận đơn"
+                                        onClick={() => handleStatusUpdate(booking.id, "confirmed")}
+                                        disabled={isRowUpdating}
+                                      >
+                                        {isMutatingTo("confirmed") ? (
+                                          <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                          <Check className="h-4 w-4" />
+                                        )}
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Xác nhận đơn</TooltipContent>
+                                  </Tooltip>
+                                )}
 
-                              {(normalizedStatus === "pending" || normalizedStatus === "confirmed") && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-destructive hover:bg-red-50"
-                                  aria-label="Hủy đơn"
-                                  onClick={() => handleStatusUpdate(booking.id, "cancelled")}
-                                  disabled={isRowUpdating}
-                                >
-                                  {isMutatingTo("cancelled") ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <X className="h-4 w-4" />
-                                  )}
-                                </Button>
-                              )}
+                                {(normalizedStatus === "pending" || normalizedStatus === "confirmed") && (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 text-destructive hover:bg-red-50"
+                                        aria-label="Hủy đơn"
+                                        onClick={() => handleStatusUpdate(booking.id, "cancelled")}
+                                        disabled={isRowUpdating}
+                                      >
+                                        {isMutatingTo("cancelled") ? (
+                                          <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                          <X className="h-4 w-4" />
+                                        )}
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Hủy đơn</TooltipContent>
+                                  </Tooltip>
+                                )}
 
-                              {normalizedStatus === "confirmed" && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-primary hover:bg-primary/10"
-                                  aria-label="Hoàn thành đơn"
-                                  onClick={() => handleStatusUpdate(booking.id, "completed")}
-                                  disabled={isRowUpdating}
-                                >
-                                  {isMutatingTo("completed") ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <CheckCircle2 className="h-4 w-4" />
-                                  )}
-                                </Button>
-                              )}
-                            </div>
+                                {normalizedStatus === "confirmed" && (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 text-primary hover:bg-primary/10"
+                                        aria-label="Hoàn thành đơn"
+                                        onClick={() => handleStatusUpdate(booking.id, "completed")}
+                                        disabled={isRowUpdating}
+                                      >
+                                        {isMutatingTo("completed") ? (
+                                          <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                          <CheckCircle2 className="h-4 w-4" />
+                                        )}
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Đánh dấu hoàn thành</TooltipContent>
+                                  </Tooltip>
+                                )}
+                              </div>
+                            </TooltipProvider>
                           </td>
                         </tr>
                       );

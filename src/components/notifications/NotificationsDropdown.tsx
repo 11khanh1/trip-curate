@@ -49,21 +49,28 @@ const NotificationDropdown = () => {
     return currentUser.name ? `name:${currentUser.name}` : "guest";
   }, [currentUser]);
 
+  const canFetchNotifications = Boolean(currentUser?.id || currentUser?.email);
+
   const unreadQuery = useQuery({
     queryKey: ["notifications-unread", userScope],
     queryFn: fetchUnreadCount,
     refetchInterval: 60000,
+    enabled: canFetchNotifications,
+    retry: false,
   });
 
   const settingsQuery = useQuery({
     queryKey: ["notifications-settings", userScope],
     queryFn: fetchNotificationSettings,
+    enabled: canFetchNotifications,
+    retry: false,
   });
 
   const notificationsQuery = useQuery({
     queryKey: ["notifications", userScope, { page: 1 }],
     queryFn: () => fetchNotifications({ per_page: MAX_ITEMS }),
-    enabled: open,
+    enabled: open && canFetchNotifications,
+    retry: false,
   });
 
   const markReadMutation = useMutation({
@@ -89,8 +96,60 @@ const NotificationDropdown = () => {
     },
   });
 
-  const notifications = notificationsQuery.data?.data ?? [];
-  const unread = unreadQuery.data?.unread ?? 0;
+  const fallbackNotifications: NotificationPayload[] = useMemo(
+    () => [
+      {
+        id: "demo-tour-published",
+        type: "booking_confirmation",
+        created_at: new Date().toISOString(),
+        data: {
+          title: "Bạn đã đăng tour thành công",
+          message: "Tour mới vừa gửi lên hệ thống và đang chờ đội ngũ VietTravel duyệt.",
+          is_demo: true,
+          link: "/partner/activities",
+        },
+      },
+      {
+        id: "demo-payment-success",
+        type: "payment_status",
+        created_at: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+        data: {
+          title: "Thanh toán đặt tour thành công",
+          message: "Đơn #VX-2305 đã được thanh toán đầy đủ. Hãy chuẩn bị cho khách của bạn nhé!",
+          is_demo: true,
+          link: "/bookings",
+        },
+      },
+      {
+        id: "demo-tour-completed",
+        type: "booking_update",
+        created_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+        data: {
+          title: "Tour của bạn đã hoàn thành",
+          message: "Khách vừa kết thúc hành trình. Đừng quên gửi lời cảm ơn và mời đánh giá.",
+          is_demo: true,
+          link: "/bookings",
+        },
+      },
+      {
+        id: "demo-tour-approved",
+        type: "promotion_update",
+        created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+        data: {
+          title: "Tour đã được VietTravel duyệt",
+          message: "Tour riêng ngắm bình minh ở Mũi Né đã được đưa lên trang chủ. Hãy kiểm tra lại thông tin.",
+          is_demo: true,
+          link: "/partner/activities",
+        },
+      },
+    ],
+    [],
+  );
+
+  const apiNotifications = notificationsQuery.data?.data ?? [];
+  const shouldUseFallback = !notificationsQuery.isFetching && apiNotifications.length === 0;
+  const notifications = shouldUseFallback ? fallbackNotifications : apiNotifications;
+  const unread = shouldUseFallback ? fallbackNotifications.length : unreadQuery.data?.unread ?? 0;
   const notificationsEnabled =
     settingsQuery.data?.notifications_enabled ??
     notificationsQuery.data?.notifications_enabled ??
@@ -98,11 +157,25 @@ const NotificationDropdown = () => {
 
   const handleItemClick = (notification: NotificationPayload) => {
     if (!notification.id) return;
-    markReadMutation.mutate(notification.id);
+
+    const notificationData = (notification.data as Record<string, unknown> | undefined) ?? {};
+    const isDemoNotification = Boolean(notificationData.is_demo);
+    const fallbackLink = typeof notificationData.link === "string" ? notificationData.link : null;
+
+    if (!isDemoNotification) {
+      markReadMutation.mutate(notification.id);
+    }
+
     const bookingId = (notification.data?.["booking_id"] ??
       notification.data?.["bookingId"]) as string | undefined;
     if (bookingId) {
       navigate(`/bookings/${bookingId}`);
+      setOpen(false);
+      return;
+    }
+
+    if (fallbackLink) {
+      navigate(fallbackLink);
       setOpen(false);
     }
   };
@@ -180,7 +253,7 @@ const NotificationDropdown = () => {
           <Button
             variant="ghost"
             size="sm"
-            disabled={markAllMutation.isPending || notifications.length === 0}
+            disabled={shouldUseFallback || markAllMutation.isPending || notifications.length === 0}
             onClick={() => markAllMutation.mutate()}
           >
             Đánh dấu đã đọc

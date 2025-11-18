@@ -564,9 +564,16 @@ const TravelHeader = () => {
 
             <div className="flex items-center space-x-2">
               <Button variant="ghost" size="sm" className="hidden md:flex text-gray-600 hover:text-gray-800 text-sm">Mở ứng dụng</Button>
-              <Button variant="ghost" size="sm" className="hidden md:flex text-gray-600 hover:text-gray-800 text-sm">
-                <HelpCircle className="w-4 h-4 mr-1" />
-                Trợ giúp
+              <Button
+                variant="ghost"
+                size="sm"
+                className="hidden md:flex text-gray-600 hover:text-gray-800 text-sm"
+                asChild
+              >
+                <Link to="/support/help-center" className="inline-flex items-center">
+                  <HelpCircle className="w-4 h-4 mr-1" />
+                  Trợ giúp
+                </Link>
               </Button>
               {currentUser ? <NotificationDropdown /> : null}
               <Button

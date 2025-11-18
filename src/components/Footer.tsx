@@ -28,9 +28,6 @@ const Footer = () => {
       links: [
         { name: "Vé tham quan", url: "/activities" },
         { name: "Ưu đãi hot", url: "/deals" },
-        { name: "Khách sạn", url: "/" },
-        { name: "Vé máy bay", url: "/" },
-        { name: "Tour trọn gói", url: "/" }
       ]
     }
   ];

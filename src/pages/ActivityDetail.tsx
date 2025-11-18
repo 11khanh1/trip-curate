@@ -885,6 +885,19 @@ const ActivityDetail = () => {
         description: "Bạn có thể xem lại tour này trong mục Wishlist.",
       });
       scheduleRecommendationRefresh();
+      if (resolvedTourEntityId) {
+        trackEvent(
+          {
+            event_name: "wishlist_add",
+            entity_type: "tour",
+            entity_id: resolvedTourEntityId,
+            metadata: {
+              source: "activity_detail",
+            },
+          },
+          { immediate: true },
+        );
+      }
     },
     onError: (error: unknown) => {
       toast({
@@ -908,6 +921,19 @@ const ActivityDetail = () => {
         title: "Đã xoá khỏi yêu thích",
         description: "Tour đã được gỡ khỏi danh sách Wishlist.",
       });
+      if (resolvedTourEntityId) {
+        trackEvent(
+          {
+            event_name: "wishlist_remove",
+            entity_type: "tour",
+            entity_id: resolvedTourEntityId,
+            metadata: {
+              source: "activity_detail",
+            },
+          },
+          { immediate: true },
+        );
+      }
     },
     onError: (error: unknown) => {
       toast({
@@ -960,6 +986,7 @@ useEffect(() => {
   if (!tourDetail) return;
   if (hasLoggedViewRef.current) return;
   if (!resolvedTourEntityId) return;
+
   trackEvent(
     {
       event_name: "tour_view",
@@ -971,6 +998,7 @@ useEffect(() => {
     },
     { immediate: true },
   );
+
   hasLoggedViewRef.current = true;
 }, [resolvedTourEntityId, tourDetail, trackEvent]);
 
@@ -1234,25 +1262,6 @@ useEffect(() => {
   const { mutate: removeFromWishlist, isPending: isRemovingWishlist } = removeWishlistMutation;
   const isWishlistMutating = isAddingWishlist || isRemovingWishlist;
 
-  const emitWishlistAddEvent = useCallback(() => {
-    if (!resolvedTourEntityId) {
-      console.warn("Không thể gửi analytics cho wishlist_add do thiếu entity_id");
-      return false;
-    }
-    trackEvent(
-      {
-        event_name: "wishlist_add",
-        entity_type: "tour",
-        entity_id: resolvedTourEntityId,
-        metadata: {
-          source: "activity_detail",
-        },
-      },
-      { immediate: true },
-    );
-    return true;
-  }, [resolvedTourEntityId, trackEvent]);
-
   const handleWishlistToggle = useCallback(() => {
     if (!activity?.id) {
       toast({
@@ -1290,12 +1299,10 @@ useEffect(() => {
       return;
     }
 
-    emitWishlistAddEvent();
     addToWishlist(String(activity.id));
   }, [
     activity?.id,
     addToWishlist,
-    emitWishlistAddEvent,
     currentUser,
     isWishlisted,
     isWishlistMutating,
@@ -1523,21 +1530,6 @@ useEffect(() => {
       });
 
       if (resolvedTourEntityId) {
-        trackEvent(
-          {
-            event_name: "cart_add",
-            entity_type: "tour",
-            entity_id: resolvedTourEntityId,
-            metadata: {
-              source: isEditingCartItem ? "cart_detail" : "activity_detail",
-              package_id: selectedPackage.packageId ?? selectedPackage.id,
-              schedule_id: selectedScheduleId ?? undefined,
-              adults: safeAdultCount,
-              children: safeChildCount,
-            },
-          },
-          { immediate: true },
-        );
         scheduleRecommendationRefresh();
       }
 

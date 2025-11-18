@@ -1,3 +1,4 @@
+import { useState } from "react";
 import TravelHeader from "@/components/TravelHeader";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import {
   Phone,
   Mail,
   MessageCircle,
+  ChevronDown,
 } from "lucide-react";
 import { useChatWidget } from "@/context/ChatWidgetContext";
 
@@ -44,13 +46,39 @@ const HelpCenter = () => {
     },
   ];
 
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+
   const popularArticles = [
-    "Làm thế nào để đặt hoạt động trên VietTravel?",
-    "Chính sách hủy và hoàn tiền",
-    "Cách sử dụng mã giảm giá",
-    "Tôi có thể thay đổi ngày đặt chỗ không?",
-    "Làm sao để liên hệ với nhà cung cấp dịch vụ?",
-    "VietTravel có hỗ trợ thanh toán trả góp không?",
+    {
+      question: "Làm thế nào để đặt hoạt động trên VietTravel?",
+      answer:
+        "Bạn chỉ cần tìm kiếm hoạt động theo điểm đến hoặc từ khóa, chọn tour mong muốn và bấm “Đặt ngay”. Điền thông tin hành khách, chọn lịch khởi hành và phương thức thanh toán. Sau khi thanh toán thành công, hệ thống sẽ gửi email xác nhận cùng mã đơn hàng cho bạn.",
+    },
+    {
+      question: "Chính sách hủy và hoàn tiền",
+      answer:
+        "Mỗi hoạt động có quy định hủy riêng. Bạn có thể xem ở phần “Điều khoản” của tour hoặc trong email xác nhận. Nếu cần hủy, hãy vào mục “Đơn đặt của tôi”, chọn tour và bấm “Hủy đơn”. Hệ thống sẽ hiển thị số tiền được hoàn và dự kiến thời gian hoàn (thông thường 3-7 ngày làm việc tùy phương thức).",
+    },
+    {
+      question: "Cách sử dụng mã giảm giá",
+      answer:
+        "Ở bước thanh toán, nhập mã vào ô “Mã khuyến mãi” rồi bấm “Áp dụng”. Hệ thống sẽ trừ trực tiếp nếu mã hợp lệ. Lưu ý rằng mỗi mã có điều kiện riêng như giá trị đơn tối thiểu, số lần sử dụng, thời gian áp dụng…",
+    },
+    {
+      question: "Tôi có thể thay đổi ngày đặt chỗ không?",
+      answer:
+        "Bạn có thể yêu cầu đổi lịch nếu tour còn chỗ và vẫn trong thời gian cho phép. Vào “Đơn đặt của tôi” → chọn tour → “Đổi lịch”. Nếu nhà cung cấp không hỗ trợ đổi lịch, bạn vui lòng hủy đơn hiện tại và đặt lại ngày mới.",
+    },
+    {
+      question: "Làm sao để liên hệ với nhà cung cấp dịch vụ?",
+      answer:
+        "Trong trang chi tiết tour có mục “Liên hệ” hiển thị email và số điện thoại của nhà cung cấp. Ngoài ra, bạn có thể sử dụng chức năng Chat/Hotline VietTravel để được kết nối trực tiếp với đối tác trong vòng 24 giờ.",
+    },
+    {
+      question: "VietTravel có hỗ trợ thanh toán trả góp không?",
+      answer:
+        "Đối với đơn hàng từ 5.000.000đ, bạn có thể chọn trả góp 0% qua thẻ tín dụng của các ngân hàng đối tác (Sacombank, VPBank, Techcombank…). Ở bước thanh toán, chọn mục “Trả góp 0%” và làm theo hướng dẫn trên màn hình.",
+    },
   ];
 
   return (
@@ -111,17 +139,29 @@ const HelpCenter = () => {
             <Card>
               <CardContent className="p-6">
                 <div className="space-y-4">
-                  {popularArticles.map((article, index) => (
-                    <div 
-                      key={index}
-                      className="p-4 hover:bg-muted/50 rounded-lg cursor-pointer transition-colors border-b last:border-b-0"
-                    >
-                      <div className="flex items-center gap-3">
-                        <BookOpen className="w-5 h-5 text-primary flex-shrink-0" />
-                        <span className="font-medium">{article}</span>
-                      </div>
-                    </div>
-                  ))}
+                  {popularArticles.map((article, index) => {
+                    const isOpen = openIndex === index;
+                    return (
+                      <button
+                        key={index}
+                        type="button"
+                        onClick={() => setOpenIndex(isOpen ? null : index)}
+                        className="w-full text-left p-4 hover:bg-muted/50 rounded-lg transition-colors border-b last:border-b-0 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        aria-expanded={isOpen}
+                      >
+                        <div className="flex items-center gap-3">
+                          <BookOpen className="w-5 h-5 text-primary flex-shrink-0" />
+                          <p className="flex-1 font-medium">{article.question}</p>
+                          <ChevronDown
+                            className={`h-4 w-4 text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`}
+                          />
+                        </div>
+                        {isOpen && (
+                          <p className="mt-3 pl-8 text-sm text-muted-foreground">{article.answer}</p>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>

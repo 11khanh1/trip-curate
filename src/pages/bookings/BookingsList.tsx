@@ -43,6 +43,7 @@ import {
   type Booking,
   type BookingListResponse,
   type BookingPayment,
+  type CancelBookingResponse,
 } from "@/services/bookingApi";
 import {
   createReview,
@@ -54,6 +55,7 @@ import {
   type UpdateReviewPayload,
 } from "@/services/reviewApi";
 import { useToast } from "@/hooks/use-toast";
+import { useAnalytics } from "@/hooks/useAnalytics";
 
 const STATUS_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "all", label: "Tất cả" },
@@ -101,6 +103,7 @@ const statusLabel = (status?: string) => {
 };
 
 const PAYMENT_SUCCESS_STATUSES = new Set(["paid", "success", "completed"]);
+const AWAITING_CONFIRMATION_STATUSES = new Set(["pending", "unconfirmed"]);
 const normalizeStatus = (status?: string | null) => (status ?? "").toString().trim().toLowerCase();
 const didPaymentSucceed = (payment?: BookingPayment | null) => {
   if (!payment) return false;
@@ -194,6 +197,49 @@ const resolveCancellationInfo = (booking: Booking) => {
     normalizedText.includes("thiếu khách") ||
     normalizedText.includes("không đủ khách");
   return { reasonText: reasonText ?? null, reasonCode: reasonCode ?? null, underbooked };
+};
+
+const resolveBookingTourId = (booking?: Booking | null) => {
+  if (!booking) return null;
+  const record = booking as Record<string, unknown>;
+  const candidates: Array<unknown> = [
+    record?.["tour_id"],
+    record?.["tour_uuid"],
+    booking.tour?.uuid,
+    booking.tour?.id,
+  ];
+  const candidate = candidates.find(
+    (value) => typeof value === "string" || typeof value === "number",
+  );
+  return candidate !== undefined && candidate !== null ? String(candidate) : null;
+};
+
+const resolveBookingPackageId = (booking?: Booking | null) => {
+  if (!booking) return undefined;
+  const record = booking as Record<string, unknown>;
+  const candidates: Array<unknown> = [
+    booking.package?.id,
+    record?.["package_id"],
+    booking.package?.uuid,
+  ];
+  const candidate = candidates.find(
+    (value) => typeof value === "string" || typeof value === "number",
+  );
+  return candidate !== undefined && candidate !== null ? String(candidate) : undefined;
+};
+
+const resolveBookingScheduleId = (booking?: Booking | null) => {
+  if (!booking) return undefined;
+  const record = booking as Record<string, unknown>;
+  const candidates: Array<unknown> = [
+    booking.schedule?.id,
+    record?.["schedule_id"],
+    booking.schedule?.uuid,
+  ];
+  const candidate = candidates.find(
+    (value) => typeof value === "string" || typeof value === "number",
+  );
+  return candidate !== undefined && candidate !== null ? String(candidate) : undefined;
 };
 
 const resolveTourTypeLabel = (type?: string | null) => {
@@ -334,6 +380,13 @@ interface UpdateReviewVariables {
   payload: UpdateReviewPayload;
 }
 
+interface CancelBookingVariables {
+  bookingId: string;
+  tourId?: string | null;
+  packageId?: string;
+  scheduleId?: string;
+}
+
 interface DeleteReviewVariables {
   bookingId: string | number;
   reviewId: string | number;
@@ -386,6 +439,7 @@ const BookingsList = () => {
   const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { trackEvent } = useAnalytics();
   const [reviewDialog, setReviewDialog] = useState<ReviewDialogState>({
     booking: null,
     mode: "create",
@@ -406,6 +460,26 @@ const BookingsList = () => {
   const createReviewMutation = useMutation<ReviewResponse, unknown, CreateReviewPayload>({
     mutationFn: createReview,
     onSuccess: (response) => {
+      const reviewBooking = reviewDialog.booking;
+      const resolvedTourId = resolveBookingTourId(reviewBooking);
+      if (resolvedTourId) {
+        trackEvent(
+          {
+            event_name: "review_submitted",
+            entity_type: "tour",
+            entity_id: resolvedTourId,
+            metadata: {
+              booking_id: reviewBooking?.id ? String(reviewBooking.id) : undefined,
+              rating: clampRating(reviewDialog.rating),
+              review_id:
+                response?.review?.id !== undefined && response?.review?.id !== null
+                  ? String(response.review.id)
+                  : undefined,
+            },
+          },
+          { immediate: true },
+        );
+      }
       toast({
         title: "Cảm ơn bạn đã đánh giá",
         description: response?.message ?? "Đánh giá của bạn đã được ghi nhận.",
@@ -530,9 +604,13 @@ const BookingsList = () => {
     });
   };
 
-  const cancelMutation = useMutation({
-    mutationFn: (bookingId: string) => cancelBooking(bookingId),
-    onSuccess: (response) => {
+  const cancelMutation = useMutation<
+    CancelBookingResponse,
+    unknown,
+    CancelBookingVariables
+  >({
+    mutationFn: (variables) => cancelBooking(variables.bookingId),
+    onSuccess: (response, variables) => {
       const refund = response?.refund ?? null;
       const details: string[] = [];
       if (refund) {
@@ -554,6 +632,25 @@ const BookingsList = () => {
         title: "Đã hủy booking",
         description: descriptionParts.join(" "),
       });
+      if (variables?.tourId) {
+        trackEvent(
+          {
+            event_name: "booking_cancelled",
+            entity_type: "tour",
+            entity_id: String(variables.tourId),
+            metadata: {
+              booking_id: variables.bookingId,
+              refund_amount: refund?.amount,
+              refund_rate: refund?.rate,
+            },
+            context: {
+              package_id: variables?.packageId,
+              schedule_id: variables?.scheduleId,
+            },
+          },
+          { immediate: true },
+        );
+      }
       queryClient.invalidateQueries({ queryKey: ["bookings"] });
     },
     onError: (error: unknown) => {
@@ -580,8 +677,8 @@ const BookingsList = () => {
   const isCancellingBooking = (bookingId: string | number) => {
     const pending = cancelMutation.isPending;
     if (!pending) return false;
-    if (cancelMutation.variables === undefined) return false;
-    return String(cancelMutation.variables) === String(bookingId);
+    if (!cancelMutation.variables) return false;
+    return String(cancelMutation.variables.bookingId) === String(bookingId);
   };
 
   const payLaterMutation = useMutation({
@@ -843,7 +940,7 @@ const BookingsList = () => {
                   : null;
 
               const isAwaitingConfirmation =
-                booking.status !== "cancelled" &&
+                AWAITING_CONFIRMATION_STATUSES.has(normalizedStatus) &&
                 (PAYMENT_SUCCESS_STATUSES.has(paymentStatusNormalized) || hasPaidTransaction);
               const headerStatusLabel = isAwaitingConfirmation ? "Chờ xác nhận" : statusLabel(booking.status);
               const headerStatusVariant = isAwaitingConfirmation ? "default" : statusVariant(booking.status);
@@ -1038,9 +1135,7 @@ const BookingsList = () => {
                         <p>
                           Trạng thái đơn:{" "}
                           <span className="font-medium text-foreground">
-                            {paymentStatusNormalized === "paid" || paymentStatusNormalized === "success"
-                              ? "Chờ xác nhận"
-                              : statusLabel(booking.status)}
+                            {isAwaitingConfirmation ? "Chờ xác nhận" : statusLabel(booking.status)}
                           </span>
                         </p>
                       )}
@@ -1112,7 +1207,12 @@ const BookingsList = () => {
                           className="border-red-200 text-red-500 hover:bg-red-50"
                           onClick={() => {
                             if (!window.confirm("Bạn có chắc chắn muốn hủy booking này?")) return;
-                            cancelMutation.mutate(String(booking.id));
+                            cancelMutation.mutate({
+                              bookingId: String(booking.id),
+                              tourId: resolveBookingTourId(booking),
+                              packageId: resolveBookingPackageId(booking),
+                              scheduleId: resolveBookingScheduleId(booking),
+                            });
                           }}
                           disabled={isCancellingBooking(booking.id)}
                         >

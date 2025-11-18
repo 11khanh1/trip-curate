@@ -14,7 +14,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Pagination, PaginationContent, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import { StatCard } from "@/components/admin/StatCard";
 import { Briefcase, BarChart3, Loader2, Calendar } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -153,12 +160,28 @@ export default function AdminPartners() {
 
   const partners = partnersQuery.data?.data?.map(normalizePartner) ?? [];
   const meta = partnersQuery.data?.meta ?? {};
-  const totalPartners = parseNumber(meta.total) ?? partners.length;
+  const metaTotal = parseNumber(meta.total);
+  const hasMetaTotal = typeof metaTotal === "number";
+  const totalPartners = hasMetaTotal ? metaTotal : partners.length;
   const approvedCount = parseNumber(meta.approved_count) ?? partners.filter((p) => p.status === "approved").length;
   const pendingCount = parseNumber(meta.pending_count) ?? partners.filter((p) => p.status === "pending").length;
   const rejectedCount = parseNumber(meta.rejected_count) ?? partners.filter((p) => p.status === "rejected").length;
-  const lastPage = parseNumber(meta.last_page) ?? Math.max(1, Math.ceil(totalPartners / perPage));
+  const serverLastPage = parseNumber(meta.last_page);
+  const computedLastPage =
+    serverLastPage ??
+    (hasMetaTotal ? Math.max(1, perPage > 0 ? Math.ceil(totalPartners / perPage) : 1) : null);
   const currentPage = parseNumber(meta.current_page) ?? page;
+  const rangeStart =
+    parseNumber((meta as Record<string, unknown>)?.from as number | string | undefined) ??
+    (totalPartners === 0 ? 0 : (currentPage - 1) * perPage + 1);
+  const fallbackRangeEnd = rangeStart + Math.max(partners.length - 1, 0);
+  const rangeEnd =
+    parseNumber((meta as Record<string, unknown>)?.to as number | string | undefined) ??
+    (hasMetaTotal ? Math.min(totalPartners, fallbackRangeEnd) : fallbackRangeEnd);
+  const estimatedTotal = (currentPage - 1) * perPage + partners.length;
+  const totalDisplayLabel = hasMetaTotal
+    ? totalPartners.toLocaleString("vi-VN")
+    : `${Math.max(rangeEnd, estimatedTotal).toLocaleString("vi-VN")}+`;
 
   const partnerDetailQuery = useQuery<AdminPartnerDetail, Error, PartnerDetailSelection>({
     queryKey: ["admin-partner", detailId],
@@ -291,8 +314,13 @@ export default function AdminPartners() {
     { label: "Đã duyệt", value: approvedCount, icon: BarChart3 },
   ];
 
+  const lastPage = computedLastPage ?? Math.max(1, currentPage);
+
   const paginationNumbers = useMemo(() => {
-    const total = Math.max(1, lastPage);
+    if (!computedLastPage) {
+      return [currentPage];
+    }
+    const total = Math.max(1, computedLastPage);
     const current = Math.min(Math.max(1, currentPage), total);
     const range: (number | "ellipsis")[] = [];
     if (total <= 5) {
@@ -356,12 +384,18 @@ export default function AdminPartners() {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={perPage.toString()} onValueChange={(value) => setPerPage(Number(value))}>
+            <Select
+              value={perPage.toString()}
+              onValueChange={(value) => {
+                setPerPage(Number(value));
+                setPage(1);
+              }}
+            >
               <SelectTrigger className="w-full md:w-32">
                 <SelectValue placeholder="Hiển thị" />
               </SelectTrigger>
               <SelectContent>
-                {[10, 20, 50].map((size) => (
+                {[5, 10, 20].map((size) => (
                   <SelectItem key={size} value={String(size)}>
                     {size}/trang
                   </SelectItem>
@@ -449,29 +483,85 @@ export default function AdminPartners() {
             </table>
           </div>
 
-          {lastPage > 1 && (
+          <div className="flex flex-col items-start justify-between gap-3 pt-3 text-sm text-muted-foreground md:flex-row md:items-center">
+            <p>
+              Hiển thị {rangeStart}-{rangeEnd} trên tổng {totalDisplayLabel} đối tác
+            </p>
             <Pagination className="justify-end">
               <PaginationContent>
-                <PaginationPrevious onClick={() => setPage((prev) => Math.max(1, prev - 1))} />
+                <PaginationPrevious
+                  href="#"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    if (currentPage <= 1) return;
+                    setPage((prev) => Math.max(1, prev - 1));
+                  }}
+                  className={currentPage <= 1 ? "pointer-events-none opacity-50" : undefined}
+                  aria-disabled={currentPage <= 1}
+                  tabIndex={currentPage <= 1 ? -1 : undefined}
+                />
                 {paginationNumbers.map((value, index) =>
                   value === "ellipsis" ? (
-                    <span key={`ellipsis-${index}`} className="px-2 text-muted-foreground">
-                      ...
-                    </span>
+                    <PaginationEllipsis key={`ellipsis-${index}`} />
                   ) : (
-                    <PaginationLink
-                      key={value}
-                      isActive={value === currentPage}
-                      onClick={() => setPage(value)}
-                    >
-                      {value}
-                    </PaginationLink>
+                        <PaginationLink
+                          key={value}
+                          href="#"
+                          isActive={value === currentPage}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            if (value === currentPage) return;
+                            if (computedLastPage) {
+                              setPage(Math.min(computedLastPage, value as number));
+                            } else {
+                              setPage(value as number);
+                            }
+                          }}
+                        >
+                          {value}
+                        </PaginationLink>
                   ),
                 )}
-                <PaginationNext onClick={() => setPage((prev) => Math.min(lastPage, prev + 1))} />
+                <PaginationNext
+                  href="#"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    const hasNext = computedLastPage
+                      ? currentPage < computedLastPage
+                      : partners.length >= perPage;
+                    if (!hasNext) return;
+                    setPage((prev) => {
+                      if (computedLastPage) {
+                        return Math.min(computedLastPage, prev + 1);
+                      }
+                      return prev + 1;
+                    });
+                  }}
+                  className={
+                    computedLastPage
+                      ? currentPage >= computedLastPage
+                        ? "pointer-events-none opacity-50"
+                        : undefined
+                      : partners.length < perPage
+                      ? "pointer-events-none opacity-50"
+                      : undefined
+                  }
+                  aria-disabled={
+                    computedLastPage ? currentPage >= computedLastPage : partners.length < perPage
+                  }
+                  tabIndex={
+                    computedLastPage
+                      ? currentPage >= computedLastPage
+                        ? -1
+                        : undefined
+                      : partners.length < perPage
+                      ? -1
+                      : undefined
+                  }
+                />
               </PaginationContent>
             </Pagination>
-          )}
+          </div>
         </CardContent>
       </Card>
 

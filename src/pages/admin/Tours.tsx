@@ -81,7 +81,7 @@ const STATUS_OPTIONS: { value: AdminTourStatus | "all"; label: string }[] = [
   { value: "rejected", label: STATUS_LABELS.rejected.label },
 ];
 
-const PER_PAGE_OPTIONS = [10, 20, 50] as const;
+const PER_PAGE_OPTIONS = [5, 10, 20] as const;
 
 const UPDATABLE_STATUSES: AdminTourStatus[] = ["pending", "approved", "rejected"];
 
@@ -328,7 +328,7 @@ export default function AdminTours() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [statusFilter, setStatusFilter] = useState<AdminTourStatus | "all">("pending");
+  const [statusFilter, setStatusFilter] = useState<AdminTourStatus | "all">("all");
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [page, setPage] = useState(1);
@@ -366,7 +366,9 @@ export default function AdminTours() {
   const tours = toursQuery.data?.list ?? [];
   const meta = toursQuery.data?.meta ?? {};
 
-  const totalTours = parseMetaNumber(meta?.total) ?? tours.length;
+  const metaTotal = parseMetaNumber(meta?.total);
+  const hasMetaTotal = typeof metaTotal === "number";
+  const totalTours = hasMetaTotal ? metaTotal : tours.length;
 
   const pendingCount =
     parseMetaNumber(meta?.pending_count) ?? tours.filter((tour) => tour.status === "pending").length;
@@ -379,20 +381,38 @@ export default function AdminTours() {
   const currentPage = parseMetaNumber(meta?.current_page) ?? page;
   const serverPerPage = parseMetaNumber(meta?.per_page) ?? perPage;
   const effectivePerPage = serverPerPage && serverPerPage > 0 ? serverPerPage : perPage;
-  const lastPage =
-    parseMetaNumber(meta?.last_page) ??
-    Math.max(1, effectivePerPage > 0 ? Math.ceil((totalTours || 0) / effectivePerPage) : 1);
+  const serverLastPage = parseMetaNumber(meta?.last_page);
+  const computedLastPage =
+    serverLastPage ??
+    (hasMetaTotal ? Math.max(1, effectivePerPage > 0 ? Math.ceil(totalTours / effectivePerPage) : 1) : null);
+  const lastPage = computedLastPage ?? Math.max(1, currentPage);
   const rangeStart =
     parseMetaNumber(meta?.from) ?? (totalTours > 0 ? (currentPage - 1) * effectivePerPage + 1 : 0);
+  const fallbackRangeEnd = rangeStart + Math.max(tours.length - 1, 0);
   const rangeEnd =
-    parseMetaNumber(meta?.to) ?? (totalTours > 0 ? Math.min(totalTours, currentPage * effectivePerPage) : 0);
-  const displayStart = totalTours === 0 ? 0 : Math.max(1, Math.min(rangeStart || 1, totalTours));
-  const displayEnd = totalTours === 0 ? 0 : Math.min(rangeEnd || displayStart, totalTours);
+    parseMetaNumber(meta?.to) ??
+    (hasMetaTotal ? Math.min(totalTours, fallbackRangeEnd) : fallbackRangeEnd);
+  const estimatedTotal = (currentPage - 1) * effectivePerPage + tours.length;
+  const displayStart = totalTours === 0 ? 0 : Math.max(1, Math.min(rangeStart || 1, totalTours || rangeStart));
+  const displayEnd =
+    totalTours === 0
+      ? 0
+      : Math.min(
+          rangeEnd || displayStart,
+          hasMetaTotal ? totalTours : Math.max(rangeEnd, estimatedTotal),
+        );
   const isFirstPage = currentPage <= 1;
-  const isLastPage = currentPage >= lastPage;
+  const allowNext = computedLastPage ? currentPage < computedLastPage : tours.length >= effectivePerPage;
+  const isLastPage = computedLastPage ? currentPage >= computedLastPage : !allowNext;
+  const totalDisplayLabel = hasMetaTotal
+    ? totalTours.toLocaleString("vi-VN")
+    : `${Math.max(rangeEnd, estimatedTotal).toLocaleString("vi-VN")}+`;
 
   const paginationRange = useMemo<(number | "ellipsis")[]>(() => {
-    const totalPages = Math.max(1, lastPage);
+    if (!computedLastPage) {
+      return [currentPage];
+    }
+    const totalPages = Math.max(1, computedLastPage);
     const current = Math.min(Math.max(1, currentPage), totalPages);
     if (totalPages <= 5) {
       return Array.from({ length: totalPages }, (_, index) => index + 1);
@@ -456,7 +476,8 @@ export default function AdminTours() {
 
   const handlePageChange = (nextPage: number) => {
     if (!Number.isFinite(nextPage)) return;
-    const clamped = Math.min(Math.max(1, Math.trunc(nextPage)), lastPage || 1);
+    const normalized = Math.max(1, Math.trunc(nextPage));
+    const clamped = computedLastPage ? Math.min(normalized, computedLastPage) : normalized;
     if (clamped === page) return;
     setPage(clamped);
   };
@@ -748,7 +769,7 @@ export default function AdminTours() {
           {totalTours > 0 ? (
             <div className="flex flex-col gap-4 px-4 py-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
               <span>
-                Hiển thị {displayStart}-{displayEnd} trên tổng {totalTours} tour
+                Hiển thị {displayStart}-{displayEnd} trên tổng {totalDisplayLabel} tour
               </span>
               <Pagination className="w-auto gap-2 md:mx-0 md:justify-end">
                 <PaginationContent>
@@ -1058,4 +1079,3 @@ export default function AdminTours() {
     </div>
   );
 }
-

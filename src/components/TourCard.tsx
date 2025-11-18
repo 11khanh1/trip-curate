@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { useAnalytics } from "@/hooks/useAnalytics";
 import { useUser } from "@/context/UserContext";
 import { addWishlistItem, removeWishlistItem, type WishlistItem } from "@/services/wishlistApi";
 
@@ -47,6 +48,7 @@ const TourCard = ({
   const { currentUser } = useUser();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { trackEvent } = useAnalytics();
   const userWishlistKey = ["wishlist", currentUser?.id != null ? String(currentUser.id) : "guest"] as const;
   const [wishlistItemId, setWishlistItemId] = useState<string | null>(null);
 
@@ -91,6 +93,17 @@ const TourCard = ({
         return [item, ...filtered];
       });
       queryClient.invalidateQueries({ queryKey: ["wishlist"] });
+      trackEvent(
+        {
+          event_name: "wishlist_add",
+          entity_type: "tour",
+          entity_id: String(id),
+          metadata: {
+            source: "tour_card",
+          },
+        },
+        { immediate: true },
+      );
       toast({
         title: "Đã thêm vào yêu thích",
         description: "Tour đã được lưu trong mục Wishlist của bạn.",
@@ -117,6 +130,17 @@ const TourCard = ({
         (previous ?? []).filter((entry) => entry.id !== removedId),
       );
       queryClient.invalidateQueries({ queryKey: ["wishlist"] });
+      trackEvent(
+        {
+          event_name: "wishlist_remove",
+          entity_type: "tour",
+          entity_id: String(id),
+          metadata: {
+            source: "tour_card",
+          },
+        },
+        { immediate: true },
+      );
       toast({
         title: "Đã xoá khỏi yêu thích",
         description: "Tour đã được gỡ khỏi danh sách Wishlist.",

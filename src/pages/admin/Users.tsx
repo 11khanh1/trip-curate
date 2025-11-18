@@ -37,7 +37,7 @@ const TOGGLE_ACTION_LABELS: Record<UserStatus, string> = {
   inactive: "Kích hoạt lại",
 };
 
-const PER_PAGE_OPTIONS = [10, 20, 50] as const;
+const PER_PAGE_OPTIONS = [5, 10, 20] as const;
 
 // ✨ TỐI ƯU 1: Xử lý status mặc định an toàn hơn
 const normalizeUser = (user: AdminUser) => {
@@ -107,16 +107,36 @@ export default function AdminUsers() {
 
   const currentPage = Number(userStatsMeta.current_page ?? page) || 1;
   const serverPerPage = Number(userStatsMeta.per_page ?? perPage) || perPage;
-  const totalUsers = Number(userStatsMeta.total ?? users.length) || users.length;
-  const lastPage = Number(userStatsMeta.last_page ?? Math.max(1, Math.ceil(totalUsers / serverPerPage))) || 1;
+  const metaTotal = Number(userStatsMeta.total);
+  const hasMetaTotal = Number.isFinite(metaTotal);
+  const totalUsers = hasMetaTotal ? Number(metaTotal) : users.length;
+  const computedLastPage = Number(userStatsMeta.last_page) || (hasMetaTotal ? Math.max(1, Math.ceil(totalUsers / serverPerPage)) : NaN);
+  const lastPage = Number.isFinite(computedLastPage) ? computedLastPage : Math.max(1, currentPage);
   const rangeStart = Number(userStatsMeta.from ?? (currentPage - 1) * serverPerPage + 1) || 0;
-  const rangeEnd = Number(userStatsMeta.to ?? Math.min(totalUsers, currentPage * serverPerPage)) || 0;
+  const fallbackRangeEnd = rangeStart + Math.max(users.length - 1, 0);
+  const rangeEnd = Number(userStatsMeta.to ?? (hasMetaTotal ? Math.min(totalUsers, fallbackRangeEnd) : fallbackRangeEnd)) || 0;
+  const estimatedTotal = (currentPage - 1) * serverPerPage + users.length;
+  const displayStart = totalUsers === 0 ? 0 : Math.max(1, Math.min(rangeStart || 1, totalUsers || rangeStart));
+  const displayEnd =
+    totalUsers === 0
+      ? 0
+      : Math.min(
+          rangeEnd || displayStart,
+          hasMetaTotal ? totalUsers : Math.max(rangeEnd, estimatedTotal),
+        );
   const isFirstPage = currentPage <= 1;
-  const isLastPage = currentPage >= lastPage;
-  const displayStart = totalUsers === 0 ? 0 : Math.max(1, Math.min(rangeStart || 1, totalUsers));
-  const displayEnd = totalUsers === 0 ? 0 : Math.min(rangeEnd || displayStart, totalUsers);
+  const allowNext = Number.isFinite(computedLastPage)
+    ? currentPage < (computedLastPage as number)
+    : users.length >= serverPerPage;
+  const isLastPage = Number.isFinite(computedLastPage) ? currentPage >= (computedLastPage as number) : !allowNext;
+  const totalDisplayLabel = hasMetaTotal
+    ? totalUsers.toLocaleString("vi-VN")
+    : `${Math.max(rangeEnd, estimatedTotal).toLocaleString("vi-VN")}+`;
 
   const paginationRange = useMemo<(number | "ellipsis")[]>(() => {
+    if (!Number.isFinite(computedLastPage)) {
+      return [currentPage];
+    }
     const totalPages = lastPage;
     const current = Math.min(Math.max(1, currentPage), totalPages);
     if (totalPages <= 5) {
@@ -184,7 +204,10 @@ export default function AdminUsers() {
 
   const handlePageChange = (nextPage: number) => {
     if (!Number.isFinite(nextPage)) return;
-    const clamped = Math.min(Math.max(1, Math.trunc(nextPage)), lastPage || 1);
+    const normalized = Math.max(1, Math.trunc(nextPage));
+    const clamped = Number.isFinite(computedLastPage)
+      ? Math.min(normalized, lastPage)
+      : normalized;
     if (clamped === page) return;
     setPage(clamped);
   };
@@ -363,7 +386,7 @@ export default function AdminUsers() {
           {totalUsers > 0 ? (
             <div className="flex flex-col gap-4 px-4 py-4 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
               <span>
-                Hiển thị {displayStart}-{displayEnd} trên tổng {totalUsers} người dùng
+                Hiển thị {displayStart}-{displayEnd} trên tổng {totalDisplayLabel} người dùng
               </span>
               <Pagination className="w-auto gap-2 md:mx-0 md:justify-end">
                 <PaginationContent>

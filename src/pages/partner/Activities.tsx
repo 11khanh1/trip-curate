@@ -5,6 +5,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   Pagination,
   PaginationContent,
   PaginationEllipsis,
@@ -2305,26 +2311,73 @@ const handleMoveItinerary = (index: number, delta: number) => {
                         <Badge variant={getStatusBadge(tour.status)}>{getStatusText(tour.status)}</Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          {/* IMPROVEMENT: Thêm aria-label cho các nút icon */}
-                          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleViewTour(tour.id)} aria-label="Xem chi tiết tour">
-                            <Eye className="h-4 w-4" />
-                          </Button>
+                        <TooltipProvider delayDuration={200}>
+                          <div className="flex justify-end gap-1">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => handleViewTour(tour.id)}
+                                  aria-label="Xem chi tiết tour"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Xem chi tiết tour</TooltipContent>
+                            </Tooltip>
 
-                          {(tour.status === 'rejected') && (
-                            <Button variant="default" size="icon" className="h-8 w-8 bg-green-500 hover:bg-green-600" onClick={() => submitTourForApproval(tour.id)} aria-label="Gửi duyệt lại tour">
-                              <Send className="h-4 w-4" />
-                            </Button>
-                          )}
-                          
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditTour(tour)} disabled={tour.status === 'approved'} aria-label="Chỉnh sửa tour">
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-red-600" onClick={() => handleDeleteTour(tour.id)} disabled={tour.status === 'approved'} aria-label="Xóa tour">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
+                            {tour.status === "rejected" && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="default"
+                                    size="icon"
+                                    className="h-8 w-8 bg-green-500 hover:bg-green-600"
+                                    onClick={() => submitTourForApproval(tour.id)}
+                                    aria-label="Gửi duyệt lại tour"
+                                  >
+                                    <Send className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Gửi lại để admin duyệt</TooltipContent>
+                              </Tooltip>
+                            )}
+
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => handleEditTour(tour)}
+                                  disabled={tour.status === "approved"}
+                                  aria-label="Chỉnh sửa tour"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Chỉnh sửa tour</TooltipContent>
+                            </Tooltip>
+
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-destructive hover:text-red-600"
+                                  onClick={() => handleDeleteTour(tour.id)}
+                                  disabled={tour.status === "approved"}
+                                  aria-label="Xóa tour"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Xóa tour</TooltipContent>
+                            </Tooltip>
+                          </div>
+                        </TooltipProvider>
                       </TableCell>
                     </TableRow>
                   ))

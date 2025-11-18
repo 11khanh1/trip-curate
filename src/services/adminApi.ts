@@ -113,6 +113,12 @@ export interface AdminPartner {
   user?: {
     id?: string | number;
     status?: string;
+    name?: string | null;
+    full_name?: string | null;
+    email?: string | null;
+    mail?: string | null;
+    phone?: string | null;
+    phone_number?: string | null;
   } | null;
   [key: string]: unknown;
 }
