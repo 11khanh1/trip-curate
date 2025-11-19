@@ -34,12 +34,14 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 import {
   cancelBooking,
   confirmRefundRequest,
   createRefundRequest,
   fetchBookingDetail,
+  fetchBookingInvoice,
   fetchRefundRequests,
   initiateBookingPayment,
   requestInvoice,
@@ -378,6 +380,8 @@ const BookingDetailPage = () => {
     customer_email: "",
     delivery_method: "download" as "download" | "email",
   });
+  const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false);
+  const [invoiceDetail, setInvoiceDetail] = useState<BookingInvoice | null>(null);
   const refundSectionRef = useRef<HTMLDivElement | null>(null);
 
   const {
@@ -718,6 +722,43 @@ const BookingDetailPage = () => {
     },
   });
 
+  const invoiceDetailMutation = useMutation({
+    mutationFn: () => {
+      if (!bookingActionId) {
+        return Promise.reject(new Error("Thiếu mã booking"));
+      }
+      return fetchBookingInvoice(bookingActionId);
+    },
+    onSuccess: (data) => {
+      if (!data) {
+        toast({
+          title: "Chưa có hóa đơn",
+          description: "Hóa đơn chưa sẵn sàng hoặc đã bị gỡ.",
+        });
+        setIsInvoiceDialogOpen(false);
+        setInvoiceDetail(null);
+        return;
+      }
+      setInvoiceDetail(data);
+    },
+    onError: (error: unknown) => {
+      let message = "Không thể tải thông tin hóa đơn. Vui lòng thử lại sau.";
+      if (isAxiosError(error)) {
+        message =
+          (error.response?.data as { message?: string } | undefined)?.message ?? message;
+      } else if (error instanceof Error && error.message) {
+        message = error.message;
+      }
+      toast({
+        title: "Không thể xem hóa đơn",
+        description: message,
+        variant: "destructive",
+      });
+      setIsInvoiceDialogOpen(false);
+      setInvoiceDetail(null);
+    },
+  });
+
   const handleInitiatePayment = () => {
     if (!bookingActionId || paymentMutation.isPending) return;
     paymentMutation.mutate();
@@ -793,6 +834,33 @@ const BookingDetailPage = () => {
       return;
     }
     invoiceDownloadMutation.mutate();
+  };
+
+  const handleViewInvoice = () => {
+    if (!bookingActionId) {
+      toast({
+        title: "Thiếu mã booking",
+        description: "Không thể xem hóa đơn vì thiếu thông tin đơn đặt.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setInvoiceDetail(invoice ?? null);
+    setIsInvoiceDialogOpen(true);
+    invoiceDetailMutation.mutate();
+  };
+
+  const handleInvoiceDialogToggle = (open: boolean) => {
+    if (!open) {
+      setIsInvoiceDialogOpen(false);
+      setInvoiceDetail(null);
+      invoiceDetailMutation.reset();
+      return;
+    }
+    setIsInvoiceDialogOpen(true);
+    if (!invoiceDetail && invoice) {
+      setInvoiceDetail(invoice);
+    }
   };
 
   const contactRecord =
@@ -947,6 +1015,7 @@ const BookingDetailPage = () => {
   }, [booking?.id, booking?.refund_requests, id, refundRequestList]);
   const invoiceRecord = (bookingRecord?.["invoice"] as BookingInvoice | null) ?? null;
   const invoice = booking?.invoice ?? invoiceRecord;
+  const resolvedInvoiceDetail = invoiceDetail ?? invoice ?? null;
   const hasRefundInProgress = derivedRefundRequests.some((request) => {
     const status = (request.status ?? "").toString().trim().toLowerCase();
     return status === "pending" || status === "await_partner" || status === "await_customer_confirm";
@@ -1762,6 +1831,24 @@ const BookingDetailPage = () => {
                       <div className="flex flex-wrap gap-2">
                         <Button
                           type="button"
+                          variant="outline"
+                          onClick={handleViewInvoice}
+                          disabled={invoiceDetailMutation.isPending}
+                        >
+                          {invoiceDetailMutation.isPending ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Đang mở...
+                            </>
+                          ) : (
+                            <>
+                              <FileText className="mr-2 h-4 w-4" />
+                              Xem hóa đơn
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          type="button"
                           onClick={handleDownloadInvoice}
                           disabled={invoiceDownloadMutation.isPending}
                         >
@@ -1909,6 +1996,92 @@ const BookingDetailPage = () => {
         )}
       </main>
       <Footer />
+      <Dialog open={isInvoiceDialogOpen} onOpenChange={handleInvoiceDialogToggle}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Chi tiết hóa đơn</DialogTitle>
+            <DialogDescription>Xem thông tin hóa đơn điện tử cho booking của bạn.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 text-sm">
+            {invoiceDetailMutation.isPending && !resolvedInvoiceDetail ? (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Đang tải thông tin hóa đơn...
+              </div>
+            ) : resolvedInvoiceDetail ? (
+              <>
+                <dl className="space-y-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <dt className="text-muted-foreground">Số hóa đơn</dt>
+                    <dd className="font-medium text-foreground">
+                      {resolvedInvoiceDetail.number ?? "—"}
+                    </dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <dt className="text-muted-foreground">Trạng thái</dt>
+                    <dd className="font-medium text-foreground">
+                      {statusLabel(resolvedInvoiceDetail.status ?? undefined)}
+                    </dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <dt className="text-muted-foreground">Tổng tiền</dt>
+                    <dd className="font-semibold text-foreground">
+                      {formatCurrency(
+                        resolvedInvoiceDetail.total_amount ?? bookingTotalAmount,
+                        resolvedInvoiceDetail.currency ?? booking?.currency ?? "VND",
+                      )}
+                    </dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <dt className="text-muted-foreground">Phương thức nhận</dt>
+                    <dd className="font-medium text-foreground">
+                      {deliveryMethodLabel(resolvedInvoiceDetail.delivery_method ?? undefined)}
+                    </dd>
+                  </div>
+                  {resolvedInvoiceDetail.issued_at && (
+                    <div className="flex items-center justify-between gap-4">
+                      <dt className="text-muted-foreground">Ngày phát hành</dt>
+                      <dd className="font-medium text-foreground">
+                        {formatDateTime(resolvedInvoiceDetail.issued_at)}
+                      </dd>
+                    </div>
+                  )}
+                  {resolvedInvoiceDetail.emailed_at && (
+                    <div className="flex items-center justify-between gap-4">
+                      <dt className="text-muted-foreground">Ngày gửi email</dt>
+                      <dd className="font-medium text-foreground">
+                        {formatDateTime(resolvedInvoiceDetail.emailed_at)}
+                      </dd>
+                    </div>
+                  )}
+                </dl>
+                <Button
+                  type="button"
+                  className="w-full"
+                  onClick={handleDownloadInvoice}
+                  disabled={invoiceDownloadMutation.isPending}
+                >
+                  {invoiceDownloadMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Đang tải...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="mr-2 h-4 w-4" />
+                      Tải hóa đơn
+                    </>
+                  )}
+                </Button>
+              </>
+            ) : (
+              <p className="text-muted-foreground">
+                Không tìm thấy thông tin hóa đơn cho booking này.
+              </p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
