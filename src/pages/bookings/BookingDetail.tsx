@@ -55,6 +55,8 @@ import {
   type RefundRequestStatus,
 } from "@/services/bookingApi";
 import { useToast } from "@/hooks/use-toast";
+import { useUser } from "@/context/UserContext";
+import { logUserActivity } from "@/services/userActivityLogService";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import {
   coalesceString,
@@ -358,6 +360,7 @@ const BookingDetailPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { currentUser } = useUser();
   const { trackEvent } = useAnalytics();
   const [refundForm, setRefundForm] = useState({
     bank_account_name: "",
@@ -435,6 +438,16 @@ const BookingDetailPage = () => {
           },
           { immediate: true },
         );
+        logUserActivity({
+          action: "booking_cancelled",
+          tourId: resolvedTourId,
+          userId: currentUser?.id ?? null,
+          metadata: {
+            booking_id: booking?.id ? String(booking.id) : bookingActionId ?? undefined,
+            refund_amount: response?.refund?.amount,
+            refund_rate: response?.refund?.rate,
+          },
+        });
       }
       queryClient.invalidateQueries({ queryKey: ["booking-detail", id] });
       queryClient.invalidateQueries({ queryKey: ["bookings"] });

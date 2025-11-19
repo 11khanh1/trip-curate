@@ -67,6 +67,7 @@ import {
   type TourReview,
   type TourReviewListResponse,
 } from "@/services/reviewApi";
+import { logUserActivity } from "@/services/userActivityLogService";
 import SimilarTourRecommendations from "@/components/recommendations/SimilarTourRecommendations";
 
 
@@ -899,6 +900,12 @@ const ActivityDetail = () => {
           },
           { immediate: true },
         );
+        logUserActivity({
+          action: "wishlist_add",
+          tourId: resolvedTourEntityId,
+          userId: currentUser?.id ?? null,
+          metadata: { source: "activity_detail" },
+        });
       }
     },
     onError: (error: unknown) => {
@@ -1000,9 +1007,15 @@ useEffect(() => {
     },
     { immediate: true },
   );
+  logUserActivity({
+    action: "tour_view",
+    tourId: resolvedTourEntityId,
+    userId: currentUser?.id ?? null,
+    metadata: { source: "activity_detail" },
+  });
 
   hasLoggedViewRef.current = true;
-}, [resolvedTourEntityId, tourDetail, trackEvent]);
+}, [currentUser?.id, resolvedTourEntityId, tourDetail, trackEvent]);
 
   const tourTypeDisplay = useMemo(
     () => resolveTourTypeLabel(activity?.tourClassification ?? activity?.tourType ?? null),

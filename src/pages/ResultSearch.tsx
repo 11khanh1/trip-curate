@@ -5,7 +5,6 @@ import { SlidersHorizontal, Sparkles, TrendingUp, Wallet, MapPin } from "lucide-
 
 import TravelHeader from "@/components/TravelHeader";
 import Footer from "@/components/Footer";
-import { TabNavigation } from "@/components/search/TabNavigation";
 import {
   FilterSidebarKlook,
   type SearchFilterState,
@@ -368,6 +367,11 @@ const ResultSearch = () => {
   const isFirstPage = currentPage <= 1;
   const isLastPage = currentPage >= lastPage;
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [currentPage]);
+
   const paginationRange = useMemo<(number | "ellipsis")[]>(() => {
     if (lastPage <= 5) {
       return Array.from({ length: lastPage }, (_, index) => index + 1);
@@ -385,17 +389,35 @@ const ResultSearch = () => {
     return range;
   }, [currentPage, lastPage]);
 
-  const handleSortChange = (value: string) => {
-    setSortBy(value);
-    setPage(1);
-  };
+  const handleSortChange = useCallback(
+    (value: string) => {
+      setSortBy(value);
+      setPage(1);
+      const params = new URLSearchParams(searchParams);
+      const mappedSort = sortMapping[value];
+      if (mappedSort) {
+        params.set("sort", mappedSort);
+      } else {
+        params.delete("sort");
+      }
+      params.set("page", "1");
+      setSearchParams(params, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
 
-  const handlePageChange = (nextPage: number) => {
-    if (!Number.isFinite(nextPage)) return;
-    const clamped = Math.min(Math.max(1, Math.trunc(nextPage)), lastPage);
-    if (clamped === page) return;
-    setPage(clamped);
-  };
+  const handlePageChange = useCallback(
+    (nextPage: number) => {
+      if (!Number.isFinite(nextPage)) return;
+      const clamped = Math.min(Math.max(1, Math.trunc(nextPage)), lastPage);
+      if (clamped === page) return;
+      setPage(clamped);
+      const params = new URLSearchParams(searchParams);
+      params.set("page", String(clamped));
+      setSearchParams(params, { replace: true });
+    },
+    [lastPage, page, searchParams, setSearchParams],
+  );
 
   const activeFilters = useMemo(() => {
     const chips: string[] = [];
@@ -435,8 +457,22 @@ const ResultSearch = () => {
     return chips;
   }, [filters, keyword]);
 
+  const sortedTours = useMemo(() => {
+    if (!toursData.length) return toursData;
+    if (sortBy === "price_low" || sortBy === "price_high") {
+      const clone = [...toursData];
+      clone.sort((a, b) => {
+        const priceA = getTourStartingPrice(a);
+        const priceB = getTourStartingPrice(b);
+        return priceA - priceB;
+      });
+      return sortBy === "price_low" ? clone : clone.reverse();
+    }
+    return toursData;
+  }, [toursData, sortBy]);
+
   const mappedActivities =
-    toursData.length > 0 ? toursData.map(mapTourToActivityCard) : [];
+    sortedTours.length > 0 ? sortedTours.map(mapTourToActivityCard) : [];
 
   const priceStats = useMemo(() => {
     const prices = toursData
@@ -453,8 +489,6 @@ const ResultSearch = () => {
   return (
     <div className="min-h-screen bg-muted/40 flex flex-col">
       <TravelHeader />
-      <TabNavigation />
-
       <header className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-orange-200 via-white to-white" />
         <div className="relative z-10">
@@ -479,19 +513,6 @@ const ResultSearch = () => {
                       {filter}
                     </Badge>
                   ))}
-                </div>
-                <div className="flex flex-wrap items-center gap-3 pt-2">
-                  <Button
-                    variant="default"
-                    className="rounded-full bg-primary px-5"
-                    onClick={() => setShowFilters(true)}
-                  >
-                    <SlidersHorizontal className="mr-2 h-4 w-4" />
-                    Mở bộ lọc nâng cao
-                  </Button>
-                  <Button variant="ghost" className="rounded-full border border-transparent px-5">
-                    Lưu tìm kiếm
-                  </Button>
                 </div>
               </div>
 
@@ -534,16 +555,7 @@ const ResultSearch = () => {
 
       <main className="container mx-auto flex-1 px-4 py-6">
         <div className="flex flex-col gap-6 lg:flex-row">
-          <div className="lg:hidden">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowFilters((prev) => !prev)}
-              className="flex w-full items-center justify-center gap-2"
-            >
-              <SlidersHorizontal className="h-4 w-4" /> Bộ lọc
-            </Button>
-          </div>
+          <div className="lg:hidden" />
 
           <aside className={`${showFilters ? "block" : "hidden"} lg:block lg:w-80 lg:flex-shrink-0 lg:sticky lg:top-24`}>
             <FilterSidebarKlook

@@ -30,6 +30,7 @@ import { Info, Loader2 } from "lucide-react";
 import { isAxiosError } from "axios";
 import { useToast } from "@/hooks/use-toast";
 import { useCart } from "@/context/CartContext";
+import { useUser } from "@/context/UserContext";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { useRecommendationRealtimeRefresh } from "@/hooks/useRecommendationRealtimeRefresh";
 import {
@@ -49,6 +50,7 @@ import {
   normalizeCitizenId,
   normalizeVietnamPhone,
 } from "@/lib/validators";
+import { logUserActivity } from "@/services/userActivityLogService";
 
 const extractOrderCode = (url: string): string | null => {
   try {
@@ -371,6 +373,7 @@ const BookingCheckout = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { removeItem } = useCart();
+  const { currentUser } = useUser();
   const { trackEvent } = useAnalytics();
   const scheduleRecommendationRefresh = useRecommendationRealtimeRefresh();
   const [searchParams] = useSearchParams();
@@ -827,6 +830,16 @@ const BookingCheckout = () => {
           { immediate: true },
         );
         scheduleRecommendationRefresh();
+        logUserActivity({
+          action: "booking_created",
+          tourId: resolvedTourEntityId,
+          userId: currentUser?.id ?? null,
+          metadata: {
+            booking_id: bookingIdentifier ?? undefined,
+            payment_method: payload.payment_method,
+            total_amount: normalizedTotalAmount,
+          },
+        });
       }
 
       const invalidatePromises: Array<Promise<unknown>> = [

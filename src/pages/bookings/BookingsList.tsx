@@ -55,6 +55,8 @@ import {
   type UpdateReviewPayload,
 } from "@/services/reviewApi";
 import { useToast } from "@/hooks/use-toast";
+import { useUser } from "@/context/UserContext";
+import { logUserActivity } from "@/services/userActivityLogService";
 import { useAnalytics } from "@/hooks/useAnalytics";
 
 const STATUS_OPTIONS: Array<{ value: string; label: string }> = [
@@ -439,6 +441,7 @@ const BookingsList = () => {
   const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { currentUser } = useUser();
   const { trackEvent } = useAnalytics();
   const [reviewDialog, setReviewDialog] = useState<ReviewDialogState>({
     booking: null,
@@ -479,6 +482,14 @@ const BookingsList = () => {
           },
           { immediate: true },
         );
+        logUserActivity({
+          action: "review_submitted",
+          tourId: resolvedTourId,
+          userId: currentUser?.id ?? null,
+          metadata: {
+            booking_id: reviewBooking?.id ? String(reviewBooking.id) : undefined,
+          },
+        });
       }
       toast({
         title: "Cảm ơn bạn đã đánh giá",
@@ -651,6 +662,16 @@ const BookingsList = () => {
           { immediate: true },
         );
       }
+      logUserActivity({
+        action: "booking_cancelled",
+        tourId: variables?.tourId ?? null,
+        userId: currentUser?.id ?? null,
+        metadata: {
+          booking_id: variables.bookingId,
+          refund_amount: refund?.amount,
+          refund_rate: refund?.rate,
+        },
+      });
       queryClient.invalidateQueries({ queryKey: ["bookings"] });
     },
     onError: (error: unknown) => {

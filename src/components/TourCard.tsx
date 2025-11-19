@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { useUser } from "@/context/UserContext";
 import { addWishlistItem, removeWishlistItem, type WishlistItem } from "@/services/wishlistApi";
+import { logUserActivity } from "@/services/userActivityLogService";
 
 interface TourCardProps {
   id: string;
@@ -93,6 +94,12 @@ const TourCard = ({
         return [item, ...filtered];
       });
       queryClient.invalidateQueries({ queryKey: ["wishlist"] });
+      logUserActivity({
+        action: "wishlist_add",
+        tourId: id,
+        userId: currentUser?.id ?? null,
+        metadata: { source: "tour_card" },
+      });
       trackEvent(
         {
           event_name: "wishlist_add",

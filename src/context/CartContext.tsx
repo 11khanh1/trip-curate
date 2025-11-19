@@ -20,6 +20,7 @@ import {
 import type { AutoPromotion, CancellationPolicy, PublicTour, TourType } from "@/services/publicApi";
 import { applyAutoPromotionToPrice, getTourPriceInfo } from "@/lib/tour-utils";
 import { useAnalytics } from "@/hooks/useAnalytics";
+import { logUserActivity } from "@/services/userActivityLogService";
 import { useUser } from "./UserContext";
 
 export interface CartItem {
@@ -665,6 +666,18 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
           total_price: matchedItem?.totalPrice ?? fallbackTotal,
           original_total_price: matchedItem?.originalTotalPrice ?? fallbackOriginal ?? undefined,
           promotion_label: matchedItem?.promotionLabel ?? input.promotionLabel ?? undefined,
+        });
+        logUserActivity({
+          action: "cart_add",
+          tourId: matchedItem?.tourId ?? input.tourId,
+          userId: currentUser?.id ?? null,
+          metadata: {
+            cart_item_id: matchedItem?.id,
+            package_id: input.packageId,
+            schedule_id: input.scheduleId ?? null,
+            adults: normalizedAdults,
+            children: normalizedChildren,
+          },
         });
         setError(null);
       } catch (err) {
