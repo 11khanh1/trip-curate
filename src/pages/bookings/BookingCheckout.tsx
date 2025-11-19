@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -379,6 +379,7 @@ const BookingCheckout = () => {
   const [searchParams] = useSearchParams();
   const [sepayPanel, setSepayPanel] = useState<SepayPanelState | null>(null);
   const [shouldPollSepayStatus, setShouldPollSepayStatus] = useState(false);
+  const sepaySuccessToastRef = useRef(false);
   const {
     data: profile,
     isLoading: isProfileLoading,
@@ -944,6 +945,17 @@ const BookingCheckout = () => {
         }
       }
 
+      toast({
+        title:
+          payload.payment_method === "sepay"
+            ? "Thanh toán thành công"
+            : "Đặt tour thành công",
+        description:
+          payload.payment_method === "sepay"
+            ? "Chúng tôi đã ghi nhận giao dịch và sẽ cập nhật chi tiết đơn ngay sau ít phút."
+            : "Chúng tôi đã gửi email xác nhận đơn của bạn. Bạn có thể theo dõi tiến trình trong mục Đơn của tôi.",
+      });
+
       if (response?.booking?.id) {
         navigate(`/bookings/${response.booking.id}`);
       } else {
@@ -984,17 +996,27 @@ const BookingCheckout = () => {
   const isSepayPaymentFetching = sepayPaymentQuery.isFetching;
   const sepayPaymentError = sepayPaymentQuery.error;
 
-  useEffect(() => {
-    if (!sepayPanel?.bookingId) return;
-    const normalized = normalizeStatus(sepayPaymentStatus?.status ?? sepayPaymentStatus?.payment?.status);
-    if (SUCCESS_STATUSES.has(normalized)) {
-      const timer = window.setTimeout(() => {
-        navigate(`/bookings/${sepayPanel.bookingId}`);
-      }, 2000);
-      return () => window.clearTimeout(timer);
+useEffect(() => {
+  if (!sepayPanel?.bookingId) {
+    sepaySuccessToastRef.current = false;
+    return;
+  }
+  const normalized = normalizeStatus(sepayPaymentStatus?.status ?? sepayPaymentStatus?.payment?.status);
+  if (SUCCESS_STATUSES.has(normalized)) {
+    if (!sepaySuccessToastRef.current) {
+      toast({
+        title: "Thanh toán thành công",
+        description: "Chúng tôi đã ghi nhận giao dịch của bạn và sẽ cập nhật thông tin đơn trong giây lát.",
+      });
+      sepaySuccessToastRef.current = true;
     }
-    return undefined;
-  }, [navigate, sepayPanel?.bookingId, sepayPaymentStatus?.payment?.status, sepayPaymentStatus?.status]);
+    const timer = window.setTimeout(() => {
+      navigate(`/bookings/${sepayPanel.bookingId}`);
+    }, 2000);
+    return () => window.clearTimeout(timer);
+  }
+  return undefined;
+}, [navigate, sepayPanel?.bookingId, sepayPaymentStatus?.payment?.status, sepayPaymentStatus?.status, toast]);
 
   useEffect(() => {
     if (isAxiosError(sepayPaymentError) && sepayPaymentError.response?.status === 404) {

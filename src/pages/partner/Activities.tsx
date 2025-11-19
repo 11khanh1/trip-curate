@@ -76,6 +76,20 @@ interface ItineraryItem {
   detail: string;
 }
 
+const extractArray = (value: unknown): unknown[] => {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    for (const key of ["data", "items", "results", "records", "rows"]) {
+      if (Array.isArray(record[key])) {
+        return record[key] as unknown[];
+      }
+    }
+  }
+  return [];
+};
+
 interface Tour {
   id: string;
   title: string;
@@ -85,7 +99,7 @@ interface Tour {
   policy: string;
   tags: string[];
   media: string[];
-  itinerary: string[];
+  itinerary: ItineraryItem[];
   itinerary_type?: ItineraryType | string | null;
   type?: string | null;
   child_age_limit?: number | null;
@@ -99,6 +113,8 @@ interface Tour {
     seats_available: number;
     season_price: number;
     min_participants?: number | null;
+    bookings_count?: number | null;
+    has_booking?: boolean | null;
   } | null;
   schedules?: Array<{
     id?: string;
@@ -110,6 +126,8 @@ interface Tour {
     min_participants?: number | null;
     created_at?: string | null;
     updated_at?: string | null;
+    bookings_count?: number | null;
+    has_booking?: boolean | null;
   }>;
   packages?: Array<{
     id?: string;
@@ -143,6 +161,8 @@ type FormSchedule = {
   seats_available: number;
   season_price: number;
   min_participants: number;
+  bookings_count?: number | null;
+  has_booking?: boolean | null;
 };
 
 type FormPackage = {
@@ -252,6 +272,7 @@ export default function PartnerActivities() {
   const baseFormDefaults = useMemo(() => createInitialFormData(), []);
   const [formData, setFormData] = useState<FormData>(() => createInitialFormData());
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isFormLoading, setIsFormLoading] = useState(false);
 
   const showToast = useCallback(
     ({ title, description, variant }: { title: string; description?: string; variant?: "default" | "destructive" }) => {
@@ -333,149 +354,39 @@ export default function PartnerActivities() {
     return fallback;
   };
 
-  const normalizeSchedule = (raw: any) => {
-    if (!raw || typeof raw !== "object") return null;
-    return {
-      id: raw.id ? String(raw.id) : undefined,
-      start_date: raw.start_date ? String(raw.start_date) : "",
-      end_date: raw.end_date ? String(raw.end_date) : "",
-    seats_total: coerceNumber(raw.seats_total, 0) ?? 0,
-    seats_available: coerceNumber(raw.seats_available, 0) ?? 0,
-    season_price: coerceNumber(raw.season_price, 0) ?? 0,
-    min_participants: coerceNumber(raw.min_participants, 1) ?? 1,
-    created_at: raw.created_at ? String(raw.created_at) : undefined,
-    updated_at: raw.updated_at ? String(raw.updated_at) : undefined,
-  };
-};
+  const parseItineraryEntries = (itinerary: unknown): ItineraryItem[] => {
+    const ensureFallback = (): ItineraryItem[] => [
+      {
+        day: 1,
+        title: "Hành trình đang cập nhật",
+        detail: "Chưa có thông tin chi tiết.",
+      },
+    ];
 
-  const normalizeTourFromAPI = (t: any): Tour => {
-    const media = toStringArray(t.media);
-    const itineraryRaw = Array.isArray(t.itinerary) ? t.itinerary : toStringArray(t.itinerary);
-    const schedulesArray = Array.isArray(t.schedules) ? t.schedules.map(normalizeSchedule).filter(Boolean) : [];
-    const fallbackSchedule = normalizeSchedule(t.schedule);
-    const primarySchedule = schedulesArray.length > 0 ? schedulesArray[0] : fallbackSchedule;
-
-    const itineraryStrings = Array.isArray(itineraryRaw)
-      ? itineraryRaw.map((item) => {
-          if (typeof item === "string") return item;
-          if (item && typeof item === "object") {
-            const record = item as Record<string, unknown>;
-            const day = coerceNumber(record.day) ?? null;
-            const title = typeof record.title === "string" ? record.title : typeof record.name === "string" ? record.name : "";
-            const detail =
-              typeof record.detail === "string"
-                ? record.detail
-                : typeof record.description === "string"
-                ? record.description
-                : "";
-            const prefix = day !== null ? `Ngày ${day}: ` : "";
-            return `${prefix}${title}${detail ? ` - ${detail}` : ""}`.trim();
+    const toArray = (raw: unknown): unknown[] => {
+      if (typeof raw === "string") {
+        const trimmed = raw.trim();
+        if (!trimmed) return [];
+        if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+          try {
+            const parsed = JSON.parse(trimmed);
+            if (Array.isArray(parsed)) return parsed;
+          } catch {
+            // fall through to split logic
           }
-          return "";
-        })
-      : [];
-
-    const rawItineraryType =
-      typeof t.itinerary_type === "string" ? t.itinerary_type.toLowerCase().trim() : null;
-    const normalizedItineraryType: ItineraryType | null =
-      rawItineraryType === "single-day" || rawItineraryType === "multi-day"
-        ? (rawItineraryType as ItineraryType)
-        : null;
-
-    return {
-      id: String(t.id ?? t.uuid ?? ""),
-      title: t.title || "",
-      description: t.description || "",
-      destination: t.destination || "",
-      base_price: Number(t.base_price ?? 0),
-      policy: t.policy || "",
-      tags: toStringArray(t.tags),
-      media,
-      itinerary: itineraryStrings.filter(Boolean),
-      itinerary_type: normalizedItineraryType,
-      schedule: primarySchedule,
-      schedules: schedulesArray.length > 0 ? (schedulesArray as NonNullable<typeof schedulesArray>) : fallbackSchedule ? [fallbackSchedule] : [],
-      packages: Array.isArray(t.packages) ? (t.packages as any[]).map((pkg) => ({
-        id: pkg?.id ? String(pkg.id) : undefined,
-        name: typeof pkg?.name === "string" ? pkg.name : null,
-        description: typeof pkg?.description === "string" ? pkg.description : null,
-        adult_price: coerceNumber(pkg?.adult_price, null),
-        child_price: coerceNumber(pkg?.child_price, null),
-        is_active: coerceBoolean(pkg?.is_active, true),
-        created_at: pkg?.created_at ? String(pkg.created_at) : null,
-        updated_at: pkg?.updated_at ? String(pkg.updated_at) : null,
-      })) : [],
-      cancellation_policies: Array.isArray(t.cancellation_policies)
-        ? (t.cancellation_policies as any[]).map((policy) => ({
-            id: policy?.id ? String(policy.id) : undefined,
-            days_before: coerceNumber(policy?.days_before, null),
-            refund_rate: coerceNumber(policy?.refund_rate, null),
-            description: typeof policy?.description === "string" ? policy.description : null,
-          }))
-        : [],
-      categories: Array.isArray(t.categories)
-        ? (t.categories as any[]).map((category) => ({
-            id: category?.id ? String(category.id) : undefined,
-            name: typeof category?.name === "string" ? category.name : null,
-            slug: typeof category?.slug === "string" ? category.slug : null,
-          }))
-        : [],
-      type: typeof t.type === "string" ? t.type : null,
-      child_age_limit: coerceNumber(t.child_age_limit, null),
-      requires_passport: coerceBoolean(t.requires_passport, false),
-      requires_visa: coerceBoolean(t.requires_visa, false),
-      status: (t.status as Tour["status"]) || "pending",
+        }
+        return trimmed
+          .split(/\n+/)
+          .map((line) => line.trim())
+          .filter(Boolean);
+      }
+      return extractArray(raw);
     };
-  };
 
-const extractToursFromResponse = (payload: any): any[] => {
-  if (!payload) return [];
-  if (Array.isArray(payload)) return payload;
-  if (Array.isArray(payload.data)) return payload.data;
-  if (Array.isArray(payload.tours)) return payload.tours;
-  if (Array.isArray(payload?.data?.data)) return payload.data.data;
-  if (Array.isArray(payload?.data?.tours)) return payload.data.tours;
-  return [];
-};
+    const normalizedArray = toArray(itinerary);
+    if (normalizedArray.length === 0) return ensureFallback();
 
-const fetchTours = async () => {
-  setIsLoading(true);
-  try {
-    const res = await apiClient.get(PARTNER_TOUR_ENDPOINT);
-    const raw = extractToursFromResponse(res.data);
-    const normalized: Tour[] = raw.map(normalizeTourFromAPI);
-    setTours(normalized);
-  } catch (err: any) {
-    console.error("Error fetching tours:", err);
-    showToast({
-      title: "Lỗi tải Tour",
-      description: err?.response?.data?.message || "Không thể tải danh sách tour.",
-      variant: "destructive",
-    });
-  } finally {
-    setIsLoading(false);
-  }
-};
-
-useEffect(() => { fetchTours(); }, []);
-
-  useEffect(() => {
-    setTourPage(1);
-  }, [tourPerPage]);
-
-  useEffect(() => {
-    setTourPage((prev) => {
-      const nextTotalPages = Math.max(1, Math.ceil(tours.length / tourPerPage));
-      return Math.min(prev, nextTotalPages);
-    });
-  }, [tours.length, tourPerPage]);
-  
-  const parseItineraryString = (itinerary: unknown): ItineraryItem[] => {
-    if (!Array.isArray(itinerary) || itinerary.length === 0) {
-      return [{ day: 1, title: "Hành trình đang cập nhật", detail: "Chưa có thông tin chi tiết." }];
-    }
-
-    return itinerary.map((entry, index) => {
+    return normalizedArray.map((entry, index) => {
       if (entry && typeof entry === "object") {
         const record = entry as Record<string, unknown>;
         const day = coerceNumber(record.day, index + 1) ?? index + 1;
@@ -538,6 +449,144 @@ useEffect(() => { fetchTours(); }, []);
     });
   };
 
+  const normalizeSchedule = (raw: any) => {
+    if (!raw || typeof raw !== "object") return null;
+    const bookingsCount = coerceNumber(raw.bookings_count, null);
+    const hasBookingFlag =
+      typeof raw.has_booking === "boolean"
+        ? raw.has_booking
+        : bookingsCount !== null
+        ? bookingsCount > 0
+        : undefined;
+    return {
+      id: raw.id ? String(raw.id) : undefined,
+      start_date: raw.start_date ? String(raw.start_date) : "",
+      end_date: raw.end_date ? String(raw.end_date) : "",
+      seats_total: coerceNumber(raw.seats_total, 0) ?? 0,
+      seats_available: coerceNumber(raw.seats_available, 0) ?? 0,
+      season_price: coerceNumber(raw.season_price, 0) ?? 0,
+      min_participants: coerceNumber(raw.min_participants, 1) ?? 1,
+      bookings_count: bookingsCount,
+      has_booking: hasBookingFlag,
+      created_at: raw.created_at ? String(raw.created_at) : undefined,
+      updated_at: raw.updated_at ? String(raw.updated_at) : undefined,
+    };
+  };
+
+  const normalizeTourFromAPI = (t: any): Tour => {
+    const media = toStringArray(t.media);
+    const itineraryItems = parseItineraryEntries(
+      t?.itinerary ??
+        t?.itinerary_items ??
+        t?.itineraryEntries ??
+        (typeof t?.itinerary_json === "string" ? t.itinerary_json : undefined),
+    );
+    const scheduleEntries = extractArray(
+      t?.schedules ??
+        (t as Record<string, unknown>)?.schedules_list ??
+        (t as Record<string, unknown>)?.schedule_items,
+    );
+    const schedulesArray = scheduleEntries.map(normalizeSchedule).filter(Boolean);
+    const fallbackSchedule = normalizeSchedule(t.schedule);
+    const primarySchedule = schedulesArray.length > 0 ? schedulesArray[0] : fallbackSchedule;
+
+    const rawItineraryType =
+      typeof t.itinerary_type === "string" ? t.itinerary_type.toLowerCase().trim() : null;
+    const normalizedItineraryType: ItineraryType | null =
+      rawItineraryType === "single-day" || rawItineraryType === "multi-day"
+        ? (rawItineraryType as ItineraryType)
+        : null;
+
+    return {
+      id: String(t.id ?? t.uuid ?? ""),
+      title: t.title || "",
+      description: t.description || "",
+      destination: t.destination || "",
+      base_price: Number(t.base_price ?? 0),
+      policy: t.policy || "",
+      tags: toStringArray(t.tags),
+      media,
+      itinerary: itineraryItems,
+      itinerary_type: normalizedItineraryType,
+      schedule: primarySchedule,
+      schedules: schedulesArray.length > 0 ? (schedulesArray as NonNullable<typeof schedulesArray>) : fallbackSchedule ? [fallbackSchedule] : [],
+      packages: (extractArray(t.packages) as any[]).map((pkg) => ({
+        id: pkg?.id ? String(pkg.id) : undefined,
+        name: typeof pkg?.name === "string" ? pkg.name : null,
+        description: typeof pkg?.description === "string" ? pkg.description : null,
+        adult_price: coerceNumber(pkg?.adult_price, null),
+        child_price: coerceNumber(pkg?.child_price, null),
+        is_active: coerceBoolean(pkg?.is_active, true),
+        created_at: pkg?.created_at ? String(pkg.created_at) : null,
+        updated_at: pkg?.updated_at ? String(pkg.updated_at) : null,
+      })),
+      cancellation_policies: (extractArray(t.cancellation_policies) as any[]).map((policy) => ({
+        id: policy?.id ? String(policy.id) : undefined,
+        days_before: coerceNumber(policy?.days_before, null),
+        refund_rate: coerceNumber(policy?.refund_rate, null),
+        description: typeof policy?.description === "string" ? policy.description : null,
+      })),
+      categories: (extractArray(t.categories) as any[]).map((category) => ({
+        id: category?.id ? String(category.id) : undefined,
+        name: typeof category?.name === "string" ? category.name : null,
+        slug: typeof category?.slug === "string" ? category.slug : null,
+      })),
+      type: typeof t.type === "string" ? t.type : null,
+      child_age_limit: coerceNumber(t.child_age_limit, null),
+      requires_passport: coerceBoolean(t.requires_passport, false),
+      requires_visa: coerceBoolean(t.requires_visa, false),
+      status: (t.status as Tour["status"]) || "pending",
+    };
+  };
+
+const extractToursFromResponse = (payload: any): any[] => {
+  if (!payload) return [];
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload.data)) return payload.data;
+  if (Array.isArray(payload.tours)) return payload.tours;
+  if (Array.isArray(payload?.data?.data)) return payload.data.data;
+  if (Array.isArray(payload?.data?.tours)) return payload.data.tours;
+  return [];
+};
+
+const fetchTours = async () => {
+  setIsLoading(true);
+  try {
+    const res = await apiClient.get(PARTNER_TOUR_ENDPOINT);
+    const raw = extractToursFromResponse(res.data);
+    const normalized: Tour[] = raw.map(normalizeTourFromAPI);
+    setTours(normalized);
+  } catch (err: any) {
+    console.error("Error fetching tours:", err);
+    showToast({
+      title: "Lỗi tải Tour",
+      description: err?.response?.data?.message || "Không thể tải danh sách tour.",
+      variant: "destructive",
+    });
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+useEffect(() => { fetchTours(); }, []);
+
+const fetchTourDetail = useCallback(async (id: string): Promise<Tour> => {
+  const res = await apiClient.get(`${PARTNER_TOUR_ENDPOINT}/${id}`);
+  const raw = res.data?.tour ?? res.data;
+  return normalizeTourFromAPI(raw);
+}, []);
+
+  useEffect(() => {
+    setTourPage(1);
+  }, [tourPerPage]);
+
+  useEffect(() => {
+    setTourPage((prev) => {
+      const nextTotalPages = Math.max(1, Math.ceil(tours.length / tourPerPage));
+      return Math.min(prev, nextTotalPages);
+    });
+  }, [tours.length, tourPerPage]);
+  
   const detectItineraryType = (items: ItineraryItem[]): ItineraryType => {
     if (!items || items.length === 0) return "multi-day";
     const timePattern = /^([01]?\d|2[0-3])(:[0-5]\d)?(\s*(am|pm))?$/i;
@@ -558,9 +607,7 @@ useEffect(() => { fetchTours(); }, []);
     return items.length > 1 ? "multi-day" : "single-day";
   };
 
-  const selectedTourItineraryItems = selectedTour
-    ? parseItineraryString(selectedTour.itinerary)
-    : [];
+  const selectedTourItineraryItems = selectedTour ? parseItineraryEntries(selectedTour.itinerary) : [];
 
   const selectedTourItineraryType: ItineraryType =
     selectedTour &&
@@ -654,9 +701,10 @@ useEffect(() => { fetchTours(); }, []);
   }, []); 
 
   useEffect(() => {
+    if (isFormLoading) return;
     const defaults = baseFormDefaults;
     if (editingTour) {
-      const parsedItinerary = parseItineraryString(editingTour.itinerary);
+      const parsedItinerary = parseItineraryEntries(editingTour.itinerary);
       const schedulesForForm: FormSchedule[] =
         Array.isArray(editingTour.schedules) && editingTour.schedules.length > 0
           ? editingTour.schedules.map((schedule) => ({
@@ -670,6 +718,16 @@ useEffect(() => { fetchTours(); }, []);
                 typeof schedule?.min_participants === "number" && Number.isFinite(schedule.min_participants)
                   ? Math.max(1, Math.trunc(schedule.min_participants))
                   : 1,
+              bookings_count:
+                typeof schedule?.bookings_count === "number" && Number.isFinite(schedule.bookings_count)
+                  ? schedule.bookings_count
+                  : null,
+              has_booking:
+                typeof schedule?.has_booking === "boolean"
+                  ? schedule.has_booking
+                  : typeof schedule?.bookings_count === "number"
+                  ? schedule.bookings_count > 0
+                  : null,
             }))
           : editingTour.schedule
           ? [
@@ -689,6 +747,17 @@ useEffect(() => { fetchTours(); }, []);
                   Number.isFinite(editingTour.schedule.min_participants)
                     ? Math.max(1, Math.trunc(editingTour.schedule.min_participants))
                     : 1,
+                bookings_count:
+                  typeof editingTour.schedule.bookings_count === "number" &&
+                  Number.isFinite(editingTour.schedule.bookings_count)
+                    ? editingTour.schedule.bookings_count
+                    : null,
+                has_booking:
+                  typeof editingTour.schedule.has_booking === "boolean"
+                    ? editingTour.schedule.has_booking
+                    : typeof editingTour.schedule.bookings_count === "number"
+                    ? editingTour.schedule.bookings_count > 0
+                    : null,
               },
             ]
           : defaults.schedules.map((schedule) => ({ ...schedule }));
@@ -744,7 +813,13 @@ useEffect(() => { fetchTours(); }, []);
         tagsString: Array.isArray(editingTour.tags) ? editingTour.tags.join(", ") : "",
         imageUrlsString: Array.isArray(editingTour.media) ? editingTour.media.join("\n") : "",
         itineraryItems:
-          parsedItinerary.length > 0 ? parsedItinerary : defaults.itineraryItems.map((item) => ({ ...item })),
+          parsedItinerary.length > 0
+            ? parsedItinerary.map((item, idx) => ({
+                day: item.day ?? idx + 1,
+                title: item.title ?? `Hoạt động ngày ${idx + 1}`,
+                detail: item.detail ?? "Chưa có chi tiết.",
+              }))
+            : defaults.itineraryItems.map((item) => ({ ...item })),
         itineraryType: detectedItineraryType,
         type: editingTour.type ?? defaults.type,
         child_age_limit:
@@ -763,7 +838,7 @@ useEffect(() => { fetchTours(); }, []);
     } else {
       setFormData(createInitialFormData());
     }
-  }, [editingTour, baseFormDefaults]);
+  }, [editingTour, baseFormDefaults, isFormLoading]);
 
   // ---------------------------- HANDLERS ----------------------------
 
@@ -772,12 +847,8 @@ useEffect(() => { fetchTours(); }, []);
       setIsDetailOpen(true);
       setIsDetailLoading(true);
       try {
-          const res = await apiClient.get(`${PARTNER_TOUR_ENDPOINT}/${id}`);
-
-          const raw = res.data.tour || res.data;
-          const tourData: Tour = normalizeTourFromAPI(raw);
+          const tourData = await fetchTourDetail(id);
           setSelectedTour(tourData);
-
       } catch (err: any) {
           showToast({
               title: "Lỗi",
@@ -791,20 +862,28 @@ useEffect(() => { fetchTours(); }, []);
   }
 
   const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
+    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
   ) => {
-    const { id, value } = e.target;
-    // IMPROVEMENT: Chuyển đổi sang số an toàn hơn
-    if (["base_price"].includes(id)) {
-      setFormData((prev) => ({ ...prev, [id]: Number(value) || 0 }));
-    } else if (id === "child_age_limit") {
+    const { id, value } = event.target;
+    const numericFields = [
+      "base_price",
+      "child_age_limit",
+      "duration",
+      "capacity",
+      "slots_available",
+      "seats_total",
+      "min_participants",
+    ];
+
+    if (numericFields.includes(id)) {
       setFormData((prev) => ({
         ...prev,
-        child_age_limit: value === "" ? null : Number(value) || null,
+        [id]: value,
       }));
-    } else {
-      setFormData((prev) => ({ ...prev, [id]: value }));
+      return;
     }
+
+    setFormData((prev) => ({ ...prev, [id]: value }));
   };
 
   const handleCheckboxChange = (id: "requires_passport" | "requires_visa") => (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -814,15 +893,33 @@ useEffect(() => { fetchTours(); }, []);
 
   const handleAddTour = () => {
     setEditingTour(null);
+    setIsFormLoading(false);
     setFormData(createInitialFormData());
     setIsFormOpen(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const handleEditTour = (tour: Tour) => {
+  const handleEditTour = async (tour: Tour | null) => {
+    if (!tour?.id) return;
     setEditingTour(tour);
     setIsFormOpen(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
+    setIsFormLoading(true);
+    try {
+      const detailedTour = await fetchTourDetail(tour.id);
+      setEditingTour(detailedTour);
+    } catch (err: any) {
+      console.error("Error loading tour detail:", err);
+      showToast({
+        title: "Không thể tải tour",
+        description: err?.response?.data?.message || "Vui lòng thử lại sau.",
+        variant: "destructive",
+      });
+      setEditingTour(null);
+      setIsFormOpen(false);
+    } finally {
+      setIsFormLoading(false);
+    }
   };
 
   const handleItineraryTypeChange = (type: ItineraryType) => {
@@ -935,6 +1032,12 @@ const handleMoveItinerary = (index: number, delta: number) => {
   const removeSchedule = (index: number) => {
     setFormData((prev) => {
       if (prev.schedules.length <= 1) return prev;
+      const target = prev.schedules[index];
+      const bookingsCount =
+        target && typeof target.bookings_count === "number" ? target.bookings_count : null;
+      const hasLockedBooking =
+        Boolean(target?.has_booking) || (bookingsCount !== null && bookingsCount > 0);
+      if (target?.id && hasLockedBooking) return prev;
       const next = prev.schedules.filter((_, i) => i !== index);
       return { ...prev, schedules: next };
     });
@@ -1299,7 +1402,14 @@ const handleMoveItinerary = (index: number, delta: number) => {
           </CardHeader>
           <CollapsibleContent>
             <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} aria-busy={isFormLoading}>
+            {isFormLoading && (
+              <div className="mb-4 flex items-center gap-2 rounded-md border border-dashed border-amber-300 bg-amber-50/80 px-3 py-2 text-sm text-amber-700">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Đang tải dữ liệu tour, vui lòng chờ trong giây lát...</span>
+              </div>
+            )}
+            <fieldset disabled={isSubmitting || isFormLoading} className="space-y-6">
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               <div className="space-y-2">
                 <Label htmlFor="title">Tên tour *</Label>
@@ -1449,100 +1559,122 @@ const handleMoveItinerary = (index: number, delta: number) => {
                 </Button>
               </div>
               <div className="space-y-3">
-                {formData.schedules.map((schedule, index) => (
-                  <Card key={`schedule-${index}`} className="border border-dashed border-primary/30">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4">
-                      <CardTitle className="text-base font-semibold text-foreground">
-                        Lịch #{index + 1}
-                      </CardTitle>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="text-destructive hover:text-red-600"
-                          onClick={() => removeSchedule(index)}
-                          disabled={formData.schedules.length === 1}
-                          aria-label="Xóa lịch khởi hành"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
-                      <div className="space-y-1">
-                        <Label>Ngày bắt đầu</Label>
-                        <Input
-                          type="date"
-                          value={schedule.start_date}
-                          onChange={(event) =>
-                            handleScheduleChange(index, "start_date", event.target.value)
-                          }
-                          required
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Ngày kết thúc</Label>
-                        <Input
-                          type="date"
-                          value={schedule.end_date}
-                          onChange={(event) =>
-                            handleScheduleChange(index, "end_date", event.target.value)
-                          }
-                          required
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Tổng số chỗ</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          value={schedule.seats_total}
-                          onChange={(event) =>
-                            handleScheduleChange(index, "seats_total", Number(event.target.value))
-                          }
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Số chỗ còn trống</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          value={schedule.seats_available}
-                          onChange={(event) =>
-                            handleScheduleChange(index, "seats_available", Number(event.target.value))
-                          }
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Giá mùa cao điểm</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          value={schedule.season_price}
-                          onChange={(event) =>
-                            handleScheduleChange(index, "season_price", Number(event.target.value))
-                          }
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Số khách tối thiểu</Label>
-                        <Input
-                          type="number"
-                          min="1"
-                          value={schedule.min_participants}
-                          onChange={(event) =>
-                            handleScheduleChange(index, "min_participants", Number(event.target.value))
-                          }
-                          required
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Lịch sẽ được duy trì khi đạt từ {schedule.min_participants || 1} khách trở lên.
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                {formData.schedules.map((schedule, index) => {
+                  const bookingsCount =
+                    typeof schedule.bookings_count === "number" ? schedule.bookings_count : null;
+                  const hasLockedBooking =
+                    Boolean(schedule.has_booking) || (bookingsCount !== null && bookingsCount > 0);
+                  const disableRemove =
+                    formData.schedules.length === 1 || Boolean(schedule.id && hasLockedBooking);
+                  return (
+                    <Card key={`schedule-${index}`} className="border border-dashed border-primary/30">
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4">
+                        <CardTitle className="text-base font-semibold text-foreground">
+                          Lịch #{index + 1}
+                        </CardTitle>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="text-destructive hover:text-red-600"
+                            onClick={() => removeSchedule(index)}
+                            disabled={disableRemove}
+                            aria-label="Xóa lịch khởi hành"
+                            title={
+                              disableRemove
+                                ? schedule.id && hasLockedBooking
+                                  ? "Không thể xoá lịch đã có khách đặt"
+                                  : "Cần ít nhất một lịch khởi hành"
+                                : "Xóa lịch này"
+                            }
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+                        <div className="space-y-1">
+                          <Label>Ngày bắt đầu</Label>
+                          <Input
+                            type="date"
+                            value={schedule.start_date}
+                            onChange={(event) =>
+                              handleScheduleChange(index, "start_date", event.target.value)
+                            }
+                            required
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label>Ngày kết thúc</Label>
+                          <Input
+                            type="date"
+                            value={schedule.end_date}
+                            onChange={(event) =>
+                              handleScheduleChange(index, "end_date", event.target.value)
+                            }
+                            required
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label>Tổng số chỗ</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            value={schedule.seats_total}
+                            onChange={(event) =>
+                              handleScheduleChange(index, "seats_total", Number(event.target.value))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label>Số chỗ còn trống</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            value={schedule.seats_available}
+                            onChange={(event) =>
+                              handleScheduleChange(index, "seats_available", Number(event.target.value))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label>Giá mùa cao điểm</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            value={schedule.season_price}
+                            onChange={(event) =>
+                              handleScheduleChange(index, "season_price", Number(event.target.value))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label>Số khách tối thiểu</Label>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={schedule.min_participants}
+                            onChange={(event) =>
+                              handleScheduleChange(index, "min_participants", Number(event.target.value))
+                            }
+                            required
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Lịch sẽ được duy trì khi đạt từ {schedule.min_participants || 1} khách trở lên.
+                          </p>
+                        </div>
+                      </CardContent>
+                      {schedule.id && hasLockedBooking && (
+                        <div className="px-4 pb-4 text-sm text-amber-700">
+                          Lịch này đã có khách đặt
+                          {bookingsCount ? ` (${bookingsCount.toLocaleString("vi-VN")} booking)` : ""}
+                          nên không thể xoá, bạn chỉ có thể cập nhật thông tin.
+                        </div>
+                      )}
+                    </Card>
+                  );
+                })}
               </div>
             </div>
 
@@ -1907,6 +2039,7 @@ const handleMoveItinerary = (index: number, delta: number) => {
                 )}
               </Button>
             </div>
+            </fieldset>
           </form>
         </CardContent>
       </CollapsibleContent>
