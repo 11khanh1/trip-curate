@@ -6,9 +6,9 @@ export interface PartnerProfile {
   id?: string | number;
   company_name?: string | null;
   tax_code?: string | null;
-  business_license?: string | null;
-  company_address?: string | null;
-  website?: string | null;
+  address?: string | null;
+  business_type?: string | null;
+  description?: string | null;
   contact_name?: string | null;
   contact_phone?: string | null;
   contact_email?: string | null;
@@ -17,10 +17,6 @@ export interface PartnerProfile {
   invoice_address?: string | null;
   invoice_email?: string | null;
   invoice_vat_rate?: number | null;
-  bank_name?: string | null;
-  bank_account_number?: string | null;
-  bank_account_name?: string | null;
-  note?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
   [key: string]: unknown;
@@ -29,9 +25,9 @@ export interface PartnerProfile {
 export type UpdatePartnerProfilePayload = Partial<{
   company_name: string | null;
   tax_code: string | null;
-  business_license: string | null;
-  company_address: string | null;
-  website: string | null;
+  address: string | null;
+  business_type: string | null;
+  description: string | null;
   contact_name: string | null;
   contact_phone: string | null;
   contact_email: string | null;
@@ -40,10 +36,6 @@ export type UpdatePartnerProfilePayload = Partial<{
   invoice_address: string | null;
   invoice_email: string | null;
   invoice_vat_rate: number | null;
-  bank_name: string | null;
-  bank_account_number: string | null;
-  bank_account_name: string | null;
-  note: string | null;
 }>;
 
 export type PartnerBookingStatus = "pending" | "confirmed" | "cancelled" | "completed";
@@ -366,6 +358,7 @@ export async function updatePartnerRefundRequestStatus(
 const extractProfile = (payload: unknown): PartnerProfile => {
   if (!payload || typeof payload !== "object") return {};
   const record = payload as Record<string, unknown>;
+  if (record.partner) return extractProfile(record.partner);
   if (record.profile) return extractProfile(record.profile);
   if (record.data) return extractProfile(record.data);
   return payload as PartnerProfile;

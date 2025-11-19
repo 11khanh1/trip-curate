@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import {
   fetchPartnerProfile,
@@ -15,33 +14,19 @@ import {
   type UpdatePartnerProfilePayload,
 } from "@/services/partnerApi";
 
-type ProfileFormKeys =
-  | "company_name"
-  | "tax_code"
-  | "business_license"
-  | "company_address"
-  | "website"
-  | "contact_name"
-  | "contact_phone"
-  | "contact_email"
-  | "invoice_company_name"
-  | "invoice_tax_code"
-  | "invoice_address"
-  | "invoice_email"
-  | "invoice_vat_rate"
-  | "bank_name"
-  | "bank_account_number"
-  | "bank_account_name"
-  | "note";
+type ProfileFormKeys = Extract<keyof UpdatePartnerProfilePayload, string>;
+type NumericProfileField = "invoice_vat_rate";
+type TextProfileField = Exclude<ProfileFormKeys, NumericProfileField>;
+type PartnerProfileFormState = Record<TextProfileField, string> & {
+  invoice_vat_rate: string;
+};
 
-type PartnerProfileFormState = Record<ProfileFormKeys, string>;
-
-const profileFieldOrder: ProfileFormKeys[] = [
+const textProfileFields: TextProfileField[] = [
   "company_name",
   "tax_code",
-  "business_license",
-  "company_address",
-  "website",
+  "address",
+  "business_type",
+  "description",
   "contact_name",
   "contact_phone",
   "contact_email",
@@ -49,21 +34,15 @@ const profileFieldOrder: ProfileFormKeys[] = [
   "invoice_tax_code",
   "invoice_address",
   "invoice_email",
-  "invoice_vat_rate",
-  "bank_name",
-  "bank_account_number",
-  "bank_account_name",
-  "note",
 ];
 
-type TextProfileField = Exclude<ProfileFormKeys, "invoice_vat_rate">;
 
 const mapProfileToForm = (profile?: PartnerProfile | null): PartnerProfileFormState => ({
   company_name: profile?.company_name ?? "",
   tax_code: profile?.tax_code ?? "",
-  business_license: profile?.business_license ?? "",
-  company_address: profile?.company_address ?? "",
-  website: profile?.website ?? "",
+  address: profile?.address ?? "",
+  business_type: profile?.business_type ?? "",
+  description: profile?.description ?? "",
   contact_name: profile?.contact_name ?? "",
   contact_phone: profile?.contact_phone ?? "",
   contact_email: profile?.contact_email ?? "",
@@ -75,10 +54,6 @@ const mapProfileToForm = (profile?: PartnerProfile | null): PartnerProfileFormSt
     typeof profile?.invoice_vat_rate === "number" && Number.isFinite(profile.invoice_vat_rate)
       ? String(profile.invoice_vat_rate)
       : "",
-  bank_name: profile?.bank_name ?? "",
-  bank_account_number: profile?.bank_account_number ?? "",
-  bank_account_name: profile?.bank_account_name ?? "",
-  note: profile?.note ?? "",
 });
 
 export default function PartnerSettings() {
@@ -100,12 +75,13 @@ export default function PartnerSettings() {
   const mutation = useMutation({
     mutationFn: (payload: UpdatePartnerProfilePayload) => updatePartnerProfile(payload),
     onSuccess: (response) => {
+      const nextProfile = response.profile ?? profileQuery.data ?? null;
       toast({
         title: "Đã cập nhật hồ sơ",
         description: response.message ?? "Thông tin đối tác đã được lưu.",
       });
-      setFormState(mapProfileToForm(response.profile));
-      queryClient.setQueryData(["partner-profile"], response.profile);
+      setFormState(mapProfileToForm(nextProfile));
+      queryClient.setQueryData(["partner-profile"], nextProfile);
     },
     onError: (error: unknown) => {
       const message =
@@ -127,29 +103,23 @@ export default function PartnerSettings() {
   const buildPayload = (): UpdatePartnerProfilePayload => {
     const payload: UpdatePartnerProfilePayload = {};
     const profile = profileQuery.data;
-    profileFieldOrder.forEach((key) => {
-      if (key === "invoice_vat_rate") {
-        const numericValue =
-          formState.invoice_vat_rate.trim().length === 0
-            ? null
-            : Number(formState.invoice_vat_rate);
-        const original =
-          typeof profile?.invoice_vat_rate === "number" && Number.isFinite(profile.invoice_vat_rate)
-            ? profile.invoice_vat_rate
-            : null;
-        if (numericValue !== original) {
-          payload.invoice_vat_rate = numericValue;
-        }
-        return;
-      }
-      const fieldKey = key as TextProfileField;
-      const currentValue = formState[fieldKey];
+    textProfileFields.forEach((key) => {
+      const currentValue = formState[key];
       const originalValue =
-        (profile?.[fieldKey as keyof PartnerProfile] as string | null | undefined) ?? "";
+        (profile?.[key as keyof PartnerProfile] as string | null | undefined) ?? "";
       if ((originalValue ?? "") !== currentValue) {
-        payload[fieldKey] = currentValue.trim().length ? currentValue : null;
+        payload[key] = currentValue.trim().length ? currentValue : null;
       }
     });
+    const vatInput = formState.invoice_vat_rate.trim();
+    const numericValue = vatInput.length === 0 ? null : Number(vatInput);
+    const original =
+      typeof profile?.invoice_vat_rate === "number" && Number.isFinite(profile.invoice_vat_rate)
+        ? profile.invoice_vat_rate
+        : null;
+    if (numericValue !== original) {
+      payload.invoice_vat_rate = numericValue;
+    }
     return payload;
   };
 
@@ -205,15 +175,6 @@ export default function PartnerSettings() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="business-license">Giấy phép kinh doanh</Label>
-              <Input
-                id="business-license"
-                placeholder="0123456789"
-                value={formState.business_license}
-                onChange={handleInputChange("business_license")}
-              />
-            </div>
-            <div className="grid gap-2">
               <Label htmlFor="tax-code">Mã số thuế</Label>
               <Input
                 id="tax-code"
@@ -227,18 +188,26 @@ export default function PartnerSettings() {
               <Textarea
                 id="address"
                 placeholder="Nhập địa chỉ công ty..."
-                value={formState.company_address}
-                onChange={handleInputChange("company_address")}
+                value={formState.address}
+                onChange={handleInputChange("address")}
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="website">Website</Label>
+              <Label htmlFor="business-type">Loại hình kinh doanh</Label>
               <Input
-                id="website"
-                type="url"
-                placeholder="https://yourwebsite.com"
-                value={formState.website}
-                onChange={handleInputChange("website")}
+                id="business-type"
+                placeholder="Tour nội địa, tour inbound..."
+                value={formState.business_type}
+                onChange={handleInputChange("business_type")}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="description">Giới thiệu doanh nghiệp</Label>
+              <Textarea
+                id="description"
+                placeholder="Mô tả ngắn về dịch vụ, thế mạnh của đối tác..."
+                value={formState.description}
+                onChange={handleInputChange("description")}
               />
             </div>
           </CardContent>
@@ -339,87 +308,12 @@ export default function PartnerSettings() {
             </div>
           </CardContent>
         </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Thanh toán</CardTitle>
-            <CardDescription>Thông tin tài khoản nhận thanh toán</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-2">
-              <Label htmlFor="bank-name">Ngân hàng</Label>
-              <Input
-                id="bank-name"
-                placeholder="Vietcombank"
-                value={formState.bank_name}
-                onChange={handleInputChange("bank_name")}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="account-number">Số tài khoản</Label>
-              <Input
-                id="account-number"
-                placeholder="1234567890"
-                value={formState.bank_account_number}
-                onChange={handleInputChange("bank_account_number")}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="account-holder">Chủ tài khoản</Label>
-              <Input
-                id="account-holder"
-                placeholder="NGUYEN VAN A"
-                value={formState.bank_account_name}
-                onChange={handleInputChange("bank_account_name")}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="note">Ghi chú</Label>
-              <Textarea
-                id="note"
-                placeholder="Ghi chú nội bộ..."
-                value={formState.note}
-                onChange={handleInputChange("note")}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Thông báo</CardTitle>
-            <CardDescription>Quản lý các thông báo bạn nhận được</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label>Đơn đặt mới</Label>
-                <p className="text-sm text-muted-foreground">Nhận thông báo khi có đơn đặt mới</p>
-              </div>
-              <Switch defaultChecked />
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label>Đánh giá mới</Label>
-                <p className="text-sm text-muted-foreground">Nhận thông báo khi có đánh giá mới</p>
-              </div>
-              <Switch defaultChecked />
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label>Báo cáo doanh thu</Label>
-                <p className="text-sm text-muted-foreground">Nhận báo cáo doanh thu hàng tuần</p>
-              </div>
-              <Switch />
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
       <div className="flex justify-end">
         <Button
           type="submit"
-          className="bg-gradient-primary"
+          className="bg-[#f97316] hover:bg-[#ea580c] text-white font-semibold px-6"
           disabled={isSaving}
         >
           {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
