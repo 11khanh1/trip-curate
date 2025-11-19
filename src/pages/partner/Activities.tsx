@@ -76,6 +76,18 @@ interface ItineraryItem {
   detail: string;
 }
 
+const unwrapPayload = (payload: any): any => {
+  if (!payload || typeof payload !== "object") return payload;
+  if ("tour" in payload && payload.tour) return unwrapPayload(payload.tour);
+  if ("data" in payload && (payload as Record<string, unknown>).data) {
+    return unwrapPayload((payload as Record<string, unknown>).data);
+  }
+  if ("result" in payload && (payload as Record<string, unknown>).result) {
+    return unwrapPayload((payload as Record<string, unknown>).result);
+  }
+  return payload;
+};
+
 const extractArray = (value: unknown): unknown[] => {
   if (!value) return [];
   if (Array.isArray(value)) return value;
@@ -473,7 +485,8 @@ export default function PartnerActivities() {
     };
   };
 
-  const normalizeTourFromAPI = (t: any): Tour => {
+  const normalizeTourFromAPI = (incoming: any): Tour => {
+    const t = unwrapPayload(incoming);
     const media = toStringArray(t.media);
     const itineraryItems = parseItineraryEntries(
       t?.itinerary ??
@@ -553,7 +566,7 @@ const fetchTours = async () => {
   setIsLoading(true);
   try {
     const res = await apiClient.get(PARTNER_TOUR_ENDPOINT);
-    const raw = extractToursFromResponse(res.data);
+    const raw = extractToursFromResponse(unwrapPayload(res.data));
     const normalized: Tour[] = raw.map(normalizeTourFromAPI);
     setTours(normalized);
   } catch (err: any) {
@@ -572,8 +585,17 @@ useEffect(() => { fetchTours(); }, []);
 
 const fetchTourDetail = useCallback(async (id: string): Promise<Tour> => {
   const res = await apiClient.get(`${PARTNER_TOUR_ENDPOINT}/${id}`);
-  const raw = res.data?.tour ?? res.data;
-  return normalizeTourFromAPI(raw);
+  const payload = res.data ?? {};
+  const baseTour = unwrapPayload(payload);
+  const merged = {
+    ...baseTour,
+    packages: payload.packages ?? baseTour.packages,
+    schedules: payload.schedules ?? baseTour.schedules ?? payload.tour?.schedules,
+    cancellation_policies:
+      payload.cancellation_policies ?? baseTour.cancellation_policies ?? payload.tour?.cancellation_policies,
+    categories: payload.categories ?? baseTour.categories ?? payload.tour?.categories,
+  };
+  return normalizeTourFromAPI(merged);
 }, []);
 
   useEffect(() => {
@@ -836,7 +858,7 @@ const fetchTourDetail = useCallback(async (id: string): Promise<Tour> => {
       });
       window.scrollTo({ top: 0, behavior: "smooth" });
     } else {
-      setFormData(createInitialFormData());
+      if (!isFormLoading) setFormData(createInitialFormData());
     }
   }, [editingTour, baseFormDefaults, isFormLoading]);
 
@@ -901,10 +923,10 @@ const fetchTourDetail = useCallback(async (id: string): Promise<Tour> => {
 
   const handleEditTour = async (tour: Tour | null) => {
     if (!tour?.id) return;
-    setEditingTour(tour);
     setIsFormOpen(true);
-    window.scrollTo({ top: 0, behavior: "smooth" });
     setIsFormLoading(true);
+    setEditingTour(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
     try {
       const detailedTour = await fetchTourDetail(tour.id);
       setEditingTour(detailedTour);

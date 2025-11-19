@@ -40,6 +40,21 @@ const normalizeStatus = (status?: string | null) =>
 const SUCCESS_STATUSES = new Set(["success", "paid", "completed"]);
 const PENDING_STATUSES = new Set(["pending", "processing", "waiting"]);
 
+const resolvePaymentStatus = (payload?: BookingPaymentStatusResponse | null): string => {
+  if (!payload) return "";
+  const candidates = [
+    payload?.status,
+    payload?.payment?.status,
+    (payload as Record<string, unknown>)?.payment_status,
+    (payload as Record<string, unknown>)?.booking_status,
+  ];
+  for (const candidate of candidates) {
+    const normalized = normalizeStatus(candidate);
+    if (normalized) return normalized;
+  }
+  return "";
+};
+
 const SepayGatewaySkeleton = () => (
   <div className="space-y-6">
     <Skeleton className="h-24 w-full rounded-2xl" />
@@ -87,13 +102,13 @@ const SepayGateway = () => {
     refetchInterval: (query) => {
       const nextData = query.state.data;
       if (!nextData) return 5000;
-      const normalized = normalizeStatus(nextData.status ?? nextData.payment?.status);
+      const normalized = resolvePaymentStatus(nextData as BookingPaymentStatusResponse);
       return SUCCESS_STATUSES.has(normalized) ? false : 5000;
     },
   });
 
   useEffect(() => {
-    const normalizedPaymentStatus = normalizeStatus(paymentStatus?.status ?? paymentStatus?.payment?.status);
+    const normalizedPaymentStatus = resolvePaymentStatus(paymentStatus);
     if (bookingId && SUCCESS_STATUSES.has(normalizedPaymentStatus)) {
       const timeout = window.setTimeout(() => {
         navigate(`/bookings/${bookingId}`);
@@ -161,7 +176,7 @@ const SepayGateway = () => {
     return "Trip Curate";
   }, [booking?.tour?.partner?.company_name]);
 
-  const normalizedPaymentStatus = normalizeStatus(paymentStatus?.status ?? paymentStatus?.payment?.status);
+  const normalizedPaymentStatus = resolvePaymentStatus(paymentStatus);
 
   const statusLabel = (() => {
     if (SUCCESS_STATUSES.has(normalizedPaymentStatus)) return "Thanh toán thành công";

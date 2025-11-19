@@ -81,6 +81,20 @@ interface SepayPanelState {
 
 const normalizeStatus = (status?: string | null) => (status ?? "").toString().trim().toLowerCase();
 const SUCCESS_STATUSES = new Set(["success", "paid", "completed"]);
+const resolvePaymentStatus = (payload?: BookingPaymentStatusResponse | null): string => {
+  if (!payload) return "";
+  const candidates = [
+    payload.status,
+    payload.payment?.status,
+    (payload as Record<string, unknown>)?.payment_status,
+    (payload as Record<string, unknown>)?.booking_status,
+  ];
+  for (const candidate of candidates) {
+    const normalized = normalizeStatus(candidate);
+    if (normalized) return normalized;
+  }
+  return "";
+};
 const PENDING_STATUSES = new Set(["pending", "processing", "waiting"]);
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
 
@@ -1001,7 +1015,7 @@ useEffect(() => {
     sepaySuccessToastRef.current = false;
     return;
   }
-  const normalized = normalizeStatus(sepayPaymentStatus?.status ?? sepayPaymentStatus?.payment?.status);
+  const normalized = resolvePaymentStatus(sepayPaymentStatus);
   if (SUCCESS_STATUSES.has(normalized)) {
     if (!sepaySuccessToastRef.current) {
       toast({
@@ -1114,9 +1128,7 @@ useEffect(() => {
     sepayPanel && typeof sepayOriginalAmount === "number"
       ? formatCurrency(sepayOriginalAmount, sepayPanel.currency)
       : "";
-  const sepayStatusNormalized = normalizeStatus(
-    sepayPaymentStatus?.status ?? sepayPaymentStatus?.payment?.status,
-  );
+  const sepayStatusNormalized = resolvePaymentStatus(sepayPaymentStatus);
   const sepayStatusLabel = sepayPanel
     ? SUCCESS_STATUSES.has(sepayStatusNormalized)
       ? "Thanh toán thành công"
