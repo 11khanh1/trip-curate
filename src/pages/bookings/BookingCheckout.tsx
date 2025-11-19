@@ -83,13 +83,17 @@ interface SepayPanelState {
 
 const normalizeStatus = (status?: string | null) => (status ?? "").toString().trim().toLowerCase();
 const SUCCESS_STATUSES = new Set(["success", "paid", "completed"]);
+const extractStatusString = (value: unknown): string | undefined =>
+  typeof value === "string" ? value : undefined;
+
 const resolvePaymentStatus = (payload?: BookingPaymentStatusResponse | null): string => {
   if (!payload) return "";
-  const candidates = [
-    payload.status,
-    payload.payment?.status,
-    (payload as Record<string, unknown>)?.payment_status,
-    (payload as Record<string, unknown>)?.booking_status,
+  const metaRecord = (payload as Record<string, unknown>) ?? {};
+  const candidates: Array<string | undefined> = [
+    extractStatusString(payload.status),
+    extractStatusString(payload.payment?.status),
+    extractStatusString(metaRecord?.payment_status),
+    extractStatusString(metaRecord?.booking_status),
   ];
   for (const candidate of candidates) {
     const normalized = normalizeStatus(candidate);
@@ -696,7 +700,7 @@ const BookingCheckout = () => {
       promotionLabel = autoLabel;
       if (autoLabel) {
         const autoDiscountAmount =
-          typeof original === "number" && original > total ? original - total : discountAmount ?? undefined;
+          typeof original === "number" && original > total ? original - total : undefined;
         promotionEntries.push({
           code: autoPromotion.code ?? null,
           description: autoLabel,
