@@ -213,7 +213,20 @@ const SepayGateway = () => {
   return (
     <div className="flex min-h-screen flex-col bg-muted/10">
       <TravelHeader />
-      <main className="flex-1 bg-gradient-to-b from-muted/40 via-transparent to-transparent">
+      <main className="relative flex-1 bg-gradient-to-b from-muted/40 via-transparent to-transparent">
+        {isPaid && (
+          <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+            <div className="pointer-events-auto max-w-sm rounded-2xl bg-white p-8 text-center shadow-2xl">
+              <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg">
+                <CheckCircle2 className="h-10 w-10" />
+              </div>
+              <p className="mt-4 text-xl font-semibold text-emerald-700">Thanh toán thành công</p>
+              <p className="text-sm text-muted-foreground">
+                Chúng tôi đã ghi nhận giao dịch và đang chuyển bạn tới trang booking.
+              </p>
+            </div>
+          </div>
+        )}
         <div className="container mx-auto px-4 py-10 space-y-8">
           <CheckoutProgress steps={steps} />
 

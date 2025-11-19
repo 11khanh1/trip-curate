@@ -2,6 +2,50 @@ import { apiClient } from "@/lib/api-client";
 import type { Booking, BookingStatus } from "@/services/bookingApi";
 import type { PromotionDiscountType } from "@/services/publicApi";
 
+export interface PartnerProfile {
+  id?: string | number;
+  company_name?: string | null;
+  tax_code?: string | null;
+  business_license?: string | null;
+  company_address?: string | null;
+  website?: string | null;
+  contact_name?: string | null;
+  contact_phone?: string | null;
+  contact_email?: string | null;
+  invoice_company_name?: string | null;
+  invoice_tax_code?: string | null;
+  invoice_address?: string | null;
+  invoice_email?: string | null;
+  invoice_vat_rate?: number | null;
+  bank_name?: string | null;
+  bank_account_number?: string | null;
+  bank_account_name?: string | null;
+  note?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  [key: string]: unknown;
+}
+
+export type UpdatePartnerProfilePayload = Partial<{
+  company_name: string | null;
+  tax_code: string | null;
+  business_license: string | null;
+  company_address: string | null;
+  website: string | null;
+  contact_name: string | null;
+  contact_phone: string | null;
+  contact_email: string | null;
+  invoice_company_name: string | null;
+  invoice_tax_code: string | null;
+  invoice_address: string | null;
+  invoice_email: string | null;
+  invoice_vat_rate: number | null;
+  bank_name: string | null;
+  bank_account_number: string | null;
+  bank_account_name: string | null;
+  note: string | null;
+}>;
+
 export type PartnerBookingStatus = "pending" | "confirmed" | "cancelled" | "completed";
 
 export interface PartnerBooking extends Booking {
@@ -317,6 +361,35 @@ export async function updatePartnerRefundRequestStatus(
     return (res.data as { refund_request: PartnerRefundRequest }).refund_request;
   }
   return res.data as PartnerRefundRequest;
+}
+
+const extractProfile = (payload: unknown): PartnerProfile => {
+  if (!payload || typeof payload !== "object") return {};
+  const record = payload as Record<string, unknown>;
+  if (record.profile) return extractProfile(record.profile);
+  if (record.data) return extractProfile(record.data);
+  return payload as PartnerProfile;
+};
+
+export async function fetchPartnerProfile(): Promise<PartnerProfile> {
+  const res = await apiClient.get("/partner/profile");
+  return extractProfile(res.data);
+}
+
+export interface UpdatePartnerProfileResponse {
+  message?: string;
+  profile: PartnerProfile;
+}
+
+export async function updatePartnerProfile(
+  payload: UpdatePartnerProfilePayload,
+): Promise<UpdatePartnerProfileResponse> {
+  const res = await apiClient.put("/partner/profile", payload);
+  const profile = extractProfile(res.data);
+  return {
+    message: res.data?.message ?? "Cập nhật hồ sơ thành công",
+    profile,
+  };
 }
 
 export interface PartnerDashboardResponse {
