@@ -1011,7 +1011,6 @@ const WishlistRecommendations = () => {
       <PersonalizedRecommendations
         className="mt-16"
         limit={10}
-        fallbackTours={trendingTours ?? []}
       />
     );
   }

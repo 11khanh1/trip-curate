@@ -1,7 +1,7 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Info, Loader2 } from "lucide-react";
+import { CheckCircle2, Info, Loader2, XCircle } from "lucide-react";
 
 import TravelHeader from "@/components/TravelHeader";
 import Footer from "@/components/Footer";
@@ -39,7 +39,6 @@ const normalizeStatus = (status?: string | null) =>
 
 const SUCCESS_STATUSES = new Set(["success", "paid", "completed"]);
 const PENDING_STATUSES = new Set(["pending", "processing", "waiting"]);
-
 const resolvePaymentStatus = (payload?: BookingPaymentStatusResponse | null): string => {
   if (!payload) return "";
   const candidates = [
@@ -54,6 +53,7 @@ const resolvePaymentStatus = (payload?: BookingPaymentStatusResponse | null): st
   }
   return "";
 };
+const MAX_POLLING_DURATION = 2 * 60 * 1000;
 
 const SepayGatewaySkeleton = () => (
   <div className="space-y-6">
@@ -92,31 +92,47 @@ const SepayGateway = () => {
     staleTime: 30_000,
   });
 
+  const [pollingStopped, setPollingStopped] = useState(false);
+  const pollStartRef = useRef<number | null>(null);
+
   const {
     data: paymentStatus,
     isFetching: isPaymentStatusFetching,
   } = useQuery<BookingPaymentStatusResponse>({
     queryKey: ["booking-payment-status", bookingId],
     queryFn: () => fetchBookingPaymentStatus(String(bookingId)),
-    enabled: Boolean(bookingId),
-    refetchInterval: (query) => {
-      const nextData = query.state.data;
-      if (!nextData) return 5000;
-      const normalized = resolvePaymentStatus(nextData as BookingPaymentStatusResponse);
-      return SUCCESS_STATUSES.has(normalized) ? false : 5000;
-    },
+    enabled: Boolean(bookingId) && !pollingStopped,
+    refetchInterval: pollingStopped ? false : 4000,
   });
 
   useEffect(() => {
-    const normalizedPaymentStatus = resolvePaymentStatus(paymentStatus);
-    if (bookingId && SUCCESS_STATUSES.has(normalizedPaymentStatus)) {
-      const timeout = window.setTimeout(() => {
-        navigate(`/bookings/${bookingId}`);
-      }, 2000);
-      return () => window.clearTimeout(timeout);
+    if (!bookingId || pollingStopped) return;
+    if (!pollStartRef.current) {
+      pollStartRef.current = Date.now();
     }
-    return undefined;
-  }, [bookingId, navigate, paymentStatus?.payment?.status, paymentStatus?.status]);
+    const normalized = resolvePaymentStatus(paymentStatus);
+    if (SUCCESS_STATUSES.has(normalized) || normalized === "failed") {
+      setPollingStopped(true);
+      return;
+    }
+    const now = Date.now();
+    if (pollStartRef.current && now - pollStartRef.current >= MAX_POLLING_DURATION) {
+      setPollingStopped(true);
+    }
+  }, [bookingId, paymentStatus, pollingStopped]);
+
+  const normalizedPaymentStatus = resolvePaymentStatus(paymentStatus);
+  const isPaid = SUCCESS_STATUSES.has(normalizedPaymentStatus);
+  const isFailed = normalizedPaymentStatus === "failed";
+  const hasTimedOut = pollingStopped && !isPaid && !isFailed;
+  const paidAtRaw =
+    paymentStatus?.payment && typeof paymentStatus.payment === "object"
+      ? (paymentStatus.payment as Record<string, unknown>).paid_at
+      : null;
+  const paidAtLabel =
+    typeof paidAtRaw === "string" && paidAtRaw
+      ? new Date(paidAtRaw).toLocaleString("vi-VN")
+      : null;
 
   const paymentUrl = useMemo(() => {
     if (paymentUrlParam) return paymentUrlParam;
@@ -175,8 +191,6 @@ const SepayGateway = () => {
     }
     return "Trip Curate";
   }, [booking?.tour?.partner?.company_name]);
-
-  const normalizedPaymentStatus = resolvePaymentStatus(paymentStatus);
 
   const statusLabel = (() => {
     if (SUCCESS_STATUSES.has(normalizedPaymentStatus)) return "Thanh toán thành công";
@@ -328,72 +342,136 @@ const SepayGateway = () => {
                   </div>
 
                   <div className="flex flex-col items-center gap-5">
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="flex items-center gap-2 text-[#1d4ed8]">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[#1d4ed8]/20 bg-[#eef3ff]">
-                          <span className="text-lg font-semibold">S</span>
+                    {isPaid ? (
+                      <div className="flex w-full flex-col items-center gap-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-center text-emerald-800">
+                        <CheckCircle2 className="h-12 w-12" />
+                        <div className="space-y-1">
+                          <p className="text-lg font-semibold text-emerald-900">Thanh toán SePay đã hoàn tất</p>
+                          <p className="text-sm">
+                            {paidAtLabel ? `Được xác nhận lúc ${paidAtLabel}.` : "Chúng tôi đã ghi nhận giao dịch thành công."}
+                          </p>
                         </div>
-                        <span className="text-lg font-semibold">SePay</span>
+                        <div className="flex flex-wrap items-center justify-center gap-3">
+                          <Button onClick={() => navigate(`/bookings/${bookingId}`)}>Xem booking của bạn</Button>
+                          <Button variant="outline" onClick={() => navigate("/")}>
+                            Về trang chủ
+                          </Button>
+                        </div>
                       </div>
-                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                        Thanh toán QR
-                      </p>
-                    </div>
-                    <div className="w-full max-w-[280px] rounded-2xl border border-[#1d4ed8] bg-white p-3">
-                      {qrImage ? (
-                        <img
-                          src={qrImage}
-                          alt="QR thanh toán SePay"
-                          className="h-auto w-full rounded-xl object-contain"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <div className="flex h-60 w-full items-center justify-center rounded-xl border border-dashed border-[#1d4ed8]/40 bg-muted/30 px-6 text-xs text-muted-foreground">
-                          Hiện chưa có mã QR. Vui lòng chọn mở trang thanh toán.
+                    ) : isFailed ? (
+                      <div className="flex w-full flex-col items-center gap-4 rounded-2xl border border-red-200 bg-red-50 p-6 text-center text-red-700">
+                        <XCircle className="h-12 w-12" />
+                        <div className="space-y-1">
+                          <p className="text-lg font-semibold text-red-800">Thanh toán chưa thành công</p>
+                          <p className="text-sm text-red-700">
+                            Chúng tôi không nhận được xác nhận từ ngân hàng. Bạn có thể quét lại QR hoặc mở lại trang thanh
+                            toán để thử lại.
+                          </p>
                         </div>
-                      )}
-                    </div>
-                    <div className="flex items-center justify-center gap-4 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      <span>
-                        <span className="text-[#1d4ed8]">napas</span>
-                        <span className="text-emerald-500">247</span>
-                      </span>
-                      <span className="text-[#ef4444]">MB</span>
-                      <span className="text-[#2563eb]">VietQR</span>
-                    </div>
+                        <div className="flex flex-wrap items-center justify-center gap-3">
+                          <Button
+                            className="bg-[#ff5b00] text-white hover:bg-[#e24c00]"
+                            onClick={() => {
+                              handleOpenPaymentUrl();
+                              pollStartRef.current = Date.now();
+                              setPollingStopped(false);
+                            }}
+                            disabled={!paymentUrl}
+                          >
+                            Mở lại trang thanh toán
+                          </Button>
+                          <Button variant="outline" onClick={() => navigate(bookingId ? `/bookings/${bookingId}` : "/")}>
+                            Quay lại
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex flex-col items-center gap-2">
+                          <div className="flex items-center gap-2 text-[#1d4ed8]">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[#1d4ed8]/20 bg-[#eef3ff]">
+                              <span className="text-lg font-semibold">S</span>
+                            </div>
+                            <span className="text-lg font-semibold">SePay</span>
+                          </div>
+                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            Thanh toán QR
+                          </p>
+                        </div>
+                        <div className="w-full max-w-[280px] rounded-2xl border border-[#1d4ed8] bg-white p-3">
+                          {qrImage ? (
+                            <img
+                              src={qrImage}
+                              alt="QR thanh toán SePay"
+                              className="h-auto w-full rounded-xl object-contain"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="flex h-60 w-full items-center justify-center rounded-xl border border-dashed border-[#1d4ed8]/40 bg-muted/30 px-6 text-xs text-muted-foreground">
+                              Hiện chưa có mã QR. Vui lòng chọn mở trang thanh toán.
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-center gap-4 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          <span>
+                            <span className="text-[#1d4ed8]">napas</span>
+                            <span className="text-emerald-500">247</span>
+                          </span>
+                          <span className="text-[#ef4444]">MB</span>
+                          <span className="text-[#2563eb]">VietQR</span>
+                        </div>
 
-                    <div className="flex w-full flex-col gap-3">
-                      {!isDirectImagePayment && (
-                        <Button
-                          size="lg"
-                          className="w-full bg-[#ff5b00] text-white hover:bg-[#e24c00]"
-                          onClick={handleOpenPaymentUrl}
-                          disabled={!paymentUrl}
-                        >
-                          Mở trang thanh toán
-                        </Button>
-                      )}
-                      <Button
-                        variant="outline"
-                        className="w-full border-muted-foreground/30 text-muted-foreground hover:border-muted-foreground/60"
-                        onClick={() => navigate(bookingId ? `/bookings/${bookingId}` : "/")}
-                      >
-                        Hủy thanh toán
-                      </Button>
-                    </div>
+                        <div className="flex w-full flex-col gap-3">
+                          {!isDirectImagePayment && (
+                            <Button
+                              size="lg"
+                              className="w-full bg-[#ff5b00] text-white hover:bg-[#e24c00]"
+                              onClick={() => {
+                                handleOpenPaymentUrl();
+                                pollStartRef.current = Date.now();
+                                setPollingStopped(false);
+                              }}
+                              disabled={!paymentUrl}
+                            >
+                              Mở trang thanh toán
+                            </Button>
+                          )}
+                          <Button
+                            variant="outline"
+                            className="w-full border-muted-foreground/30 text-muted-foreground hover:border-muted-foreground/60"
+                            onClick={() => navigate(bookingId ? `/bookings/${bookingId}` : "/")}
+                          >
+                            Hủy thanh toán
+                          </Button>
+                          {hasTimedOut && (
+                            <Button
+                              variant="ghost"
+                              className="w-full text-muted-foreground hover:text-foreground"
+                              onClick={() => {
+                                pollStartRef.current = Date.now();
+                                setPollingStopped(false);
+                              }}
+                            >
+                              Làm mới trạng thái giao dịch
+                            </Button>
+                          )}
+                        </div>
 
-                    <div className="flex flex-col items-center gap-1 text-center text-xs text-muted-foreground">
-                      <span>Trạng thái: {statusLabel}</span>
-                      {isPaymentStatusFetching && (
-                        <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                          Đang cập nhật trạng thái giao dịch...
-                        </span>
-                      )}
-                      <span>
-                        Nếu đã thanh toán thành công, trang sẽ tự động chuyển sang chi tiết booking trong ít phút.
-                      </span>
-                    </div>
+                        <div className="flex flex-col items-center gap-1 text-center text-xs text-muted-foreground">
+                          <span>Trạng thái: {statusLabel}</span>
+                          {isPaymentStatusFetching && (
+                            <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              Đang cập nhật từ ngân hàng...
+                            </span>
+                          )}
+                          <span>
+                            Chúng tôi sẽ hiển thị kết quả ngay tại đây khi nhận được phản hồi từ SePay. Bạn có thể tiếp tục
+                            mở lại trang thanh toán nếu cần.
+                          </span>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </CardContent>
 

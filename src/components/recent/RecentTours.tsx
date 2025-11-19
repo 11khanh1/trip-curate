@@ -113,11 +113,6 @@ const RecentTours = () => {
                         ) : null}
                       </span>
                     )}
-                    {entry.view_count !== undefined && (
-                      <span className="text-xs text-muted-foreground">
-                        Đã xem {entry.view_count} lần
-                      </span>
-                    )}
                   </div>
                 </div>
                 <div className="flex items-center justify-between">

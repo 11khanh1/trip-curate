@@ -23,6 +23,8 @@ export interface RecommendationResponse {
     generated_at?: string;
     count?: number;
     base_tour_id?: string | number | null;
+    has_personalized_signals?: boolean;
+    personalized_results?: boolean;
     [key: string]: unknown;
   };
 }

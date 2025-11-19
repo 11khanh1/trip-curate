@@ -1,11 +1,13 @@
 import { useMemo } from "react";
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Compass, Sparkles } from "lucide-react";
 import CollectionTourCard from "@/components/CollectionTourCard";
 import { useUser } from "@/context/UserContext";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { fetchPersonalizedRecommendations, type RecommendationItem } from "@/services/recommendationApi";
-import type { PublicTour } from "@/services/publicApi";
 import { getTourStartingPrice, formatCurrency as formatPrice } from "@/lib/tour-utils";
 import { cn } from "@/lib/utils";
 
@@ -55,7 +57,6 @@ const formatDuration = (value?: number | string | null) => {
 
 interface PersonalizedRecommendationsProps {
   limit?: number;
-  fallbackTours?: PublicTour[];
   className?: string;
 }
 
@@ -91,7 +92,7 @@ const mapRecommendationToCard = (item: RecommendationItem) => {
   };
 };
 
-const PersonalizedRecommendations = ({ limit = 10, fallbackTours = [], className }: PersonalizedRecommendationsProps) => {
+const PersonalizedRecommendations = ({ limit = 10, className }: PersonalizedRecommendationsProps) => {
   const { currentUser } = useUser();
   const { trackEvent } = useAnalytics();
 
@@ -115,6 +116,13 @@ const PersonalizedRecommendations = ({ limit = 10, fallbackTours = [], className
       .filter((value): value is NonNullable<ReturnType<typeof mapRecommendationToCard>> => Boolean(value));
   }, [data?.data]);
 
+  const meta = data?.meta ?? {};
+  const recommendationCount =
+    typeof meta.count === "number" && Number.isFinite(meta.count) ? meta.count : cards.length;
+  const hasPersonalizedSignals =
+    typeof meta.has_personalized_signals === "boolean" ? meta.has_personalized_signals : false;
+  const shouldShowEmptyState = !isLoading && !isError && recommendationCount === 0;
+
   if (!currentUser) {
     return null;
   }
@@ -135,8 +143,6 @@ const PersonalizedRecommendations = ({ limit = 10, fallbackTours = [], className
       },
     }, { immediate: true });
   };
-
-  const showFallback = !isLoading && cards.length === 0;
 
   return (
     <section className={cn("bg-gradient-to-b from-white to-slate-50 py-12", className)}>
@@ -196,46 +202,40 @@ const PersonalizedRecommendations = ({ limit = 10, fallbackTours = [], className
           </div>
         ) : null}
 
-        {showFallback ? (
-          <div className="mt-6 space-y-4 rounded-2xl border border-dashed border-primary/40 bg-white p-6 text-sm text-muted-foreground">
-            <p>
-              Hãy xem hoặc lưu vài tour yêu thích để hệ thống hiểu bạn hơn và đưa ra gợi ý chính xác hơn. Tạm thời, chúng
-              tôi gợi ý một số tour nổi bật được nhiều người quan tâm.
-            </p>
-            <div className="grid gap-4 md:grid-cols-2">
-              {fallbackTours.slice(0, 4).map((tour) => {
-                const image = resolveTourImage(tour);
-                const price = getTourStartingPrice(tour);
-                return (
-                  <CollectionTourCard
-                    key={`fallback-${tour.id ?? tour.uuid ?? Math.random().toString(36).slice(2, 8)}`}
-                    className="border border-slate-200/70"
-                    href={`/activity/${tour.id ?? tour.uuid}`}
-                    image={image}
-                    title={tour.title ?? tour.name ?? "Tour đang cập nhật"}
-                    category={tour.type === "international" ? "Tour quốc tế" : "Tour nội địa"}
-                    location={tour.destination ?? "Đang cập nhật"}
-                    duration={formatDuration(tour.duration)}
-                    rating={
-                      typeof tour.rating_average === "number"
-                        ? tour.rating_average
-                        : typeof tour.average_rating === "number"
-                        ? tour.average_rating
-                        : null
-                    }
-                    ratingCount={tour.rating_count ?? tour.reviews_count ?? null}
-                    priceLabel={formatPrice(price)}
-                    features={
-                      tour.requires_passport || tour.requires_visa
-                        ? [
-                            tour.requires_passport ? "Yêu cầu hộ chiếu" : "",
-                            tour.requires_visa ? "Yêu cầu visa" : "",
-                          ].filter(Boolean)
-                        : []
-                    }
-                  />
-                );
-              })}
+        {shouldShowEmptyState ? (
+          <div className="mt-6 space-y-4 rounded-2xl border border-dashed border-primary/50 bg-white/80 p-6 text-sm text-muted-foreground shadow-sm">
+            <div className="flex items-start gap-3">
+              {hasPersonalizedSignals ? (
+                <Compass className="mt-1 h-6 w-6 text-primary" />
+              ) : (
+                <Sparkles className="mt-1 h-6 w-6 text-primary" />
+              )}
+              <div className="space-y-2">
+                <p className="text-base font-semibold text-foreground">
+                  {hasPersonalizedSignals
+                    ? "Chưa có gợi ý phù hợp lúc này"
+                    : "Tour sẽ được gợi ý sau vài lần thao tác"}
+                </p>
+                <p>
+                  {hasPersonalizedSignals
+                    ? "Hệ thống chưa tìm thấy tour thực sự phù hợp. Hãy tiếp tục xem, wishlist hoặc đặt tour để nhận nhiều gợi ý chính xác hơn."
+                    : "Bạn cần xem tour, thêm vào danh sách yêu thích hoặc đặt thử vài tour để hệ thống hiểu sở thích của bạn và đưa ra gợi ý cá nhân hóa."}
+                </p>
+                {!hasPersonalizedSignals ? (
+                  <p className="text-xs italic text-muted-foreground">
+                    Gợi ý sẽ xuất hiện ngay khi chúng tôi ghi nhận thêm hành vi như xem tour, thêm wishlist, đặt tour hoặc
+                    gửi đánh giá.
+                  </p>
+                ) : null}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Button asChild variant="default">
+                <Link to="/activities">Khám phá thêm tour</Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link to="/wishlist">Quản lý wishlist</Link>
+              </Button>
             </div>
           </div>
         ) : null}
