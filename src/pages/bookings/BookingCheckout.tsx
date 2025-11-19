@@ -62,6 +62,8 @@ const extractOrderCode = (url: string): string | null => {
 };
 const ensurePositive = (value: number, fallback: number) => (Number.isFinite(value) && value >= 0 ? value : fallback);
 
+type ComputedPromotion = Pick<BookingPromotion, "code" | "description" | "discount_amount">;
+
 interface SepayPanelState {
   bookingId: string;
   paymentUrl: string;
@@ -613,9 +615,18 @@ const BookingCheckout = () => {
     return raw.length > 0 ? raw : "VND";
   }, [tour?.currency]);
 
+  const promotionCodeValue = form.watch("promotion_code")?.trim() || "";
+
   const priceSummary = useMemo(() => {
     if (!selectedPackage) {
-      return { total: 0, original: null, discountAmount: null, discountPercent: null, promotionLabel: null };
+      return {
+        total: 0,
+        original: null,
+        discountAmount: null,
+        discountPercent: null,
+        promotionLabel: null,
+        appliedPromotions: [],
+      };
     }
     const selectedPackageRecord = selectedPackage as Record<string, unknown>;
     const baseAdultPrice =
@@ -629,7 +640,14 @@ const BookingCheckout = () => {
       baseAdultPrice;
     const baseSubtotal = adults * baseAdultPrice + children * baseChildPrice;
     if (baseSubtotal <= 0) {
-      return { total: 0, original: null, discountAmount: null, discountPercent: null, promotionLabel: null };
+      return {
+        total: 0,
+        original: null,
+        discountAmount: null,
+        discountPercent: null,
+        promotionLabel: null,
+        appliedPromotions: [],
+      };
     }
     const autoPromotion = tourPriceInfo?.autoPromotion ?? null;
     const hasGlobalDiscount =
@@ -645,6 +663,7 @@ const BookingCheckout = () => {
     let original: number | null = null;
 
     let promotionLabel: string | null = null;
+    const promotionEntries: ComputedPromotion[] = [];
 
     if (globalDiscountRatio !== null) {
       total = baseSubtotal * globalDiscountRatio;
@@ -655,6 +674,13 @@ const BookingCheckout = () => {
           ? tourPriceInfo.autoPromotion.description.trim()
           : null) ??
         (tourPriceInfo?.discountPercent ? `Giảm ${tourPriceInfo.discountPercent}%` : null);
+      promotionEntries.push({
+        code: tourPriceInfo?.autoPromotion?.code ?? null,
+        description:
+          tourPriceInfo?.autoPromotion?.description?.trim() ??
+          (tourPriceInfo?.discountPercent ? `Giảm ${tourPriceInfo.discountPercent}%` : "Khuyến mãi tự động"),
+        discount_amount: baseSubtotal - total,
+      });
     } else if (autoPromotion) {
       const applied = applyAutoPromotionToPrice(baseSubtotal, autoPromotion);
       if (typeof applied.finalPrice === "number" && applied.finalPrice < total) {
@@ -663,13 +689,41 @@ const BookingCheckout = () => {
       } else if (typeof applied.originalPrice === "number" && applied.originalPrice > total) {
         original = applied.originalPrice;
       }
-      promotionLabel =
+      const autoLabel =
         (autoPromotion.description && autoPromotion.description.trim().length > 0
           ? autoPromotion.description.trim()
           : null) ?? null;
+      promotionLabel = autoLabel;
+      if (autoLabel) {
+        const autoDiscountAmount =
+          typeof original === "number" && original > total ? original - total : discountAmount ?? undefined;
+        promotionEntries.push({
+          code: autoPromotion.code ?? null,
+          description: autoLabel,
+          discount_amount: autoDiscountAmount,
+        });
+      }
     }
     if (!original && baseSubtotal > total) {
       original = baseSubtotal;
+    }
+
+    let manualDiscountAmount: number | null = null;
+    if (promotionCodeValue) {
+      const percentMatch = promotionCodeValue.match(/(\d{1,3})$/);
+      const percentValue = percentMatch ? Number(percentMatch[1]) : null;
+      if (percentValue && percentValue > 0 && percentValue <= 100) {
+        const reduction = Math.round((total * percentValue) / 100);
+        if (reduction > 0) {
+          manualDiscountAmount = reduction;
+          total = Math.max(0, total - reduction);
+        }
+      }
+      promotionEntries.push({
+        code: promotionCodeValue,
+        description: `Mã ${promotionCodeValue}`,
+        discount_amount: manualDiscountAmount ?? undefined,
+      });
     }
     const normalizedTotal = Math.max(0, Math.round(total));
     const normalizedOriginal = original && original > normalizedTotal ? Math.round(original) : null;
@@ -685,9 +739,16 @@ const BookingCheckout = () => {
       discountAmount,
       discountPercent,
       promotionLabel: promotionLabel ?? (discountPercent ? `Giảm ${discountPercent}%` : null),
+      appliedPromotions: promotionEntries,
     };
-  }, [adults, children, selectedPackage, tour?.base_price, tourPriceInfo]);
+  }, [adults, children, promotionCodeValue, selectedPackage, tour?.base_price, tourPriceInfo]);
+  const appliedPromotionEntries = priceSummary.appliedPromotions ?? [];
   const totalPrice = priceSummary.total;
+  const hasDiscount = Boolean(priceSummary.discountAmount && priceSummary.discountAmount > 0);
+  const totalPriceLabel = formatCurrency(priceSummary.total, displayCurrency);
+  const discountAmountLabel = hasDiscount
+    ? formatCurrency(priceSummary.discountAmount, displayCurrency)
+    : "";
 
   const mutation = useMutation({
     mutationFn: (payload: CreateBookingPayload) => createBooking(payload),
@@ -742,6 +803,10 @@ const BookingCheckout = () => {
       const bookingPromotions =
         bookingEntity?.promotions ??
         (Array.isArray(response?.promotions) ? response.promotions : null);
+      const promotionsForPanel: BookingPromotion[] =
+        Array.isArray(bookingPromotions) && bookingPromotions.length > 0
+          ? bookingPromotions
+          : (appliedPromotionEntries as BookingPromotion[]);
       const promotionsDiscountTotal =
         Array.isArray(bookingPromotions)
           ? bookingPromotions.reduce((sum, promo) => {
@@ -920,7 +985,7 @@ const BookingCheckout = () => {
             qrImage: resolvedQrImage ?? null,
             providerName,
             discountTotal: inferredDiscountTotal ?? null,
-            promotions: bookingPromotions ?? null,
+            promotions: promotionsForPanel.length > 0 ? promotionsForPanel : null,
           });
           setShouldPollSepayStatus(true);
           return;
@@ -946,7 +1011,7 @@ const BookingCheckout = () => {
             qrImage: resolvedQrImage ?? null,
             providerName,
             discountTotal: inferredDiscountTotal ?? null,
-            promotions: bookingPromotions ?? null,
+            promotions: promotionsForPanel.length > 0 ? promotionsForPanel : null,
           });
           setShouldPollSepayStatus(true);
           return;
@@ -1901,6 +1966,42 @@ useEffect(() => {
                             <FormDescription>
                               Hệ thống vẫn tự áp dụng khuyến mãi nội bộ nếu tour của bạn đủ điều kiện.
                             </FormDescription>
+                            {hasDiscount ? (
+                              <div className="mt-2 space-y-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                                <div>
+                                  <p className="text-sm font-semibold text-emerald-900">
+                                    {priceSummary.promotionLabel ?? "Khuyến mãi đã áp dụng"}
+                                  </p>
+                                  <p>
+                                    Tổng sau giảm:{" "}
+                                    <span className="font-semibold text-emerald-900">{totalPriceLabel}</span>
+                                  </p>
+                                  <p>Tiết kiệm {discountAmountLabel}</p>
+                                </div>
+                                {appliedPromotionEntries.length > 0 ? (
+                                  <div className="space-y-1">
+                                    <p className="text-[11px] font-semibold uppercase text-emerald-700">
+                                      Chi tiết khuyến mãi
+                                    </p>
+                                    <ul className="space-y-1.5">
+                                      {appliedPromotionEntries.map((promo, idx) => (
+                                        <li
+                                          key={promo.code ?? promo.description ?? `promo-${idx}`}
+                                          className="rounded-md bg-white/60 px-2 py-1 text-emerald-700"
+                                        >
+                                          <span className="font-medium">
+                                            {promo.description ?? (promo.code ? `Mã ${promo.code}` : "Khuyến mãi")}
+                                          </span>
+                                          {promo.code && (
+                                            <span className="ml-1 text-[11px] text-emerald-600">({promo.code})</span>
+                                          )}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : null}
                             <FormMessage />
                           </FormItem>
                         )}
@@ -1927,27 +2028,14 @@ useEffect(() => {
                               })}
                             </span>
                           )}
-                          <span className="text-2xl font-bold text-primary">
-                            {totalPrice.toLocaleString("vi-VN", {
-                              style: "currency",
-                              currency: displayCurrency,
-                              minimumFractionDigits: 0,
-                            })}
-                          </span>
+                          <span className="text-2xl font-bold text-primary">{totalPriceLabel}</span>
                           {priceSummary.promotionLabel ? (
                             <span className="text-xs font-medium text-emerald-600">
                               {priceSummary.promotionLabel}
                             </span>
                           ) : null}
-                          {priceSummary.discountAmount ? (
-                            <span className="text-xs text-emerald-600">
-                              Tiết kiệm{" "}
-                              {priceSummary.discountAmount.toLocaleString("vi-VN", {
-                                style: "currency",
-                                currency: displayCurrency,
-                                minimumFractionDigits: 0,
-                              })}
-                            </span>
+                          {hasDiscount ? (
+                            <span className="text-xs text-emerald-600">Tiết kiệm {discountAmountLabel}</span>
                           ) : null}
                         </div>
                       </div>

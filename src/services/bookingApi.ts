@@ -1,4 +1,4 @@
-import { apiClient } from "@/lib/api-client";
+import { apiClient, ensureCsrfToken } from "@/lib/api-client";
 import type {
   Paginated,
   PublicTour,
@@ -335,7 +335,10 @@ export interface BookingPaymentStatusResponse {
 export async function fetchBookingPaymentStatus(
   id: string | number,
 ): Promise<BookingPaymentStatusResponse> {
-  const res = await apiClient.get(`/bookings/${id}/payment-status`);
+  await ensureCsrfToken();
+  const res = await apiClient.get(`/bookings/${id}/payment-status`, {
+    withCredentials: true,
+  });
   return res.data as BookingPaymentStatusResponse;
 }
 
