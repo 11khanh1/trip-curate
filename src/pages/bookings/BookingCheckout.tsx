@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -459,6 +459,19 @@ const BookingCheckout = () => {
   const children = form.watch("children");
   const packageId = form.watch("package_id");
   const scheduleId = form.watch("schedule_id");
+  const isSchedulePast = useCallback((schedule?: PublicTourSchedule | null) => {
+    if (!schedule) return false;
+    const raw =
+      (schedule.start_date as string | null | undefined) ??
+      ((schedule as Record<string, unknown>)?.startDate as string | undefined);
+    if (!raw) return false;
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) return false;
+    const today = new Date();
+    parsed.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
+    return parsed.getTime() < today.getTime();
+  }, []);
 
   const { data: tour, isLoading, isError, error } = useQuery<PublicTour | null>({
     queryKey: ["tour-detail", tourId],
@@ -560,6 +573,16 @@ const BookingCheckout = () => {
     () => schedules.find((schedule) => String(schedule?.id) === scheduleId),
     [schedules, scheduleId],
   );
+  useEffect(() => {
+    if (selectedSchedule && isSchedulePast(selectedSchedule) && scheduleId) {
+      toast({
+        title: "Lịch khởi hành đã qua",
+        description: "Vui lòng chọn lịch khởi hành còn hiệu lực.",
+        variant: "destructive",
+      });
+      setValue("schedule_id", "", { shouldValidate: true });
+    }
+  }, [selectedSchedule, isSchedulePast, scheduleId, setValue, toast]);
 
   const selectedScheduleMinParticipants = useMemo(() => {
     if (!selectedSchedule) return null;
@@ -1669,14 +1692,25 @@ useEffect(() => {
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {schedules.map((schedule) => (
-                                schedule && <SelectItem key={String(schedule.id)} value={String(schedule.id)}>
-                                  {schedule.title ??
-                                    (schedule.start_date
-                                      ? new Date(schedule.start_date).toLocaleDateString("vi-VN")
-                                      : `Lịch ${schedule.id}`)}
-                                </SelectItem>
-                              ))}
+                              {schedules.map((schedule) => {
+                                if (!schedule) return null;
+                                const past = isSchedulePast(schedule);
+                                const baseLabel =
+                                  schedule.title ??
+                                  (schedule.start_date
+                                    ? new Date(schedule.start_date).toLocaleDateString("vi-VN")
+                                    : `Lịch ${schedule.id}`);
+                                return (
+                                  <SelectItem
+                                    key={String(schedule.id)}
+                                    value={String(schedule.id)}
+                                    disabled={past}
+                                  >
+                                    {baseLabel}
+                                    {past ? " (Đã kết thúc)" : ""}
+                                  </SelectItem>
+                                );
+                              })}
                             </SelectContent>
                           </Select>
                           <FormMessage />
