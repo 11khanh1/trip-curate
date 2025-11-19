@@ -17,27 +17,61 @@ export interface RecommendationItem {
   tour?: PublicTour | null;
 }
 
+export interface RecommendationMeta {
+  generated_at?: string;
+  count?: number;
+  base_tour_id?: string | number | null;
+  has_personalized_signals?: boolean;
+  personalized_results?: boolean;
+  [key: string]: unknown;
+}
+
 export interface RecommendationResponse {
   data: RecommendationItem[];
-  meta?: {
-    generated_at?: string;
-    count?: number;
-    base_tour_id?: string | number | null;
-    has_personalized_signals?: boolean;
-    personalized_results?: boolean;
-    [key: string]: unknown;
-  };
+  meta?: RecommendationMeta;
 }
+
+const normalizeRecommendationPayload = (payload: unknown): RecommendationResponse => {
+  if (!payload || typeof payload !== "object") {
+    return { data: [] };
+  }
+
+  const record = payload as Record<string, unknown>;
+  let data: RecommendationItem[] = [];
+  if (Array.isArray(record.data)) {
+    data = record.data as RecommendationItem[];
+  } else if (record.data && typeof record.data === "object" && Array.isArray((record.data as { data?: unknown }).data)) {
+    data = ((record.data as { data?: RecommendationItem[] }).data ?? []) as RecommendationItem[];
+  } else if (Array.isArray(record.recommendations)) {
+    data = record.recommendations as RecommendationItem[];
+  } else if (Array.isArray(record.items)) {
+    data = record.items as RecommendationItem[];
+  } else if (Array.isArray(record.records)) {
+    data = record.records as RecommendationItem[];
+  }
+
+  let meta: RecommendationMeta | undefined;
+  if (record.meta && typeof record.meta === "object") {
+    meta = record.meta as RecommendationMeta;
+  } else {
+    const additional = record.additional;
+    if (additional && typeof additional === "object") {
+      const additionalRecord = additional as Record<string, unknown>;
+      if (additionalRecord.meta && typeof additionalRecord.meta === "object") {
+        meta = additionalRecord.meta as RecommendationMeta;
+      }
+    }
+  }
+
+  return { data, meta };
+};
 
 export const fetchPersonalizedRecommendations = async (limit = 10): Promise<RecommendationResponse> => {
   const response = await apiClient.get("/recommendations", {
     params: { limit },
   });
-  const payload = extractData<RecommendationResponse>(response);
-  return {
-    data: Array.isArray(payload?.data) ? payload.data : [],
-    meta: payload?.meta,
-  };
+  const payload = extractData<unknown>(response);
+  return normalizeRecommendationPayload(payload);
 };
 
 export const fetchSimilarRecommendations = async (
@@ -47,9 +81,6 @@ export const fetchSimilarRecommendations = async (
   const response = await apiClient.get(`/recommendations/similar/${tourId}`, {
     params: { limit },
   });
-  const payload = extractData<RecommendationResponse>(response);
-  return {
-    data: Array.isArray(payload?.data) ? payload.data : [],
-    meta: payload?.meta,
-  };
+  const payload = extractData<unknown>(response);
+  return normalizeRecommendationPayload(payload);
 };

@@ -394,6 +394,16 @@ const BookingDetailPage = () => {
     queryFn: () => fetchBookingDetail(String(id)),
     enabled: Boolean(id),
   });
+
+  const {
+    data: bookingInvoice,
+    isFetching: isInvoiceFetching,
+    refetch: refetchInvoice,
+  } = useQuery<BookingInvoice | null>({
+    queryKey: ["booking-invoice", id],
+    queryFn: () => fetchBookingInvoice(String(id)),
+    enabled: Boolean(id),
+  });
   const bookingRecord = (booking ?? null) as Record<string, unknown>;
   const {
     data: refundRequestList = [],
@@ -684,6 +694,8 @@ const BookingDetailPage = () => {
             : "Bạn có thể tải hóa đơn sau vài phút.",
       });
       queryClient.invalidateQueries({ queryKey: ["booking-detail", id] });
+      queryClient.invalidateQueries({ queryKey: ["booking-invoice", id] });
+      void refetchInvoice();
     },
     onError: (error: unknown) => {
       console.error("Không thể yêu cầu hóa đơn:", error);
@@ -1014,7 +1026,7 @@ const BookingDetailPage = () => {
     });
   }, [booking?.id, booking?.refund_requests, id, refundRequestList]);
   const invoiceRecord = (bookingRecord?.["invoice"] as BookingInvoice | null) ?? null;
-  const invoice = booking?.invoice ?? invoiceRecord;
+  const invoice = booking?.invoice ?? invoiceRecord ?? bookingInvoice ?? null;
   const resolvedInvoiceDetail = invoiceDetail ?? invoice ?? null;
   const hasRefundInProgress = derivedRefundRequests.some((request) => {
     const status = (request.status ?? "").toString().trim().toLowerCase();
