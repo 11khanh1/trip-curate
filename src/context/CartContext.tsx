@@ -217,6 +217,10 @@ const mapCartApiItemToCartItem = (item: CartApiItem): CartItem => {
     : undefined;
 
   const tourPriceInfo = tourData ? getTourPriceInfo(tourData as PublicTour) : null;
+  const tourLevelDiscountPercent =
+    typeof tourPriceInfo?.discountPercent === "number" && Number.isFinite(tourPriceInfo.discountPercent)
+      ? Math.max(0, tourPriceInfo.discountPercent)
+      : null;
   const autoPromotion =
     (isRecord(item.auto_promotion) ? (item.auto_promotion as AutoPromotion) : null) ??
     (isRecord((item as Record<string, unknown>).autoPromotion)
@@ -290,7 +294,12 @@ const mapCartApiItemToCartItem = (item: CartApiItem): CartItem => {
   let totalPrice = Math.max(0, apiSubtotal);
   let originalSubtotal: number | null = baseSubtotal > totalPrice ? baseSubtotal : null;
 
-  if (autoPromotion && baseSubtotal > 0) {
+  const hasTourLevelDiscount = baseSubtotal > 0 && !!tourLevelDiscountPercent && tourLevelDiscountPercent > 0;
+  if (hasTourLevelDiscount) {
+    const ratio = Math.max(0, Math.min(1, 1 - tourLevelDiscountPercent / 100));
+    totalPrice = Math.round(baseSubtotal * ratio);
+    originalSubtotal = Math.round(baseSubtotal);
+  } else if (autoPromotion && baseSubtotal > 0) {
     const applied = applyAutoPromotionToPrice(baseSubtotal, autoPromotion);
     if (typeof applied.finalPrice === "number" && applied.finalPrice < totalPrice) {
       totalPrice = applied.finalPrice;
