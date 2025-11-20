@@ -217,10 +217,6 @@ const mapCartApiItemToCartItem = (item: CartApiItem): CartItem => {
     : undefined;
 
   const tourPriceInfo = tourData ? getTourPriceInfo(tourData as PublicTour) : null;
-  const tourLevelDiscountPercent =
-    typeof tourPriceInfo?.discountPercent === "number" && Number.isFinite(tourPriceInfo.discountPercent)
-      ? Math.max(0, tourPriceInfo.discountPercent)
-      : null;
   const autoPromotion =
     (isRecord(item.auto_promotion) ? (item.auto_promotion as AutoPromotion) : null) ??
     (isRecord((item as Record<string, unknown>).autoPromotion)
@@ -293,6 +289,24 @@ const mapCartApiItemToCartItem = (item: CartApiItem): CartItem => {
     firstNumber(item.total_price, item.totalPrice, item.total_amount, item.subtotal) ?? baseSubtotal;
   let totalPrice = Math.max(0, apiSubtotal);
   let originalSubtotal: number | null = baseSubtotal > totalPrice ? baseSubtotal : null;
+
+  const explicitDiscountPrice = firstNumber(
+    (tourData as Record<string, unknown>)?.price_after_discount,
+    (tourData as Record<string, unknown>)?.priceAfterDiscount,
+  );
+  const explicitDiscountPercent =
+    typeof explicitDiscountPrice === "number" &&
+    explicitDiscountPrice > 0 &&
+    baseAdultPrice > 0 &&
+    explicitDiscountPrice < baseAdultPrice
+      ? Math.max(0, Math.round(((baseAdultPrice - explicitDiscountPrice) / baseAdultPrice) * 100))
+      : null;
+  const tourLevelDiscountPercent =
+    explicitDiscountPercent !== null && explicitDiscountPercent > 0
+      ? explicitDiscountPercent
+      : typeof tourPriceInfo?.discountPercent === "number" && Number.isFinite(tourPriceInfo.discountPercent)
+      ? Math.max(0, tourPriceInfo.discountPercent)
+      : null;
 
   const hasTourLevelDiscount = baseSubtotal > 0 && !!tourLevelDiscountPercent && tourLevelDiscountPercent > 0;
   if (hasTourLevelDiscount) {

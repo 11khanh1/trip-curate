@@ -252,6 +252,14 @@ export const getTourPriceInfo = (tour: PublicTour | Record<string, unknown>): To
 
   let originalPrice =
     typeof originalCandidate === "number" && originalCandidate > 0 ? originalCandidate : undefined;
+  if (
+    hasDiscountPrice &&
+    (!originalPrice || originalPrice <= price) &&
+    typeof fallbackPrice === "number" &&
+    fallbackPrice > price
+  ) {
+    originalPrice = fallbackPrice;
+  }
   let discountAmount: number | undefined;
   let discountPercent: number | undefined;
 
