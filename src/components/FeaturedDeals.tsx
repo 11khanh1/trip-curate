@@ -1,6 +1,5 @@
 import { ArrowRight } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchActivePromotions, type HomePromotion } from "@/services/publicApi";
 import { Link } from "react-router-dom";
@@ -16,8 +15,6 @@ const GRADIENTS = [
   "bg-gradient-to-br from-rose-500 to-fuchsia-500",
   "bg-gradient-to-br from-amber-500 to-rose-500",
 ];
-
-const BUTTON_TEXT = "Săn deal ngay";
 
 const fallbackDeals = [
   {
@@ -137,14 +134,6 @@ const FeaturedDeals = ({ promotions }: FeaturedDealsProps) => {
                   <h3 className="text-xl font-bold mb-2 leading-tight">{deal.title}</h3>
                   <p className="text-white/90 text-sm mb-4">{deal.subtitle}</p>
                 </div>
-
-                <Button
-                  size="sm"
-                  className="bg-white/20 backdrop-blur-sm text-white border border-white/30 hover:bg-white/30 w-fit text-xs font-semibold"
-                >
-                  {BUTTON_TEXT}
-                  <ArrowRight className="w-3 h-3 ml-1" />
-                </Button>
               </div>
             ))}
           </div>

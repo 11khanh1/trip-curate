@@ -216,6 +216,7 @@ const resolveBookingScheduleId = (booking?: Booking | null) => {
 
 const PAYMENT_SUCCESS_STATUSES = new Set(["paid", "success", "completed"]);
 const PAYMENT_REFUND_STATUSES = new Set(["refunded"]);
+const AWAITING_CONFIRMATION_STATUSES = new Set(["pending", "unconfirmed"]);
 const normalizeStatus = (status?: string | null) => (status ?? "").toString().trim().toLowerCase();
 
 const formatCurrency = (value?: number | null, currency = "VND") => {
@@ -772,42 +773,6 @@ const BookingDetailPage = () => {
     paymentMutation.mutate();
   };
 
-  const paymentButtonState = (() => {
-    if (canPayOnline) {
-      return {
-        label: paymentMutation.isPending ? "Đang xử lý..." : "Thanh toán ngay",
-        disabled: paymentMutation.isPending,
-        onClick: handleInitiatePayment,
-      };
-    }
-    if (hasPaymentLink && !isPaid) {
-      return {
-        label: "Mở liên kết thanh toán",
-        disabled: false,
-        onClick: () => window.open(bookingPaymentUrl!, "_blank", "noopener,noreferrer"),
-      };
-    }
-    if (isPaid) {
-      return {
-        label: "Đã thanh toán",
-        disabled: true,
-        onClick: undefined,
-      };
-    }
-    if (paymentMethod === "offline") {
-      return {
-        label: "Thanh toán trực tiếp",
-        disabled: true,
-        onClick: undefined,
-      };
-    }
-    return {
-      label: "Thanh toán chưa khả dụng",
-      disabled: true,
-      onClick: undefined,
-    };
-  })();
-
   const handleRefundFormChange = <K extends keyof typeof refundForm>(field: K, value: string) => {
     setRefundForm((prev) => ({ ...prev, [field]: value }));
   };
@@ -1061,8 +1026,9 @@ const BookingDetailPage = () => {
   const paymentStatusBadgeVariant = isAwaitingPayment ? "outline" : statusVariant(resolvedPaymentStatus);
   const bookingStatusLabel = statusLabel(booking?.status);
   const bookingStatusVariant = statusVariant(booking?.status);
+  const bookingStatusNormalized = normalizeStatus(booking?.status);
   const isAwaitingConfirmation =
-    booking?.status !== "cancelled" &&
+    AWAITING_CONFIRMATION_STATUSES.has(bookingStatusNormalized) &&
     (PAYMENT_SUCCESS_STATUSES.has(paymentStatusNormalized) || hasPaidTransaction);
   const headerStatusLabel = isAwaitingConfirmation ? "Chờ xác nhận" : bookingStatusLabel;
   const headerStatusVariant = isAwaitingConfirmation ? "default" : bookingStatusVariant;
@@ -1263,12 +1229,6 @@ const BookingDetailPage = () => {
               <CardFooter className="flex flex-wrap gap-2">
                 <Button variant="outline" onClick={() => navigate("/bookings")}>
                   Quay lại danh sách
-                </Button>
-                <Button
-                  onClick={paymentButtonState.onClick}
-                  disabled={paymentButtonState.disabled || !paymentButtonState.onClick}
-                >
-                  {paymentButtonState.label}
                 </Button>
                 {canCancel && (
                 <Button
@@ -1817,15 +1777,6 @@ const BookingDetailPage = () => {
                     <AlertTitle>Chưa có giao dịch thanh toán</AlertTitle>
                     <AlertDescription>
                       Booking của bạn chưa phát sinh thanh toán hoặc đang chờ cập nhật từ hệ thống.
-                      {bookingPaymentUrl && (
-                        <div className="mt-3">
-                          <Button asChild size="sm">
-                            <a href={bookingPaymentUrl} target="_blank" rel="noopener noreferrer">
-                              Thanh toán ngay
-                            </a>
-                          </Button>
-                        </div>
-                      )}
                     </AlertDescription>
                   </Alert>
                 )}

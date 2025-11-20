@@ -6,7 +6,6 @@ import { ChatWidgetProvider } from "@/context/ChatWidgetContext";
 import FloatingChatWidget from "@/components/chat/FloatingChatWidget";
 import Index from "./pages/Index";
 import AllActivities from "./pages/AllActivities";
-import ActivityDetail from "./pages/ActivityDetail";
 import NotFound from "./pages/NotFound";
 import Partner from "./pages/partner/Partner";
 import Deals from "./pages/Deals";
@@ -16,7 +15,6 @@ import Press from "./pages/about/Press";
 import Partnership from "./pages/about/Partnership";
 import Affiliate from "./pages/about/Affiliate";
 import HelpCenter from "./pages/support/HelpCenter";
-import ContactUs from "./pages/support/ContactUs";
 import CancellationPolicy from "./pages/support/CancellationPolicy";
 import PrivacyPolicy from "./pages/support/PrivacyPolicy";
 import TermsOfService from "./pages/support/TermsOfService";
@@ -62,7 +60,6 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/activities" element={<AllActivities />} />
             <Route path="/recent" element={<RecentToursPage />} />
-            <Route path="/activity/:id" element={<ActivityDetail />} />
             <Route path="/deals" element={<Deals />} />
             <Route path="/resultsearch" element={<ResultSearch />} />
             <Route path="/bookings" element={<BookingsList />} />
@@ -81,7 +78,6 @@ const App = () => (
             <Route path="/about/partnership" element={<Partnership />} />
             <Route path="/about/affiliate" element={<Affiliate />} />
             <Route path="/support/help-center" element={<HelpCenter />} />
-            <Route path="/support/contact" element={<ContactUs />} />
             <Route path="/support/cancellation-policy" element={<CancellationPolicy />} />
             <Route path="/support/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="/support/terms-of-service" element={<TermsOfService />} />
