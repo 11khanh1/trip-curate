@@ -88,6 +88,10 @@ const statusLabel = (status?: string) => {
   switch (status) {
     case "pending":
       return "Chờ thanh toán";
+    case "processing":
+      return "Đang xử lý";
+    case "issued":
+      return "Đã phát hành";
     case "confirmed":
       return "Đã xác nhận";
     case "completed":
