@@ -18,7 +18,11 @@ import {
   type Booking,
   type BookingPaymentStatusResponse,
 } from "@/services/bookingApi";
-import { resolveBookingPaymentUrl } from "@/lib/payment-utils";
+import {
+  resolveBookingPayableAmount,
+  resolveBookingPaymentUrl,
+  resolvePaymentFinalAmount,
+} from "@/lib/payment-utils";
 import { deduceSepayQrImage, deriveQrFromPaymentUrl, extractSepayQrFromBooking } from "@/lib/sepay";
 
 const formatCurrency = (value?: number | null, currency = "VND") => {
@@ -169,11 +173,15 @@ const SepayGateway = () => {
   }, [paymentUrl, qrImage]);
 
   const amount = useMemo(() => {
+    const bookingAmount = resolveBookingPayableAmount(booking);
+    if (typeof bookingAmount === "number") return bookingAmount;
+    const paymentAmount = resolvePaymentFinalAmount(paymentStatus?.payment);
+    if (typeof paymentAmount === "number") return paymentAmount;
     if (typeof booking?.total_price === "number") return booking.total_price;
     if (typeof booking?.total_amount === "number") return booking.total_amount;
     if (typeof paymentStatus?.payment?.amount === "number") return paymentStatus.payment.amount;
     return null;
-  }, [booking?.total_amount, booking?.total_price, paymentStatus?.payment?.amount]);
+  }, [booking, paymentStatus?.payment]);
 
   const currency = useMemo(() => {
     const raw =

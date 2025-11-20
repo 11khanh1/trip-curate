@@ -11,6 +11,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 import type { Booking } from "@/services/bookingApi";
+import {
+  resolveBookingPayableAmount,
+  resolvePaymentDiscountAmount,
+  resolvePaymentFinalAmount,
+  resolvePaymentOriginalAmount,
+} from "@/lib/payment-utils";
 
 const statusVariant = (status?: string) => {
   switch (status) {
@@ -93,6 +99,8 @@ const formatCurrency = (value?: number | null, currency = "VND") => {
 };
 
 const resolveBookingTotal = (booking: Booking | Record<string, unknown>) => {
+  const payable = resolveBookingPayableAmount(booking);
+  if (typeof payable === "number") return payable;
   const record = booking as Record<string, unknown>;
   return (
     (typeof booking.total_price === "number" && Number.isFinite(booking.total_price)
@@ -343,33 +351,61 @@ const OrderHistory = ({ title = "Đơn hàng gần đây", limit = 5, emptyMessa
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {booking.payments?.map((payment, index) => (
-                              <TableRow key={payment.id ?? index}>
-                                <TableCell className="font-medium text-foreground">
-                                  {payment.order_code ?? payment.transaction_id ?? "—"}
-                                </TableCell>
-                                <TableCell>{formatCurrency(payment.amount, payment.currency ?? currency)}</TableCell>
-                                <TableCell>
-                                  <Badge variant={statusVariant(payment.status)}>{paymentStatusLabel(payment.status)}</Badge>
-                                </TableCell>
-                                <TableCell>{formatDate(payment.paid_at ?? payment.updated_at ?? "")}</TableCell>
-                                <TableCell className="text-right">
-                                  {payment.status !== "paid" && sepayPending ? (
-                                    <Button asChild size="sm">
-                                      <a href={booking.payment_url ?? "#"} target="_blank" rel="noopener noreferrer">
-                                        Thanh toán ngay
-                                      </a>
-                                    </Button>
-                                  ) : payment.status !== "paid" && offlinePending ? (
-                                    <Button asChild size="sm" variant="outline">
-                                      <Link to={`/bookings/${booking.id}`}>Cập nhật</Link>
-                                    </Button>
-                                  ) : (
-                                    "—"
-                                  )}
-                                </TableCell>
-                              </TableRow>
-                            ))}
+                            {booking.payments?.map((payment, index) => {
+                              const paymentFinalAmount = resolvePaymentFinalAmount(payment);
+                              const paymentOriginalAmount = resolvePaymentOriginalAmount(payment);
+                              const paymentDiscountAmount = resolvePaymentDiscountAmount(payment);
+                              const displayAmount = paymentFinalAmount ?? paymentOriginalAmount ?? payment.amount ?? null;
+                              const showOriginal =
+                                typeof paymentOriginalAmount === "number" &&
+                                typeof displayAmount === "number" &&
+                                paymentOriginalAmount > displayAmount
+                                  ? paymentOriginalAmount
+                                  : null;
+                              return (
+                                <TableRow key={payment.id ?? index}>
+                                  <TableCell className="font-medium text-foreground">
+                                    {payment.order_code ?? payment.transaction_id ?? "—"}
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="font-semibold text-foreground">
+                                      {formatCurrency(displayAmount, payment.currency ?? currency)}
+                                    </div>
+                                    {showOriginal ? (
+                                      <div className="text-xs text-muted-foreground line-through">
+                                        {formatCurrency(showOriginal, payment.currency ?? currency)}
+                                      </div>
+                                    ) : null}
+                                    {paymentDiscountAmount && paymentDiscountAmount > 0 ? (
+                                      <div className="text-xs text-emerald-600">
+                                        Giảm {formatCurrency(paymentDiscountAmount, payment.currency ?? currency)}
+                                      </div>
+                                    ) : null}
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge variant={statusVariant(payment.status)}>
+                                      {paymentStatusLabel(payment.status)}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell>{formatDate(payment.paid_at ?? payment.updated_at ?? "")}</TableCell>
+                                  <TableCell className="text-right">
+                                    {payment.status !== "paid" && sepayPending ? (
+                                      <Button asChild size="sm">
+                                        <a href={booking.payment_url ?? "#"} target="_blank" rel="noopener noreferrer">
+                                          Thanh toán ngay
+                                        </a>
+                                      </Button>
+                                    ) : payment.status !== "paid" && offlinePending ? (
+                                      <Button asChild size="sm" variant="outline">
+                                        <Link to={`/bookings/${booking.id}`}>Cập nhật</Link>
+                                      </Button>
+                                    ) : (
+                                      "—"
+                                    )}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
                           </TableBody>
                         </Table>
                       ) : (

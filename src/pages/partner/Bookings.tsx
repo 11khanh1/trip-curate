@@ -58,6 +58,13 @@ import {
   PartnerBookingStatus,
   updatePartnerBookingStatus,
 } from "@/services/partnerApi";
+import type { Booking } from "@/services/bookingApi";
+import {
+  resolveBookingPayableAmount,
+  resolvePaymentDiscountAmount,
+  resolvePaymentFinalAmount,
+  resolvePaymentOriginalAmount,
+} from "@/lib/payment-utils";
 
 type StatusFilter = "all" | PartnerBookingStatus;
 
@@ -224,6 +231,8 @@ const resolveGuestCount = (booking: PartnerBooking) => {
 };
 
 const resolveTotalAmount = (booking: PartnerBooking) => {
+  const payable = resolveBookingPayableAmount(booking as Booking);
+  if (typeof payable === "number") return payable;
   return (
     toNumber(booking.total_price) ??
     toNumber(booking.total_amount) ??
@@ -907,24 +916,46 @@ export default function PartnerBookings() {
                     <div className="space-y-2">
                       <p className="font-medium text-foreground">Giao dịch:</p>
                       <ul className="space-y-2 rounded border border-muted-foreground/20 p-2">
-                        {selectedBooking.payments.map((payment) => (
-                          <li key={payment.id ?? payment.transaction_id ?? payment.order_code}>
-                            <p className="font-medium text-foreground">
-                              {payment.method ?? payment.provider ?? "Thanh toán"}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              Số tiền: {formatCurrency(payment.amount)}
-                            </p>
-                            {payment.status && (
-                              <p className="text-sm text-muted-foreground">Trạng thái: {payment.status}</p>
-                            )}
-                            {payment.paid_at && (
-                              <p className="text-sm text-muted-foreground">
-                                Thanh toán lúc: {formatDateTime(payment.paid_at)}
+                        {selectedBooking.payments.map((payment) => {
+                          const paymentFinalAmount = resolvePaymentFinalAmount(payment);
+                          const paymentOriginalAmount = resolvePaymentOriginalAmount(payment);
+                          const paymentDiscountAmount = resolvePaymentDiscountAmount(payment);
+                          const displayAmount = paymentFinalAmount ?? paymentOriginalAmount ?? payment.amount ?? null;
+                          const showOriginal =
+                            typeof paymentOriginalAmount === "number" &&
+                            typeof displayAmount === "number" &&
+                            paymentOriginalAmount > displayAmount
+                              ? paymentOriginalAmount
+                              : null;
+                          return (
+                            <li key={payment.id ?? payment.transaction_id ?? payment.order_code}>
+                              <p className="font-medium text-foreground">
+                                {payment.method ?? payment.provider ?? "Thanh toán"}
                               </p>
-                            )}
-                          </li>
-                        ))}
+                              <p className="text-sm text-muted-foreground">
+                                Số tiền: {formatCurrency(displayAmount)}
+                              </p>
+                              {showOriginal ? (
+                                <p className="text-xs text-muted-foreground line-through">
+                                  {formatCurrency(showOriginal)}
+                                </p>
+                              ) : null}
+                              {paymentDiscountAmount && paymentDiscountAmount > 0 ? (
+                                <p className="text-xs text-emerald-600">
+                                  Giảm {formatCurrency(paymentDiscountAmount)}
+                                </p>
+                              ) : null}
+                              {payment.status && (
+                                <p className="text-sm text-muted-foreground">Trạng thái: {payment.status}</p>
+                              )}
+                              {payment.paid_at && (
+                                <p className="text-sm text-muted-foreground">
+                                  Thanh toán lúc: {formatDateTime(payment.paid_at)}
+                                </p>
+                              )}
+                            </li>
+                          );
+                        })}
                       </ul>
                     </div>
                   )}

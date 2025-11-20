@@ -64,6 +64,10 @@ import {
   coalesceString,
   extractPaymentIntentUrl,
   resolveBookingPaymentUrl,
+  resolveBookingPayableAmount,
+  resolvePaymentDiscountAmount,
+  resolvePaymentFinalAmount,
+  resolvePaymentOriginalAmount,
 } from "@/lib/payment-utils";
 
 const statusVariant = (status?: string) => {
@@ -268,18 +272,6 @@ const coerceNumber = (value: unknown): number | undefined => {
     if (Number.isFinite(parsed)) return parsed;
   }
   return undefined;
-};
-
-const resolveBookingAmount = (booking?: Booking | Record<string, unknown> | null): number | null => {
-  if (!booking) return null;
-  const record = booking as Record<string, unknown>;
-  return (
-    coerceNumber((booking as Booking).total_price) ??
-    coerceNumber(record?.totalPrice) ??
-    coerceNumber((booking as Booking).total_amount) ??
-    coerceNumber(record?.totalAmount) ??
-    null
-  );
 };
 
 const didPaymentSucceed = (payment?: BookingPayment | null) => {
@@ -977,7 +969,7 @@ const BookingDetailPage = () => {
       : booking?.tour?.id != null
       ? String(booking?.tour?.id)
       : null;
-  const bookingTotalAmount = resolveBookingAmount(booking);
+  const bookingTotalAmount = resolveBookingPayableAmount(booking);
   const bookingCurrencyCandidate =
     (typeof booking?.currency === "string" && booking.currency.trim().length > 0
       ? booking.currency.trim()
@@ -1722,6 +1714,17 @@ const BookingDetailPage = () => {
                               ? payment.refund_amount
                               : null;
                           const rowPaid = didPaymentSucceed(payment);
+                          const resolvedPaymentFinal = resolvePaymentFinalAmount(payment);
+                          const resolvedPaymentOriginal = resolvePaymentOriginalAmount(payment);
+                          const paymentDiscountAmount = resolvePaymentDiscountAmount(payment);
+                          const paymentDisplayAmount =
+                            typeof resolvedPaymentFinal === "number" ? resolvedPaymentFinal : null;
+                          const paymentOriginalDisplay =
+                            typeof resolvedPaymentOriginal === "number" &&
+                            typeof paymentDisplayAmount === "number" &&
+                            resolvedPaymentOriginal > paymentDisplayAmount
+                              ? resolvedPaymentOriginal
+                              : null;
                           const rowRefunded =
                             rowPaid &&
                             PAYMENT_REFUND_STATUSES.has(normalizedRowStatus) &&
@@ -1737,7 +1740,22 @@ const BookingDetailPage = () => {
                                 {payment.order_code ?? payment.transaction_id ?? "—"}
                               </TableCell>
                               <TableCell>
-                                {formatCurrency(payment.amount, payment.currency ?? "VND")}
+                                <div className="font-semibold text-foreground">
+                                  {formatCurrency(
+                                    paymentDisplayAmount ?? payment.amount,
+                                    payment.currency ?? "VND",
+                                  )}
+                                </div>
+                                {paymentOriginalDisplay ? (
+                                  <div className="text-xs text-muted-foreground line-through">
+                                    {formatCurrency(paymentOriginalDisplay, payment.currency ?? "VND")}
+                                  </div>
+                                ) : null}
+                                {paymentDiscountAmount && paymentDiscountAmount > 0 ? (
+                                  <div className="text-xs text-emerald-600">
+                                    Giảm {formatCurrency(paymentDiscountAmount, payment.currency ?? "VND")}
+                                  </div>
+                                ) : null}
                                 {rowRefunded && (
                                   <div className="text-xs text-emerald-600">
                                     Hoàn: {formatCurrency(refundAmountValue, payment.currency ?? "VND")}

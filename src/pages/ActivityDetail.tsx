@@ -2730,85 +2730,85 @@ useEffect(() => {
           </div>
         )}
       </main>
-    <Dialog open={isGalleryOpen} onOpenChange={setIsGalleryOpen}>
-      <DialogContent className="max-w-7xl w-full p-0 border-none bg-transparent shadow-none">
-        <div className="flex h-[90vh] flex-col overflow-hidden rounded-lg  text-white">
-          <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
-            <h3 className="font-semibold truncate pr-4">{activity.title}</h3>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-white hover:bg-white/10 flex-shrink-0"
-              onClick={closeGallery}
-            >
-              <X className="h-5 w-5" />
-            </Button>
-          </div>
-
-          <div className="relative flex-1 px-16 py-4 min-h-0">
-            {totalImages > 1 && (
-              <button
-                type="button"
-                onClick={goPrevImage}
-                className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white transition hover:bg-black/60 z-10"
-                aria-label="Ảnh trước"
+      <Dialog open={isGalleryOpen} onOpenChange={setIsGalleryOpen}>
+        <DialogContent className="max-w-7xl w-full p-0 border-none bg-transparent shadow-none">
+          <div className="flex h-[90vh] flex-col overflow-hidden rounded-lg  text-white">
+            <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
+              <h3 className="font-semibold truncate pr-4">{activity.title}</h3>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-white hover:bg-white/10 flex-shrink-0"
+                onClick={closeGallery}
               >
-                <ChevronLeft className="h-6 w-6" />
-              </button>
-            )}
-
-            <div className="relative flex h-full w-full items-center justify-center">
-              <img
-                src={activity.images[safeSelectedIndex] ?? mainImage}
-                alt={`${activity.title} ${safeSelectedIndex + 1}`}
-                className="max-h-full max-w-full rounded-lg object-contain"
-              />
-              <div className="absolute bottom-4 right-4 rounded-full bg-black/50 px-3 py-1 text-xs font-medium text-white/90">
-                {safeSelectedIndex + 1} / {totalImages}
-              </div>
+                <X className="h-5 w-5" />
+              </Button>
             </div>
 
-            {totalImages > 1 && (
-              <button
-                type="button"
-                onClick={goNextImage}
-                className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white transition hover:bg-black/60 z-10"
-                aria-label="Ảnh tiếp theo"
-              >
-                <ChevronRight className="h-6 w-6" />
-              </button>
-            )}
-          </div>
+            <div className="relative flex-1 px-16 py-4 min-h-0">
+              {totalImages > 1 && (
+                <button
+                  type="button"
+                  onClick={goPrevImage}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white transition hover:bg-black/60 z-10"
+                  aria-label="Ảnh trước"
+                >
+                  <ChevronLeft className="h-6 w-6" />
+                </button>
+              )}
 
-          {activity.images.length > 0 && (
-            <div className="border-t border-white/10 px-5 py-4">
-              <div className="flex justify-center">
-                <div className="flex gap-3 overflow-x-auto pb-1">
-                  {activity.images.map((image, index) => (
-                    <button
-                      key={`${index}-${image}`}
-                      type="button"
-                      onClick={() => setSelectedImage(index)}
-                      className={`relative h-16 w-24 flex-shrink-0 overflow-hidden rounded-md transition focus:outline-none ${
-                        safeSelectedIndex === index
-                          ? "ring-2 ring-white shadow-lg"
-                          : "opacity-60 hover:opacity-100"
-                      }`}
-                    >
-                      <img
-                        src={image}
-                        alt={`${activity.title} ${index + 1}`}
-                        className="h-full w-full object-cover"
-                      />
-                    </button>
-                  ))}
+              <div className="relative flex h-full w-full items-center justify-center">
+                <img
+                  src={activity.images[safeSelectedIndex] ?? mainImage}
+                  alt={`${activity.title} ${safeSelectedIndex + 1}`}
+                  className="max-h-full max-w-full rounded-lg object-contain"
+                />
+                <div className="absolute bottom-4 right-4 rounded-full bg-black/50 px-3 py-1 text-xs font-medium text-white/90">
+                  {safeSelectedIndex + 1} / {totalImages}
                 </div>
               </div>
+
+              {totalImages > 1 && (
+                <button
+                  type="button"
+                  onClick={goNextImage}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white transition hover:bg-black/60 z-10"
+                  aria-label="Ảnh tiếp theo"
+                >
+                  <ChevronRight className="h-6 w-6" />
+                </button>
+              )}
             </div>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
+
+            {activity.images.length > 0 && (
+              <div className="border-t border-white/10 px-5 py-4">
+                <div className="flex justify-center">
+                  <div className="flex gap-3 overflow-x-auto pb-1">
+                    {activity.images.map((image, index) => (
+                      <button
+                        key={`${index}-${image}`}
+                        type="button"
+                        onClick={() => setSelectedImage(index)}
+                        className={`relative h-16 w-24 flex-shrink-0 overflow-hidden rounded-md transition focus:outline-none ${
+                          safeSelectedIndex === index
+                            ? "ring-2 ring-white shadow-lg"
+                            : "opacity-60 hover:opacity-100"
+                        }`}
+                      >
+                        <img
+                          src={image}
+                          alt={`${activity.title} ${index + 1}`}
+                          className="h-full w-full object-cover"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
       <Footer />
     </div>
   );
