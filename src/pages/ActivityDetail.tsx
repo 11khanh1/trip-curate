@@ -2452,8 +2452,8 @@ useEffect(() => {
             )}
           </div>
 
-          <div className="lg:col-span-1 space-y-6 lg:self-start">
-            <div className="lg:sticky lg:top-24 space-y-6">
+          <div className="lg:col-span-1 lg:self-start space-y-6">
+            <div className="sticky top-28 z-30">
               <Card className="w-full shadow-xl">
                 <CardContent className="pt-6">
                   <div className="space-y-4">
@@ -2488,16 +2488,18 @@ useEffect(() => {
                         </p>
                       )}
                     </div>
-                      <Button
-                        onClick={handleSelectPackageClick}
-                        className="w-full bg-orange-500 hover:bg-orange-600 text-white text-base py-6"
-                      >
-                        Chọn các gói dịch vụ
-                      </Button>
+                    <Button
+                      onClick={handleSelectPackageClick}
+                      className="w-full bg-orange-500 hover:bg-orange-600 text-white text-base py-6"
+                    >
+                      Chọn các gói dịch vụ
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
+            </div>
 
+            <div className="space-y-6">
               <Card className="shadow-lg">
                 <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-0">
                   <div>
