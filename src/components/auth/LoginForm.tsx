@@ -8,6 +8,7 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiClient, ensureCsrfToken, persistAuthToken } from "@/lib/api-client";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
+import { useToast } from "@/hooks/use-toast";
 
 interface LoginFormProps {
   onSwitchToRegister: () => void;
@@ -30,6 +31,7 @@ interface SocialRedirectResponse {
 const LoginForm = ({ onSwitchToRegister, onForgotPassword, onSuccess }: LoginFormProps) => {
   const { setCurrentUser } = useUser();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [step, setStep] = useState<"choose" | "email" | "verify" | "account">("choose");
   const [formData, setFormData] = useState<{ email: string; otp: string; otpId: string | null; password: string }>({
     email: "",
@@ -189,7 +191,11 @@ const LoginForm = ({ onSwitchToRegister, onForgotPassword, onSuccess }: LoginFor
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isValidEmail(formData.email)) {
-      alert("Vui lòng nhập email hợp lệ");
+      toast({
+        title: "Email không hợp lệ",
+        description: "Vui lòng nhập địa chỉ email đúng định dạng.",
+        variant: "destructive",
+      });
       return;
     }
     setLoading(true);
@@ -200,18 +206,25 @@ const LoginForm = ({ onSwitchToRegister, onForgotPassword, onSuccess }: LoginFor
         value: formData.email.trim(),
       });
       if (data?.otp_id) {
-      setFormData((prev) => ({ ...prev, otpId: data.otp_id }));
-    }
-    alert("Đã gửi mã OTP tới email của bạn.");
-    setStep("verify");
-    setFormData((prev) => ({ ...prev, otp: "" }));
+        setFormData((prev) => ({ ...prev, otpId: data.otp_id }));
+      }
+      toast({
+        title: "VietTravel",
+        description: "Đã gửi mã OTP tới email của bạn.",
+      });
+      setStep("verify");
+      setFormData((prev) => ({ ...prev, otp: "" }));
       startResendCountdown();
     } catch (error) {
       const response = (error as any)?.response;
       const message =
         response?.data?.message ??
         (error instanceof Error ? error.message : "Không thể gửi mã OTP. Vui lòng thử lại.");
-      alert(message);
+      toast({
+        title: "Không thể gửi OTP",
+        description: message,
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }

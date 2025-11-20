@@ -151,7 +151,7 @@ const mapTourToCard = (tour: PublicTour) => {
   };
 };
 
-const POPULAR_LIMIT = 6;
+const POPULAR_LIMIT = 12;
 
 const PopularActivities = ({ tours }: PopularActivitiesProps) => {
   const shouldFetch = !tours;

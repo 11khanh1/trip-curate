@@ -25,24 +25,52 @@ const HelpCenter = () => {
       title: "Đặt chỗ",
       description: "Hướng dẫn đặt và quản lý đơn hàng",
       articles: 25,
+      items: [
+        "Cách đặt tour và chọn lịch khởi hành",
+        "Theo dõi & xác nhận trạng thái đơn",
+        "Chỉnh sửa thông tin hành khách sau khi đặt",
+        "Hủy/đổi lịch: điều kiện và phí",
+        "Đơn bị từ chối/hết chỗ: lý do và cách xử lý",
+      ],
     },
     {
       icon: <CreditCard className="w-8 h-8" />,
       title: "Thanh toán",
       description: "Phương thức thanh toán và hoàn tiền",
       articles: 18,
+      items: [
+        "Phương thức thanh toán hỗ trợ (thẻ, ví, chuyển khoản)",
+        "Nhập mã giảm giá và kiểm tra số tiền sau giảm",
+        "Kiểm tra trạng thái thanh toán pending/failed",
+        "Yêu cầu và tải hóa đơn điện tử",
+        "Hoàn tiền: thời gian xử lý và kênh nhận tiền",
+      ],
     },
     {
       icon: <MapPin className="w-8 h-8" />,
       title: "Hoạt động",
       description: "Thông tin về các hoạt động và tour",
       articles: 32,
+      items: [
+        "Đọc thông tin tour: lịch trình, giá, chính sách",
+        "Kiểm tra chỗ trống & số khách tối thiểu",
+        "Yêu cầu đặc biệt: ăn kiêng, đưa đón, ghép đoàn",
+        "Đổi gói/lịch sau khi đặt: điều kiện áp dụng",
+        "Chính sách hủy theo nhà cung cấp/điểm đến",
+      ],
     },
     {
       icon: <Phone className="w-8 h-8" />,
       title: "Tài khoản",
       description: "Quản lý tài khoản và bảo mật",
       articles: 15,
+      items: [
+        "Đăng ký/đăng nhập và xác minh email/số điện thoại",
+        "Đặt lại mật khẩu và bảo mật 2 lớp (nếu có)",
+        "Cập nhật hồ sơ & kênh nhận thông báo",
+        "Quản lý wishlist, lịch sử đặt chỗ và thông báo",
+        "Nhận diện email/link giả mạo và báo cáo sự cố",
+      ],
     },
   ];
 
@@ -122,6 +150,47 @@ const HelpCenter = () => {
                     <h3 className="font-semibold text-lg mb-2">{category.title}</h3>
                     <p className="text-sm text-muted-foreground mb-3">{category.description}</p>
                     <p className="text-xs text-primary">{category.articles} bài viết</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Topic details */}
+      <section className="py-12 bg-muted/30">
+        <div className="container mx-auto px-4">
+          <div className="max-w-6xl mx-auto space-y-8">
+            <div className="text-center">
+              <h3 className="text-2xl font-bold text-foreground">Bắt đầu từ chủ đề bạn quan tâm</h3>
+              <p className="text-sm text-muted-foreground mt-2">
+                Danh sách bài viết gợi ý để bạn tìm nhanh câu trả lời phổ biến.
+              </p>
+            </div>
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {categories.map((category, index) => (
+                <Card key={`topic-${index}`} className="h-full hover:shadow-lg transition-shadow">
+                  <CardContent className="p-5 space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+                        {category.icon}
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-foreground">{category.title}</h4>
+                        <p className="text-xs text-muted-foreground">{category.articles} bài viết</p>
+                      </div>
+                    </div>
+                    <ul className="space-y-2 text-sm text-muted-foreground">
+                      {category.items?.map((item, itemIndex) => (
+                        <li key={`${category.title}-${itemIndex}`} className="leading-snug">
+                          • {item}
+                        </li>
+                      ))}
+                    </ul>
+                    <Button variant="link" className="px-0 text-primary font-semibold">
+                      Xem tất cả {category.title.toLowerCase()}
+                    </Button>
                   </CardContent>
                 </Card>
               ))}

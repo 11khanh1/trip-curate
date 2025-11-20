@@ -6,7 +6,6 @@ import PopularActivities from "@/components/PopularActivities";
 import PersonalizedRecommendations from "@/components/recommendations/PersonalizedRecommendations";
 import FeaturesSection from "@/components/FeaturesSection";
 import TopDestinations from "@/components/TopDestinations";
-import AppDownload from "@/components/AppDownload";
 import Footer from "@/components/Footer";
 import { fetchHome } from "@/services/publicApi";
 
@@ -15,9 +14,9 @@ const Index = () => {
     queryKey: ["public-home", { categories_limit: 6, promotions_limit: 3, trending_limit: 6 }],
     queryFn: () =>
       fetchHome({
-        categories_limit: 6,
+        categories_limit: 12,
         promotions_limit: 3,
-        trending_limit: 6,
+        trending_limit: 12,
       }),
     staleTime: 5 * 60 * 1000,
   });
@@ -32,7 +31,6 @@ const Index = () => {
       <PersonalizedRecommendations />
       <FeaturesSection />
       <TopDestinations categories={homeData?.categories} />
-      <AppDownload />
       <Footer />
     </div>
   );

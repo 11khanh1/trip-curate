@@ -1,8 +1,23 @@
+import { useCallback, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Search, MapPin, Calendar, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 const HeroSection = () => {
+  const navigate = useNavigate();
+  const [keyword, setKeyword] = useState("");
+
+  const handleSubmit = useCallback(
+    (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const trimmed = keyword.trim();
+      if (!trimmed) return;
+      navigate(`/resultsearch?keyword=${encodeURIComponent(trimmed)}`);
+    },
+    [keyword, navigate],
+  );
+
   return (
     <section className="relative overflow-hidden min-h-[420px] md:min-h-[520px] flex items-center justify-center bg-gradient-to-r from-indigo-900 via-purple-800 to-pink-700 px-4">
       <div className="absolute inset-0 bg-black/40" />
@@ -34,20 +49,29 @@ const HeroSection = () => {
           hành trình, dù gần hay xa.
         </p>
 
-        <div className="bg-white rounded-xl p-3 sm:p-1 max-w-xl mx-auto shadow-2xl">
+        <form
+          onSubmit={handleSubmit}
+          className="bg-white rounded-xl p-3 sm:p-1 max-w-xl mx-auto shadow-2xl"
+        >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="flex-1 flex items-center px-3 py-2 rounded-lg bg-white">
+            <label className="flex-1 flex items-center px-3 py-2 rounded-lg bg-white" aria-label="Tìm kiếm">
               <Search className="w-5 h-5 text-gray-400 mr-3 flex-shrink-0" />
               <Input
                 placeholder="Tìm theo điểm đến, hoạt động"
+                value={keyword}
+                onChange={(event) => setKeyword(event.target.value)}
                 className="border-0 focus-visible:ring-0 text-gray-700 placeholder:text-gray-500 p-0 text-sm sm:text-base"
               />
-            </div>
-            <Button className="w-full sm:w-auto bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-lg px-6 py-3 shadow-lg">
+            </label>
+            <Button
+              type="submit"
+              className="w-full sm:w-auto bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-lg px-6 py-3 shadow-lg"
+              disabled={!keyword.trim()}
+            >
               Khám phá
             </Button>
           </div>
-        </div>
+        </form>
       </div>
     </section>
   );
