@@ -237,6 +237,44 @@ const resolveNumericValue = (...values: Array<unknown>): number | null => {
   return null;
 };
 
+const rewritePaymentUrlAmount = (url?: string | null, amount?: number | null) => {
+  if (!url || typeof url !== "string") return url ?? null;
+  if (typeof amount !== "number" || !Number.isFinite(amount)) return url;
+  try {
+    const parsed = new URL(url);
+    const rounded = Math.max(0, Math.round(amount));
+    parsed.searchParams.set("amount", String(rounded));
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+};
+
+const PAYABLE_AMOUNT_KEYS = [
+  "payable_amount",
+  "payableAmount",
+  "amount_payable",
+  "amountPayable",
+  "amount_due",
+  "amountDue",
+  "amount_after_discount",
+  "amountAfterDiscount",
+  "final_amount",
+  "finalAmount",
+  "final_total",
+  "finalTotal",
+  "total_after_discount",
+  "totalAfterDiscount",
+  "price_after_discount",
+  "priceAfterDiscount",
+  "grand_total",
+  "grandTotal",
+  "net_amount",
+  "netAmount",
+  "total_amount",
+  "totalAmount",
+];
+
 const FINAL_AMOUNT_KEYS = [
   "total_amount",
   "totalAmount",
@@ -266,9 +304,6 @@ const FINAL_AMOUNT_KEYS = [
   "amountAfterDiscount",
   "balance_due",
   "balanceDue",
-  "amount",
-  "total",
-  "value",
 ];
 
 const ORIGINAL_AMOUNT_KEYS = [
@@ -290,6 +325,8 @@ const ORIGINAL_AMOUNT_KEYS = [
   "list_price",
   "listPrice",
 ];
+
+const GENERIC_AMOUNT_KEYS = ["amount", "total", "value"];
 
 const collectRecordCandidates = (...sources: Array<unknown>): Record<string, unknown>[] => {
   const records: Record<string, unknown>[] = [];
@@ -812,21 +849,15 @@ const BookingCheckout = () => {
         responseRecord,
         ...nestedPaymentRecords,
       ];
+      const payableAmountHint = resolveAmountFromSources(amountSourceRecords, PAYABLE_AMOUNT_KEYS);
       const rawFinalAmount = resolveAmountFromSources(amountSourceRecords, FINAL_AMOUNT_KEYS);
+      const genericAmountField = resolveAmountFromSources(amountSourceRecords, GENERIC_AMOUNT_KEYS);
       const rawPriceFieldAmount = resolveNumericValue(
         bookingEntity?.total_price,
         bookingEntityRecord?.totalPrice,
         responseRecord?.["total_price"],
         responseRecord?.["totalPrice"],
       );
-      const preferredFinalAmount =
-        typeof rawFinalAmount === "number" && Number.isFinite(rawFinalAmount) ? rawFinalAmount : null;
-      const fallbackPriceAmount =
-        typeof rawPriceFieldAmount === "number" && Number.isFinite(rawPriceFieldAmount) ? rawPriceFieldAmount : null;
-      let normalizedTotalAmount = Math.max(0, preferredFinalAmount ?? fallbackPriceAmount ?? totalPrice);
-      if (totalPrice > 0 && normalizedTotalAmount - totalPrice > 1) {
-        normalizedTotalAmount = totalPrice;
-      }
       const bookingPromotions =
         bookingEntity?.promotions ??
         (Array.isArray(response?.promotions) ? response.promotions : null);
@@ -861,6 +892,23 @@ const BookingCheckout = () => {
       );
       const effectiveDiscountTotal =
         typeof explicitDiscountTotal === "number" ? explicitDiscountTotal : promotionsDiscountTotal;
+      const preferredFinalAmount =
+        typeof rawFinalAmount === "number" && Number.isFinite(rawFinalAmount) ? rawFinalAmount : null;
+      const fallbackPriceAmount =
+        typeof rawPriceFieldAmount === "number" && Number.isFinite(rawPriceFieldAmount) ? rawPriceFieldAmount : null;
+      const hasDiscount = typeof effectiveDiscountTotal === "number" && effectiveDiscountTotal > 0;
+      let normalizedTotalAmount =
+        payableAmountHint ??
+        preferredFinalAmount ??
+        (hasDiscount && typeof fallbackPriceAmount === "number"
+          ? Math.max(0, fallbackPriceAmount - effectiveDiscountTotal)
+          : null) ??
+        (!hasDiscount ? genericAmountField ?? null : null) ??
+        fallbackPriceAmount ??
+        totalPrice;
+      if (totalPrice > 0 && typeof normalizedTotalAmount === "number" && normalizedTotalAmount - totalPrice > 1) {
+        normalizedTotalAmount = totalPrice;
+      }
       const sourcedOriginalAmount = resolveAmountFromSources(amountSourceRecords, ORIGINAL_AMOUNT_KEYS);
       const preferredOriginalAmount =
         typeof sourcedOriginalAmount === "number" && Number.isFinite(sourcedOriginalAmount)
@@ -976,17 +1024,21 @@ const BookingCheckout = () => {
           normalizePaymentUrl(response.payment_url) ??
           normalizePaymentUrl(response.paymentUrl) ??
           bookingPaymentUrl;
+        const payableAmountForPayment =
+          typeof normalizedTotalAmount === "number" ? Math.max(0, normalizedTotalAmount) : null;
+        const adjustedPaymentUrl = rewritePaymentUrlAmount(directPaymentUrl, payableAmountForPayment);
+        const adjustedBookingPaymentUrl = rewritePaymentUrlAmount(bookingPaymentUrl, payableAmountForPayment);
         const resolvedQrImage =
           response.paymentQrUrl ??
           response.payment_qr_url ??
           bookingEntity?.paymentQrUrl ??
           bookingEntity?.payment_qr_url ??
+          deriveQrFromPaymentUrl(adjustedPaymentUrl ?? directPaymentUrl) ??
           deduceSepayQrImage(response) ??
           deduceSepayQrImage(bookingEntity) ??
-          deriveQrFromPaymentUrl(directPaymentUrl) ??
           deriveQrFromPaymentUrl(response.payment_url) ??
           deriveQrFromPaymentUrl(response.paymentUrl) ??
-          deriveQrFromPaymentUrl(bookingPaymentUrl);
+          deriveQrFromPaymentUrl(adjustedBookingPaymentUrl ?? bookingPaymentUrl);
         const inferredDiscountTotal = effectiveDiscountTotal ?? null;
 
         if (bookingIdentifier && directPaymentUrl) {
@@ -994,13 +1046,13 @@ const BookingCheckout = () => {
             extractOrderCode(directPaymentUrl) ??
             bookingCode ??
             (response.payment_id ? String(response.payment_id) : undefined);
-          const amountFromResponse = normalizedTotalAmount;
+          const amountFromResponse = payableAmountForPayment;
           const currencyFromResponse =
             (bookingEntity?.currency && String(bookingEntity.currency).trim()) || displayCurrency;
 
           setSepayPanel({
             bookingId: String(bookingIdentifier),
-            paymentUrl: directPaymentUrl,
+            paymentUrl: adjustedPaymentUrl ?? directPaymentUrl,
             orderCode: derivedOrderCode ?? undefined,
             bookingCode,
             paymentId: response.payment_id ? String(response.payment_id) : undefined,
@@ -1019,13 +1071,13 @@ const BookingCheckout = () => {
         }
 
         if (resolvedQrImage && bookingIdentifier) {
-          const amountFromResponse = normalizedTotalAmount;
+          const amountFromResponse = payableAmountForPayment;
           const currencyFromResponse =
             (bookingEntity?.currency && String(bookingEntity.currency).trim()) || displayCurrency;
 
           setSepayPanel({
             bookingId: String(bookingIdentifier),
-            paymentUrl: directPaymentUrl ?? "",
+            paymentUrl: adjustedPaymentUrl ?? directPaymentUrl ?? "",
             orderCode:
               bookingCode ?? (response.payment_id ? String(response.payment_id) : undefined) ?? undefined,
             bookingCode,
@@ -1046,7 +1098,7 @@ const BookingCheckout = () => {
 
         if (directPaymentUrl) {
           setShouldPollSepayStatus(true);
-          window.location.href = directPaymentUrl;
+          window.location.href = adjustedPaymentUrl ?? directPaymentUrl;
           return;
         }
       }
@@ -1175,8 +1227,35 @@ useEffect(() => {
     return deriveQrFromPaymentUrl(sepayPanel.paymentUrl);
   }, [sepayPanel]);
 
-  const sepayAmountLabel = sepayPanel ? formatCurrency(sepayPanel.amount, sepayPanel.currency) : "";
-  const sepayFeeLabel = sepayPanel ? formatCurrency(0, sepayPanel.currency) : "";
+  const sepayStatusPayableAmount = useMemo(() => {
+    const candidates: Array<Record<string, unknown> | null | undefined> = [];
+    const push = (value: unknown) => {
+      if (value && typeof value === "object") candidates.push(value as Record<string, unknown>);
+    };
+    push(sepayPaymentStatus as Record<string, unknown> | undefined);
+    push((sepayPaymentStatus as Record<string, unknown> | undefined)?.payment);
+    push((sepayPaymentStatus as Record<string, unknown> | undefined)?.booking);
+    const payments = (sepayPaymentStatus as Record<string, unknown> | undefined)?.payments;
+    if (Array.isArray(payments)) {
+      payments.forEach((entry) => push(entry));
+    }
+    const resolved = resolveAmountFromSources(candidates, PAYABLE_AMOUNT_KEYS);
+    return typeof resolved === "number" ? resolved : null;
+  }, [sepayPaymentStatus]);
+
+  const sepayCurrency =
+    sepayPanel?.currency ??
+    (typeof (sepayPaymentStatus as { payment?: { currency?: string } } | undefined)?.payment?.currency ===
+    "string"
+      ? (sepayPaymentStatus as { payment?: { currency?: string } }).payment?.currency
+      : "VND");
+
+  const sepayPayableAmount =
+    sepayStatusPayableAmount ?? (typeof sepayPanel?.amount === "number" ? sepayPanel.amount : null);
+
+  const sepayAmountLabel =
+    sepayPayableAmount !== null ? formatCurrency(sepayPayableAmount, sepayCurrency) : "";
+  const sepayFeeLabel = formatCurrency(0, sepayCurrency);
   const sepayAppliedPromotions =
     sepayPanel?.promotions?.filter((promo): promo is BookingPromotion => Boolean(promo)) ?? [];
   const sepayPromotionDiscountTotal =
@@ -1203,13 +1282,13 @@ useEffect(() => {
       ? sepayPanel.displayOriginalAmount
       : typeof sepayPanel?.originalAmount === "number"
       ? sepayPanel.originalAmount
-      : typeof sepayPanel?.amount === "number" && typeof sepayDiscountTotal === "number"
-      ? sepayPanel.amount + sepayDiscountTotal
+      : typeof sepayPayableAmount === "number" && typeof sepayDiscountTotal === "number"
+      ? sepayPayableAmount + sepayDiscountTotal
       : null;
   const sepayOriginalAmount =
     typeof sepayOriginalAmountCandidate === "number" &&
-    typeof sepayPanel?.amount === "number" &&
-    sepayOriginalAmountCandidate >= sepayPanel.amount
+    typeof sepayPayableAmount === "number" &&
+    sepayOriginalAmountCandidate >= sepayPayableAmount
       ? sepayOriginalAmountCandidate
       : null;
   const sepayDiscountLabel =

@@ -6,6 +6,7 @@ import { ChatWidgetProvider } from "@/context/ChatWidgetContext";
 import FloatingChatWidget from "@/components/chat/FloatingChatWidget";
 import Index from "./pages/Index";
 import AllActivities from "./pages/AllActivities";
+import ActivityDetail from "./pages/ActivityDetail";
 import NotFound from "./pages/NotFound";
 import Partner from "./pages/partner/Partner";
 import Deals from "./pages/Deals";
@@ -59,6 +60,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/activities" element={<AllActivities />} />
+            <Route path="/activity/:id" element={<ActivityDetail />} />
             <Route path="/recent" element={<RecentToursPage />} />
             <Route path="/deals" element={<Deals />} />
             <Route path="/resultsearch" element={<ResultSearch />} />
