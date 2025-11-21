@@ -1,5 +1,5 @@
 import { useMemo, useState, type MouseEvent } from "react";
-import { Bell, Loader2, CheckCircle2 } from "lucide-react";
+import { Bell, Loader2, CheckCircle2, RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -241,6 +241,11 @@ const NotificationDropdown = () => {
     navigate("/notifications");
   };
 
+  const handleRefresh = () => {
+    if (notificationsQuery.isFetching) return;
+    void notificationsQuery.refetch();
+  };
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -265,6 +270,15 @@ const NotificationDropdown = () => {
             </p>
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={notificationsQuery.isFetching}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
+              aria-label="Làm mới thông báo"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </button>
             <span>Tắt</span>
             <Switch
               checked={notificationsEnabled}
