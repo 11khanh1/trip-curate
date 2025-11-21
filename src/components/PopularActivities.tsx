@@ -180,8 +180,8 @@ const PopularActivities = ({ tours }: PopularActivitiesProps) => {
         </div>
 
         {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {Array.from({ length: 3 }).map((_, index) => (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {Array.from({ length: 4 }).map((_, index) => (
               <Skeleton key={index} className="h-[440px] rounded-xl" />
             ))}
           </div>
@@ -193,7 +193,7 @@ const PopularActivities = ({ tours }: PopularActivitiesProps) => {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {activities.map((activity) => (
               <div key={activity.id} className="h-full">
                 <TourCard {...activity} />

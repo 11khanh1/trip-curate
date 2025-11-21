@@ -8,6 +8,7 @@ import {
   markNotificationRead,
   markAllNotificationsRead,
   toggleNotifications,
+  type NotificationAudience,
   type NotificationPayload,
 } from "@/services/notificationApi";
 import { Button } from "@/components/ui/button";
@@ -83,7 +84,15 @@ const NotificationDropdown = () => {
 
   const notificationsQuery = useQuery({
     queryKey: ["notifications", userScope, { page: 1, audience: notificationAudience }],
-    queryFn: () => fetchNotifications({ per_page: MAX_ITEMS, audience: notificationAudience }),
+    queryFn: async () => {
+      const primary = await fetchNotifications({ per_page: MAX_ITEMS, audience: notificationAudience });
+      const total = Number((primary.meta as Record<string, unknown> | undefined)?.total ?? primary.data?.length ?? 0);
+      if ((primary.data?.length ?? 0) === 0 && total === 0) {
+        // Fallback: thử lại không truyền audience nếu BE chưa lọc theo tham số này
+        return fetchNotifications({ per_page: MAX_ITEMS });
+      }
+      return primary;
+    },
     enabled: open && canFetchNotifications,
     retry: false,
   });

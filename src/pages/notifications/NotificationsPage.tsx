@@ -61,12 +61,19 @@ const NotificationsPage = () => {
 
   const notificationsQuery = useQuery<NotificationListResponse>({
     queryKey: ["notifications", { page, per_page: PER_PAGE, audience: notificationAudience }],
-    queryFn: () =>
-      fetchNotifications({
+    queryFn: async () => {
+      const primary = await fetchNotifications({
         page,
         per_page: PER_PAGE,
         audience: notificationAudience,
-      }),
+      });
+      const total = Number((primary.meta as Record<string, unknown> | undefined)?.total ?? primary.data?.length ?? 0);
+      if ((primary.data?.length ?? 0) === 0 && total === 0) {
+        // Fallback khi BE không trả về dữ liệu theo audience
+        return fetchNotifications({ page, per_page: PER_PAGE });
+      }
+      return primary;
+    },
     enabled: canFetchNotifications,
   });
 
