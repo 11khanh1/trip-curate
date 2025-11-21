@@ -41,7 +41,17 @@ const NotificationsPage = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { currentUser } = useUser();
-  const canFetchNotifications = Boolean(currentUser);
+  const hasAuthToken =
+    typeof window !== "undefined" &&
+    (() => {
+      try {
+        const raw = window.localStorage.getItem("token");
+        return Boolean(raw && raw.trim().length > 0);
+      } catch {
+        return false;
+      }
+    })();
+  const canFetchNotifications = Boolean(currentUser || hasAuthToken);
 
   const notificationAudience = useMemo(() => {
     const role = currentUser?.role?.toLowerCase() ?? "";

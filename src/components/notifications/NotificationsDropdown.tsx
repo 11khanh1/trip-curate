@@ -25,6 +25,7 @@ import { getNotificationCopy } from "@/lib/notification-utils";
 import { useUser } from "@/context/UserContext";
 
 const MAX_ITEMS = 8;
+const tokenKey = "token";
 
 const renderTime = (value?: string | null) => {
   if (!value) return "—";
@@ -38,6 +39,15 @@ const NotificationDropdown = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { currentUser } = useUser();
+  const hasAuthToken = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      const raw = window.localStorage.getItem(tokenKey);
+      return Boolean(raw && raw.trim().length > 0);
+    } catch {
+      return false;
+    }
+  }, []);
   const notificationAudience: NotificationAudience =
     currentUser?.role?.toLowerCase().includes("admin")
       ? "admin"
@@ -45,7 +55,7 @@ const NotificationDropdown = () => {
       ? "partner"
       : "customer";
   const userScope = useMemo(() => {
-    if (!currentUser) return "guest";
+    if (!currentUser) return hasAuthToken ? "token" : "guest";
     if (currentUser.id !== undefined && currentUser.id !== null) {
       return `user:${currentUser.id}`;
     }
@@ -53,9 +63,9 @@ const NotificationDropdown = () => {
       return `email:${currentUser.email}`;
     }
     return currentUser.name ? `name:${currentUser.name}` : "guest";
-  }, [currentUser]);
+  }, [currentUser, hasAuthToken]);
 
-  const canFetchNotifications = Boolean(currentUser?.id || currentUser?.email);
+  const canFetchNotifications = Boolean(currentUser?.id || currentUser?.email || hasAuthToken);
 
   const unreadQuery = useQuery({
     queryKey: ["notifications-unread", userScope],
