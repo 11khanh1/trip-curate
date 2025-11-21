@@ -26,7 +26,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import OrderHistory from "@/components/orders/OrderHistory";
 import CheckoutProgress, { type CheckoutStep } from "@/components/checkout/CheckoutProgress";
-import { Info, Loader2 } from "lucide-react";
+import { CheckCircle2, Info, Loader2 } from "lucide-react";
 import { isAxiosError } from "axios";
 import { useToast } from "@/hooks/use-toast";
 import { useCart } from "@/context/CartContext";
@@ -1163,8 +1163,20 @@ useEffect(() => {
   if (SUCCESS_STATUSES.has(normalized)) {
     if (!sepaySuccessToastRef.current) {
       toast({
-        title: "Thanh toán thành công",
-        description: "Chúng tôi đã ghi nhận giao dịch của bạn và sẽ cập nhật thông tin đơn trong giây lát.",
+        duration: 5000,
+        description: (
+          <div className="flex items-start gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+              <CheckCircle2 className="h-6 w-6" aria-hidden="true" />
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-foreground">Thanh toán thành công</p>
+              <p className="text-sm text-muted-foreground">
+                Chúng tôi đã ghi nhận giao dịch của bạn và sẽ cập nhật thông tin đơn trong giây lát.
+              </p>
+            </div>
+          </div>
+        ),
       });
       sepaySuccessToastRef.current = true;
     }
