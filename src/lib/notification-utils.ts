@@ -133,8 +133,8 @@ export const getNotificationCopy = (notification: NotificationPayload): Notifica
   const explicitMessage = coerceString(data.message);
   if (explicitTitle || explicitMessage) {
     return {
-      title: explicitTitle ?? "Th?ng b?o m?i",
-      message: explicitMessage ?? "Xem chi ti?t ?? bi?t th?m th?ng tin.",
+      title: explicitTitle ?? "Thông báo mới",
+      message: explicitMessage ?? "Xem chi tiết để biết thêm thông tin.",
     };
   }
 
@@ -163,163 +163,163 @@ export const getNotificationCopy = (notification: NotificationPayload): Notifica
   switch (eventType || type) {
     case "booking_created":
       return {
-        title: "??n ??t tour m?i",
+        title: "Đơn đặt tour mới",
         message: bookingCode
-          ? `??n ${bookingCode} ?? ???c t?o${tourTitle ? ` cho tour ${tourTitle}` : ""}.`
-          : "B?n v?a c? m?t ??n ??t tour m?i.",
+          ? `Đơn ${bookingCode} đã được tạo${tourTitle ? ` cho tour ${tourTitle}` : ""}.`
+          : "Bạn vừa có một đơn đặt tour mới.",
       };
     case "booking_cancelled":
       return {
-        title: "??n ??t tour ?? b? h?y",
+        title: "Đơn đặt tour đã bị hủy",
         message: bookingCode
-          ? `??n ${bookingCode} ?? b? h?y.${tourTitle ? ` Tour: ${tourTitle}.` : ""}`
-          : "M?t ??n ??t tour ?? b? h?y.",
+          ? `Đơn ${bookingCode} đã bị hủy.${tourTitle ? ` Tour: ${tourTitle}.` : ""}`
+          : "Một đơn đặt tour đã bị hủy.",
       };
     case "payment_success":
       return {
-        title: "Thanh to?n th?nh c?ng",
+        title: "Thanh toán thành công",
         message: bookingCode
-          ? `??n ${bookingCode} ?? thanh to?n th?nh c?ng.`
-          : "Thanh to?n c?a b?n ?? ???c ghi nh?n.",
+          ? `Đơn ${bookingCode} đã thanh toán thành công.`
+          : "Thanh toán của bạn đã được ghi nhận.",
       };
     case "refund_requested":
       return {
-        title: "C? y?u c?u ho?n ti?n",
+        title: "Có yêu cầu hoàn tiền",
         message: bookingCode
-          ? `Y?u c?u ho?n ti?n cho ??n ${bookingCode} ?? ???c g?i.`
-          : "M?t y?u c?u ho?n ti?n v?a ???c t?o.",
+          ? `Yêu cầu hoàn tiền cho đơn ${bookingCode} đã được gửi.`
+          : "Một yêu cầu hoàn tiền vừa được tạo.",
       };
     case "booking_created_partner":
       return {
-        title: "B?n c? booking m?i",
+        title: "Bạn có booking mới",
         message: bookingCode
-          ? `Kh?ch v?a ??t ??n ${bookingCode}${tourTitle ? ` cho tour ${tourTitle}` : ""}. Vui l?ng x?c nh?n.`
-          : "B?n c? booking m?i c?n x?c nh?n.",
+          ? `Khách vừa đặt đơn ${bookingCode}${tourTitle ? ` cho tour ${tourTitle}` : ""}. Vui lòng xác nhận.`
+          : "Bạn có booking mới cần xác nhận.",
       };
     case "booking_cancelled_partner":
       return {
-        title: "Kh?ch ?? h?y booking",
+        title: "Khách đã hủy booking",
         message: bookingCode
-          ? `Kh?ch ?? h?y ??n ${bookingCode}${tourTitle ? ` (${tourTitle})` : ""}.`
-          : "M?t booking c?a b?n v?a b? h?y.",
+          ? `Khách đã hủy đơn ${bookingCode}${tourTitle ? ` (${tourTitle})` : ""}.`
+          : "Một booking của bạn vừa bị hủy.",
       };
     case "payment_success_partner":
       return {
-        title: "Booking ?? ???c thanh to?n",
+        title: "Booking đã được thanh toán",
         message: bookingCode
-          ? `??n ${bookingCode}${tourTitle ? ` (${tourTitle})` : ""} ?? thanh to?n. Chu?n b? d?ch v? nh?!`
-          : "M?t booking c?a b?n ?? ???c thanh to?n.",
+          ? `Đơn ${bookingCode}${tourTitle ? ` (${tourTitle})` : ""} đã thanh toán. Chuẩn bị dịch vụ nhé!`
+          : "Một booking của bạn đã được thanh toán.",
       };
     case "payment_failed_partner":
       return {
-        title: "Thanh to?n th?t b?i",
+        title: "Thanh toán thất bại",
         message: bookingCode
-          ? `??n ${bookingCode}${tourTitle ? ` (${tourTitle})` : ""} thanh to?n th?t b?i. Li?n h? kh?ch ?? h? tr?.`
-          : "M?t booking thanh to?n th?t b?i. Vui l?ng ki?m tra.",
+          ? `Đơn ${bookingCode}${tourTitle ? ` (${tourTitle})` : ""} thanh toán thất bại. Liên hệ khách để hỗ trợ.`
+          : "Một booking thanh toán thất bại. Vui lòng kiểm tra.",
       };
     case "payment_expired_partner":
       return {
-        title: "Thanh to?n qu? h?n",
+        title: "Thanh toán quá hạn",
         message: bookingCode
-          ? `??n ${bookingCode}${tourTitle ? ` (${tourTitle})` : ""} ch?a thanh to?n v? ?? qu? h?n.`
-          : "C? booking ch?a thanh to?n ?? qu? h?n.",
+          ? `Đơn ${bookingCode}${tourTitle ? ` (${tourTitle})` : ""} chưa thanh toán và đã quá hạn.`
+          : "Có booking chưa thanh toán đã quá hạn.",
       };
     case "upcoming_departure_partner": {
       const pendingCount = coerceNumber(data.pending_count);
       const unpaidCount = coerceNumber(data.unpaid_count);
       const extra =
         pendingCount || unpaidCount
-          ? `C?n ${pendingCount ?? 0} booking ch?a x?c nh?n, ${unpaidCount ?? 0} booking ch?a thanh to?n.`
+          ? `Còn ${pendingCount ?? 0} booking chưa xác nhận, ${unpaidCount ?? 0} booking chưa thanh toán.`
           : "";
       const base = startDate
-        ? `Tour${tourTitle ? ` ${tourTitle}` : ""} s? kh?i h?nh ng?y ${startDate}.`
-        : "Tour s?p kh?i h?nh.";
+        ? `Tour${tourTitle ? ` ${tourTitle}` : ""} sẽ khởi hành ngày ${startDate}.`
+        : "Tour sắp khởi hành.";
       return {
-        title: "Tour s?p kh?i h?nh (Partner)",
+        title: "Tour sắp khởi hành (Partner)",
         message: `${base} ${extra}`.trim(),
       };
     }
     case "refund_requested_partner":
       return {
-        title: "Kh?ch y?u c?u ho?n ti?n",
+        title: "Khách yêu cầu hoàn tiền",
         message: bookingCode
-          ? `Kh?ch y?u c?u ho?n ti?n cho ??n ${bookingCode}${tourTitle ? ` (${tourTitle})` : ""}.`
-          : "C? y?u c?u ho?n ti?n m?i t? kh?ch.",
+          ? `Khách yêu cầu hoàn tiền cho đơn ${bookingCode}${tourTitle ? ` (${tourTitle})` : ""}.`
+          : "Có yêu cầu hoàn tiền mới từ khách.",
       };
     case "refund_processed_partner":
       return {
-        title: "C?p nh?t ho?n ti?n",
+        title: "Cập nhật hoàn tiền",
         message: bookingCode
-          ? `??n ${bookingCode} ?? ???c c?p nh?t tr?ng th?i ho?n ti?n: ${statusLabel}.`
-          : `Ho?n ti?n: ${statusLabel}.`,
+          ? `Đơn ${bookingCode} đã được cập nhật trạng thái hoàn tiền: ${statusLabel}.`
+          : `Hoàn tiền: ${statusLabel}.`,
       };
     case "review_created_partner":
       return {
-        title: "C? ??nh gi? m?i",
+        title: "Có đánh giá mới",
         message: tourTitle
-          ? `Tour ${tourTitle} v?a nh?n ???c ??nh gi? m?i.`
-          : "B?n v?a nh?n m?t ??nh gi? m?i cho tour.",
+          ? `Tour ${tourTitle} vừa nhận được đánh giá mới.`
+          : "Bạn vừa nhận một đánh giá mới cho tour.",
       };
     case "partner_profile_submitted":
       return {
-        title: "H? s? ??i t?c ch? duy?t",
+        title: "Hồ sơ đối tác chờ duyệt",
         message: tourTitle
-          ? `??i t?c ${tourTitle} v?a g?i h? s?. Vui l?ng ki?m tra v? duy?t.`
-          : "C? h? s? ??i t?c m?i ch? duy?t.",
+          ? `Đối tác ${tourTitle} vừa gửi hồ sơ. Vui lòng kiểm tra và duyệt.`
+          : "Có hồ sơ đối tác mới chờ duyệt.",
       };
     case "tour_submitted":
     case "tour_updated_pending":
       return {
-        title: "Tour ch? duy?t",
+        title: "Tour chờ duyệt",
         message: tourTitle
-          ? `Tour ${tourTitle} ?ang ch? duy?t n?i dung.`
-          : "C? tour m?i/ch?nh s?a ?ang ch? duy?t.",
+          ? `Tour ${tourTitle} đang chờ duyệt nội dung.`
+          : "Có tour mới/chỉnh sửa đang chờ duyệt.",
       };
     case "booking_anomaly":
       return {
-        title: "C?nh b?o booking b?t th??ng",
+        title: "Cảnh báo booking bất thường",
         message: bookingCode
-          ? `??n ${bookingCode} c? d?u hi?u b?t th??ng: ${statusLabel}.`
-          : "H? th?ng ph?t hi?n giao d?ch b?t th??ng. Vui l?ng ki?m tra.",
+          ? `Đơn ${bookingCode} có dấu hiệu bất thường: ${statusLabel}.`
+          : "Hệ thống phát hiện giao dịch bất thường. Vui lòng kiểm tra.",
       };
     case "refund_requested_admin":
       return {
-        title: "Y?u c?u ho?n ti?n m?i",
+        title: "Yêu cầu hoàn tiền mới",
         message: bookingCode
-          ? `Y?u c?u ho?n ti?n cho ??n ${bookingCode}.`
-          : "C? y?u c?u ho?n ti?n m?i c?n x? l?.",
+          ? `Yêu cầu hoàn tiền cho đơn ${bookingCode}.`
+          : "Có yêu cầu hoàn tiền mới cần xử lý.",
       };
     case "refund_processed_admin":
       return {
-        title: "Ho?n ti?n ?? x? l?",
+        title: "Hoàn tiền đã xử lý",
         message: bookingCode
-          ? `??n ${bookingCode}: tr?ng th?i ho?n ti?n ${statusLabel}.`
-          : `Ho?n ti?n: ${statusLabel}.`,
+          ? `Đơn ${bookingCode}: trạng thái hoàn tiền ${statusLabel}.`
+          : `Hoàn tiền: ${statusLabel}.`,
       };
     case "payment_webhook_issue":
       return {
-        title: "S? c? webhook thanh to?n",
+        title: "Sự cố webhook thanh toán",
         message:
           coerceString(data.provider) && coerceString(data.error_message)
-            ? `Nh? cung c?p ${data.provider}: ${data.error_message}`
-            : "Webhook thanh to?n g?p l?i. Vui l?ng ki?m tra c?u h?nh.",
+            ? `Nhà cung cấp ${data.provider}: ${data.error_message}`
+            : "Webhook thanh toán gặp lỗi. Vui lòng kiểm tra cấu hình.",
       };
     case "invoice_failed":
       return {
-        title: "G?i h?a ??n th?t b?i",
+        title: "Gửi hóa đơn thất bại",
         message: bookingCode
-          ? `H?a ??n cho ??n ${bookingCode} g?i th?t b?i. Vui l?ng ki?m tra v? g?i l?i.`
-          : "G?i h?a ??n th?t b?i. Vui l?ng ki?m tra c?u h?nh email/billing.",
+          ? `Hóa đơn cho đơn ${bookingCode} gửi thất bại. Vui lòng kiểm tra và gửi lại.`
+          : "Gửi hóa đơn thất bại. Vui lòng kiểm tra cấu hình email/billing.",
       };
     case "departure_reminder":
     case "upcoming_departure":
     case "departure_alert": {
       const base = startDate
-        ? `Tour${tourTitle ? ` ${tourTitle}` : ""} s? kh?i h?nh ng?y ${startDate}.`
-        : "Tour c?a b?n s?p kh?i h?nh.";
-      const suffix = bookingCode ? ` M? ??n: ${bookingCode}.` : "";
+        ? `Tour${tourTitle ? ` ${tourTitle}` : ""} sẽ khởi hành ngày ${startDate}.`
+        : "Tour của bạn sắp khởi hành.";
+      const suffix = bookingCode ? ` Mã đơn: ${bookingCode}.` : "";
       return {
-        title: "Tour s?p kh?i h?nh (tr??c 1 ng?y)",
+        title: "Tour sắp khởi hành (trước 1 ngày)",
         message: `${base}${suffix}`,
       };
     }
@@ -327,123 +327,123 @@ export const getNotificationCopy = (notification: NotificationPayload): Notifica
     case "unpaid_booking":
     case "payment_pending":
       return {
-        title: "Nh?c thanh to?n ??n ch?a tr?",
+        title: "Nhắc thanh toán đơn chưa trả",
         message: bookingCode
-          ? `??n ${bookingCode} ch?a thanh to?n trong 2 ng?y. Vui l?ng ho?n t?t ?? gi? ch?.`
-          : "B?n c? ??n ??t tour ch?a thanh to?n trong 2 ng?y qua. H?y ho?n t?t ?? gi? ch?.",
+          ? `Đơn ${bookingCode} chưa thanh toán trong 2 ngày. Vui lòng hoàn tất để giữ chỗ.`
+          : "Bạn có đơn đặt tour chưa thanh toán trong 2 ngày qua. Hãy hoàn tất để giữ chỗ.",
       };
     case "tour_cleanup":
     case "delete_request":
       return {
-        title: "Y?u c?u x? l? tour qu? l?ch",
+        title: "Yêu cầu xử lý tour quá lịch",
         message: tourTitle
-          ? `Tour ${tourTitle} ?? qua l?ch tr?nh. Vui l?ng ki?m tra v? x? l?/x?a tour.`
-          : "C? tour ?? qua l?ch tr?nh. Vui l?ng ki?m tra ?? x? l? ho?c x?a.",
+          ? `Tour ${tourTitle} đã qua lịch trình. Vui lòng kiểm tra và xử lý/xóa tour.`
+          : "Có tour đã qua lịch trình. Vui lòng kiểm tra để xử lý hoặc xóa.",
       };
     case "booking_success":
     case "booking_confirmation":
     case "booking_confirmed":
       return {
-        title: "??t tour th?nh c?ng",
+        title: "Đặt tour thành công",
         message: bookingCode
-          ? `??n ${bookingCode} ?? ???c t?o. Ch?ng t?i s? th?ng b?o khi ??i t?c x?c nh?n.`
-          : "??n ??t tour c?a b?n ?? ???c t?o th?nh c?ng.",
+          ? `Đơn ${bookingCode} đã được tạo. Chúng tôi sẽ thông báo khi đối tác xác nhận.`
+          : "Đơn đặt tour của bạn đã được tạo thành công.",
       };
     case "payment_reminder":
       return {
-        title: "Nh?c thanh to?n",
+        title: "Nhắc thanh toán",
         message: bookingCode
-          ? `??n ${bookingCode} v?n ch?a ???c thanh to?n. Vui l?ng ho?n t?t ?? gi? ch?.`
-          : "??n ??t tour c?a b?n ch?a ???c thanh to?n. H?y ho?n t?t ?? gi? ch?.",
+          ? `Đơn ${bookingCode} vẫn chưa được thanh toán. Vui lòng hoàn tất để giữ chỗ.`
+          : "Đơn đặt tour của bạn chưa được thanh toán. Hãy hoàn tất để giữ chỗ.",
       };
     case "payment_status":
     case "payment_update":
       return {
-        title: "C?p nh?t tr?ng th?i thanh to?n",
+        title: "Cập nhật trạng thái thanh toán",
         message: bookingCode
-          ? `??n ${bookingCode}: ${statusLabel}.`
-          : `Tr?ng th?i thanh to?n: ${statusLabel}.`,
+          ? `Đơn ${bookingCode}: ${statusLabel}.`
+          : `Trạng thái thanh toán: ${statusLabel}.`,
       };
     case "booking_update":
       return {
-        title: "C?p nh?t ??n ??t tour",
+        title: "Cập nhật đơn đặt tour",
         message: bookingCode
-          ? `??n ${bookingCode} c? c?p nh?t m?i: ${statusLabel}.`
-          : `??n ??t tour c?a b?n c? c?p nh?t m?i: ${statusLabel}.`,
+          ? `Đơn ${bookingCode} có cập nhật mới: ${statusLabel}.`
+          : `Đơn đặt tour của bạn có cập nhật mới: ${statusLabel}.`,
       };
     case "booking_status":
       return {
-        title: "Tr?ng th?i ??n ??t tour",
+        title: "Trạng thái đơn đặt tour",
         message: bookingCode
-          ? `??n ${bookingCode}: ${statusLabel}.`
-          : "??n ??t tour c?a b?n c? c?p nh?t tr?ng th?i.",
+          ? `Đơn ${bookingCode}: ${statusLabel}.`
+          : "Đơn đặt tour của bạn có cập nhật trạng thái.",
       };
     case "inventory_update":
       return {
-        title: "Tr?ng th?i ch? tr?ng thay ??i",
+        title: "Trạng thái chỗ trống thay đổi",
         message: bookingCode
-          ? `Ch? tr?ng c?a ??n ${bookingCode} v?a thay ??i. H?y ki?m tra l?i h?nh tr?nh c?a b?n.`
-          : "M?t tour trong danh s?ch c?a b?n v?a thay ??i s? ch?. H?y ki?m tra ?? k?p ?i?u ch?nh.",
+          ? `Chỗ trống của đơn ${bookingCode} vừa thay đổi. Hãy kiểm tra lại hành trình của bạn.`
+          : "Một tour trong danh sách của bạn vừa thay đổi số chỗ. Hãy kiểm tra để kịp điều chỉnh.",
       };
     case "refund_request":
       return {
-        title: "?? g?i y?u c?u ho?n ti?n",
+        title: "Đã gửi yêu cầu hoàn tiền",
         message: bookingCode
-          ? `Y?u c?u ho?n ti?n cho ??n ${bookingCode} ?? ???c ghi nh?n. Ch?ng t?i s? th?ng b?o khi c? c?p nh?t.`
-          : "Y?u c?u ho?n ti?n c?a b?n ?? ???c ghi nh?n.",
+          ? `Yêu cầu hoàn tiền cho đơn ${bookingCode} đã được ghi nhận. Chúng tôi sẽ thông báo khi có cập nhật.`
+          : "Yêu cầu hoàn tiền của bạn đã được ghi nhận.",
       };
     case "refund_update":
     case "refund_partner":
       return {
-        title: "C?p nh?t ho?n ti?n",
+        title: "Cập nhật hoàn tiền",
         message: bookingCode
-          ? `??n ${bookingCode}: tr?ng th?i ho?n ti?n ${statusLabel}.`
-          : `Tr?ng th?i ho?n ti?n hi?n t?i: ${statusLabel}.`,
+          ? `Đơn ${bookingCode}: trạng thái hoàn tiền ${statusLabel}.`
+          : `Trạng thái hoàn tiền hiện tại: ${statusLabel}.`,
       };
     case "refund_completed":
       return {
-        title: "Ho?n ti?n th?nh c?ng",
+        title: "Hoàn tiền thành công",
         message: amountLabel
-          ? `Ch?ng t?i ?? ho?n ${amountLabel} v?o t?i kho?n c?a b?n.`
-          : "Y?u c?u ho?n ti?n c?a b?n ?? ???c x? l? th?nh c?ng.",
+          ? `Chúng tôi đã hoàn ${amountLabel} vào tài khoản của bạn.`
+          : "Yêu cầu hoàn tiền của bạn đã được xử lý thành công.",
       };
     case "voucher": {
       const voucherCode = coerceString(data.voucher_code) ?? coerceString(data.code);
       return {
-        title: "B?n nh?n ???c voucher m?i",
+        title: "Bạn nhận được voucher mới",
         message: voucherCode
-          ? `M? ${voucherCode} ?? ???c g?i cho b?n. H?y d?ng tr??c khi h?t h?n.`
-          : "M?t voucher m?i v?a ???c t?ng cho b?n.",
+          ? `Mã ${voucherCode} đã được gửi cho bạn. Hãy dùng trước khi hết hạn.`
+          : "Một voucher mới vừa được tặng cho bạn.",
       };
     }
     case "promotion_update":
       return {
-        title: "Khuy?n m?i m?i",
+        title: "Khuyến mãi mới",
         message: data?.["promotion"]
-          ? `?u ??i ${String(data["promotion"])} ?ang di?n ra. H?y ?p d?ng ngay!`
-          : "M?t ch??ng tr?nh khuy?n m?i m?i v?a m?. ??ng b? l?!",
+          ? `Ưu đãi ${String(data["promotion"])} đang diễn ra. Hãy áp dụng ngay!`
+          : "Một chương trình khuyến mãi mới vừa mở. Đừng bỏ lỡ!",
       };
     case "invoice":
     case "invoice_ready":
       return {
-        title: "H?a ??n ?i?n t? ?? s?n s?ng",
+        title: "Hóa đơn điện tử đã sẵn sàng",
         message: bookingCode
-          ? `H?a ??n cho ??n ${bookingCode} ?? ???c ph?t h?nh.`
-          : "H?a ??n ?i?n t? c?a b?n ?? s?n s?ng.",
+          ? `Hóa đơn cho đơn ${bookingCode} đã được phát hành.`
+          : "Hóa đơn điện tử của bạn đã sẵn sàng.",
       };
     case "post_trip_review":
       return {
-        title: "Chia s? c?m nh?n c?a b?n",
+        title: "Chia sẻ cảm nhận của bạn",
         message: bookingCode
-          ? `Chuy?n ?i c?a ??n ${bookingCode} ?? k?t th?c. H?y d?nh ?t ph?t ??nh gi? ?? nh?n ?u ??i!`
-          : "Chuy?n ?i c?a b?n ?? k?t th?c. H?y g?i ??nh gi? ?? ch?ng t?i ph?c v? t?t h?n.",
+          ? `Chuyến đi của đơn ${bookingCode} đã kết thúc. Hãy dành ít phút đánh giá để nhận ưu đãi!`
+          : "Chuyến đi của bạn đã kết thúc. Hãy gửi đánh giá để chúng tôi phục vụ tốt hơn.",
       };
     default:
       return {
-        title: TYPE_LABELS[type] ?? "Th?ng b?o m?i",
+        title: TYPE_LABELS[type] ?? "Thông báo mới",
         message: bookingCode
-          ? `??n ${bookingCode} c? c?p nh?t m?i. Vui l?ng ki?m tra chi ti?t.`
-          : "B?n c? th?ng b?o m?i. Vui l?ng ki?m tra ?? bi?t th?m th?ng tin.",
+          ? `Đơn ${bookingCode} có cập nhật mới. Vui lòng kiểm tra chi tiết.`
+          : "Bạn có thông báo mới. Vui lòng kiểm tra để biết thêm thông tin.",
       };
   }
 };

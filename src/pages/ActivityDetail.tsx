@@ -2075,7 +2075,23 @@ useEffect(() => {
                                 <SelectContent>
                                   {schedules.map((schedule) => {
                                     if (!schedule?.id) return null;
-                                    const date = formatDate(schedule.start_date);
+                                    const rawStart =
+                                      schedule.start_date ??
+                                      (schedule as Record<string, unknown>)?.startDate ??
+                                      (schedule as Record<string, unknown>)?.start_date;
+                                    const parsedStart =
+                                      rawStart && !Number.isNaN(new Date(rawStart as string).getTime())
+                                        ? new Date(rawStart as string)
+                                        : null;
+                                    const today = new Date();
+                                    const startOfToday = new Date(
+                                      today.getFullYear(),
+                                      today.getMonth(),
+                                      today.getDate(),
+                                    );
+                                    const isPastSchedule =
+                                      parsedStart !== null && parsedStart < startOfToday;
+                                    const date = formatDate(rawStart as string | null | undefined);
                                     const availabilityValue = parseScheduleNumber(
                                       schedule?.slots_available,
                                       (schedule as Record<string, unknown>)?.slots_available,
@@ -2107,9 +2123,15 @@ useEffect(() => {
                                       typeof minValue === "number"
                                         ? `• Tối thiểu ${Math.max(1, Math.trunc(minValue))} khách`
                                         : null,
+                                      isPastSchedule ? "• Đã qua ngày" : null,
                                     ].filter(Boolean);
                                     return (
-                                      <SelectItem key={schedule.id} value={String(schedule.id)}>
+                                      <SelectItem
+                                        key={schedule.id}
+                                        value={String(schedule.id)}
+                                        disabled={isPastSchedule}
+                                        className={isPastSchedule ? "opacity-50 cursor-not-allowed" : ""}
+                                      >
                                         {tokens.join(" ")}
                                       </SelectItem>
                                     );

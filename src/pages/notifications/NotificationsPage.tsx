@@ -43,9 +43,21 @@ const NotificationsPage = () => {
   const { currentUser } = useUser();
   const canFetchNotifications = Boolean(currentUser);
 
+  const notificationAudience = useMemo(() => {
+    const role = currentUser?.role?.toLowerCase() ?? "";
+    if (role.includes("admin")) return "admin";
+    if (role.includes("partner")) return "partner";
+    return "customer";
+  }, [currentUser]);
+
   const notificationsQuery = useQuery<NotificationListResponse>({
-    queryKey: ["notifications", { page, per_page: PER_PAGE }],
-    queryFn: () => fetchNotifications({ page, per_page: PER_PAGE }),
+    queryKey: ["notifications", { page, per_page: PER_PAGE, audience: notificationAudience }],
+    queryFn: () =>
+      fetchNotifications({
+        page,
+        per_page: PER_PAGE,
+        audience: notificationAudience,
+      }),
     enabled: canFetchNotifications,
   });
 
@@ -99,6 +111,17 @@ const NotificationsPage = () => {
       : true;
 
   const notifications = notificationsQuery.data?.data ?? [];
+  const filteredNotifications = useMemo(() => {
+    if (!notifications.length) return [];
+    return notifications.filter((item) => {
+      const audience = (item.data as Record<string, unknown> | undefined)?.audience;
+      if (typeof audience === "string" && audience.trim().length > 0) {
+        return audience === notificationAudience;
+      }
+      // Giữ lại thông báo cũ chưa có audience sau khi deploy
+      return true;
+    });
+  }, [notifications, notificationAudience]);
   const unreadCount = unreadQuery.data?.unread ?? 0;
 
   const meta = notificationsQuery.data?.meta ?? {};
@@ -108,8 +131,10 @@ const NotificationsPage = () => {
     typeof meta?.last_page === "number" && meta.last_page > 0 ? meta.last_page : null;
   const totalPages =
     lastPageMeta ??
-    (notifications.length === PER_PAGE ? currentPage + 1 : currentPage);
-  const hasNextPage = totalPages ? currentPage < totalPages : notifications.length === PER_PAGE;
+    (filteredNotifications.length === PER_PAGE ? currentPage + 1 : currentPage);
+  const hasNextPage = totalPages
+    ? currentPage < totalPages
+    : filteredNotifications.length === PER_PAGE;
   const hasPrevPage = currentPage > 1;
   const pageNumbers = useMemo(() => {
     const maxPage = Math.max(totalPages ?? 1, 1);
@@ -133,15 +158,31 @@ const NotificationsPage = () => {
     setPage(next);
   };
 
-  const handleItemClick = (notification: NotificationPayload) => {
-    const bookingId =
-      (notification.data?.["booking_id"] ?? notification.data?.["bookingId"]) as
-        | string
-        | undefined;
-    if (bookingId) {
-      navigate(`/bookings/${bookingId}`);
-    }
-  };
+const handleItemClick = (notification: NotificationPayload) => {
+  const data = (notification.data as Record<string, unknown> | undefined) ?? {};
+  const bookingId = (data["booking_id"] ?? data["bookingId"]) as string | undefined;
+  const tourId = (data["tour_id"] ?? data["tourId"]) as string | undefined;
+  const isPartner = currentUser?.role?.toLowerCase().includes("partner");
+
+  if (bookingId) {
+    const target = isPartner
+      ? `/partner/bookings?bookingId=${encodeURIComponent(bookingId)}`
+      : `/bookings/${bookingId}`;
+    navigate(target);
+    return;
+  }
+
+  if (tourId) {
+    const target = isPartner ? "/partner/activities" : `/activity/${tourId}`;
+    navigate(target);
+    return;
+  }
+
+  const fallback = typeof data.link === "string" ? data.link : null;
+  if (fallback) {
+    navigate(fallback);
+  }
+};
 
   const summaryItems = useMemo(
     () => [
@@ -153,12 +194,12 @@ const NotificationsPage = () => {
       },
       {
         label: "Đã đọc gần đây",
-        value: notifications.filter((item) => item.read_at).length,
+        value: filteredNotifications.filter((item) => item.read_at).length,
         icon: CheckCircle,
         accent: "text-emerald-600",
       },
     ],
-    [notifications, unreadCount],
+    [filteredNotifications, unreadCount],
   );
 
   return (
@@ -238,7 +279,7 @@ const NotificationsPage = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={markAllMutation.isPending || notifications.length === 0}
+                    disabled={markAllMutation.isPending || filteredNotifications.length === 0}
                     onClick={() => markAllMutation.mutate()}
                   >
                     Đánh dấu tất cả đã đọc
@@ -274,14 +315,14 @@ const NotificationsPage = () => {
                       Thử lại
                     </Button>
                   </div>
-                ) : notifications.length === 0 ? (
+                ) : filteredNotifications.length === 0 ? (
                   <div className="flex min-h-[320px] flex-col items-center justify-center gap-2 text-muted-foreground">
                     <BellOff className="h-10 w-10" />
                     <p className="text-sm">Hiện chưa có thông báo nào</p>
                   </div>
                 ) : (
                   <div className="divide-y">
-                    {notifications.map((notification) => {
+                    {filteredNotifications.map((notification) => {
                       const { title, message } = getNotificationCopy(notification);
                       const bookingId =
                         (notification.data?.["booking_id"] ??

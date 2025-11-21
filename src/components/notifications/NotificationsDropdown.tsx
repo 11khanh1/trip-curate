@@ -9,9 +9,7 @@ import {
   markNotificationRead,
   markAllNotificationsRead,
   toggleNotifications,
-  resolveNotificationAudience,
   type NotificationPayload,
-  type NotificationAudience,
 } from "@/services/notificationApi";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,13 +38,12 @@ const NotificationDropdown = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { currentUser } = useUser();
-  const notificationAudience: NotificationAudience = useMemo(() => {
-    if (currentUser?.role) {
-      return resolveNotificationAudience(currentUser.role);
-    }
-    return "customer";
-  }, [currentUser?.role]);
-
+  const notificationAudience: NotificationAudience =
+    currentUser?.role?.toLowerCase().includes("admin")
+      ? "admin"
+      : currentUser?.role?.toLowerCase().includes("partner")
+      ? "partner"
+      : "customer";
   const userScope = useMemo(() => {
     if (!currentUser) return "guest";
     if (currentUser.id !== undefined && currentUser.id !== null) {
@@ -61,16 +58,16 @@ const NotificationDropdown = () => {
   const canFetchNotifications = Boolean(currentUser?.id || currentUser?.email);
 
   const unreadQuery = useQuery({
-    queryKey: ["notifications-unread", userScope, notificationAudience],
-    queryFn: () => fetchUnreadCount(notificationAudience),
+    queryKey: ["notifications-unread", userScope],
+    queryFn: () => fetchUnreadCount(),
     refetchInterval: 60000,
     enabled: canFetchNotifications,
     retry: false,
   });
 
   const settingsQuery = useQuery({
-    queryKey: ["notifications-settings", userScope, notificationAudience],
-    queryFn: () => fetchNotificationSettings(notificationAudience),
+    queryKey: ["notifications-settings", userScope],
+    queryFn: () => fetchNotificationSettings(),
     enabled: canFetchNotifications,
     retry: false,
   });
@@ -86,33 +83,30 @@ const NotificationDropdown = () => {
     mutationFn: (id: string | number) => markNotificationRead(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({
-        queryKey: ["notifications", userScope, { page: 1, audience: notificationAudience }],
+        queryKey: ["notifications", userScope],
       });
       void queryClient.invalidateQueries({
-        queryKey: ["notifications-unread", userScope, notificationAudience],
+        queryKey: ["notifications-unread", userScope],
       });
     },
   });
 
   const markAllMutation = useMutation({
-    mutationFn: () => markAllNotificationsRead(notificationAudience),
+    mutationFn: () => markAllNotificationsRead(),
     onSuccess: () => {
       void queryClient.invalidateQueries({
-        queryKey: ["notifications", userScope, { page: 1, audience: notificationAudience }],
+        queryKey: ["notifications", userScope],
       });
       void queryClient.invalidateQueries({
-        queryKey: ["notifications-unread", userScope, notificationAudience],
+        queryKey: ["notifications-unread", userScope],
       });
     },
   });
 
   const toggleMutation = useMutation({
-    mutationFn: (enabled: boolean) => toggleNotifications(enabled, notificationAudience),
+    mutationFn: (enabled: boolean) => toggleNotifications(enabled),
     onSuccess: (data) => {
-      queryClient.setQueryData(
-        ["notifications-settings", userScope, notificationAudience],
-        data,
-      );
+      queryClient.setQueryData(["notifications-settings", userScope], data);
     },
   });
 
@@ -167,36 +161,51 @@ const NotificationDropdown = () => {
   );
 
   const apiNotifications = notificationsQuery.data?.data ?? [];
+  const filteredNotifications = apiNotifications.filter((item) => {
+    const audience = (item.data as Record<string, unknown> | undefined)?.audience as string | undefined;
+    if (!audience) return true;
+    return audience === notificationAudience;
+  });
   const shouldUseFallback =
-    !canFetchNotifications && !notificationsQuery.isFetching && apiNotifications.length === 0;
-  const notifications = shouldUseFallback ? fallbackNotifications : apiNotifications;
+    !canFetchNotifications && !notificationsQuery.isFetching && filteredNotifications.length === 0;
+  const notifications = shouldUseFallback ? fallbackNotifications : filteredNotifications;
   const unread = shouldUseFallback ? fallbackNotifications.length : unreadQuery.data?.unread ?? 0;
   const notificationsEnabled =
-    settingsQuery.data?.notifications_enabled ??
-    notificationsQuery.data?.notifications_enabled ??
-    true;
+    typeof settingsQuery.data?.enabled === "boolean"
+      ? settingsQuery.data.enabled
+      : typeof notificationsQuery.data?.enabled === "boolean"
+      ? notificationsQuery.data.enabled
+      : true;
+
+  const resolveNotificationLink = (notification: NotificationPayload) => {
+    const data = (notification.data as Record<string, unknown> | undefined) ?? {};
+    const bookingId = (data["booking_id"] ?? data["bookingId"]) as string | undefined;
+    const tourId = (data["tour_id"] ?? data["tourId"]) as string | undefined;
+    const isPartner = currentUser?.role?.toLowerCase().includes("partner");
+
+    if (bookingId) {
+      return isPartner ? `/partner/bookings?bookingId=${encodeURIComponent(bookingId)}` : `/bookings/${bookingId}`;
+    }
+    if (tourId) {
+      return isPartner ? `/partner/activities` : `/activity/${tourId}`;
+    }
+    const fallbackLink = typeof data.link === "string" ? data.link : null;
+    return fallbackLink;
+  };
 
   const handleItemClick = (notification: NotificationPayload) => {
     if (!notification.id) return;
 
     const notificationData = (notification.data as Record<string, unknown> | undefined) ?? {};
     const isDemoNotification = Boolean(notificationData.is_demo);
-    const fallbackLink = typeof notificationData.link === "string" ? notificationData.link : null;
+    const targetLink = resolveNotificationLink(notification);
 
     if (!isDemoNotification) {
       markReadMutation.mutate(notification.id);
     }
 
-    const bookingId = (notification.data?.["booking_id"] ??
-      notification.data?.["bookingId"]) as string | undefined;
-    if (bookingId) {
-      navigate(`/bookings/${bookingId}`);
-      setOpen(false);
-      return;
-    }
-
-    if (fallbackLink) {
-      navigate(fallbackLink);
+    if (targetLink) {
+      navigate(targetLink);
       setOpen(false);
     }
   };

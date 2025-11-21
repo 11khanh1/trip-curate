@@ -8,7 +8,7 @@ import CollectionTourCard from "@/components/CollectionTourCard";
 import { useUser } from "@/context/UserContext";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { fetchPersonalizedRecommendations, type RecommendationItem } from "@/services/recommendationApi";
-import { fetchTrendingTours, type PublicTour } from "@/services/publicApi";
+import { fetchTrendingTours, fetchTourDetail, type PublicTour } from "@/services/publicApi";
 import { getTourStartingPrice, formatCurrency as formatPrice } from "@/lib/tour-utils";
 import { cn } from "@/lib/utils";
 
@@ -135,6 +135,39 @@ const PersonalizedRecommendations = ({ limit = 10, className }: PersonalizedReco
   const hasPersonalizedData = Array.isArray(data?.data) && data.data.length > 0;
   const shouldFetchFallback = !isLoading && (!hasPersonalizedData || hasPersonalizedError);
 
+  const missingTourIds = useMemo(() => {
+    if (!data?.data) return [];
+    const ids = data.data
+      .map((item) => (item.tour ? null : item.tour_id))
+      .filter((id): id is string => typeof id === "string" && id.trim().length > 0);
+    return Array.from(new Set(ids));
+  }, [data?.data]);
+
+  const { data: resolvedTours } = useQuery({
+    queryKey: ["personalized-recommendations-tours", { ids: missingTourIds }],
+    queryFn: async () => {
+      const results = await Promise.all(
+        missingTourIds.map(async (id) => {
+          try {
+            const tour = await fetchTourDetail(String(id));
+            return { id: String(id), tour };
+          } catch {
+            return null;
+          }
+        }),
+      );
+      const map = new Map<string, PublicTour>();
+      results.forEach((entry) => {
+        if (entry?.tour) {
+          map.set(entry.id, entry.tour as PublicTour);
+        }
+      });
+      return map;
+    },
+    enabled: missingTourIds.length > 0 && Boolean(currentUser),
+    staleTime: 5 * 60 * 1000,
+  });
+
   const {
     data: fallbackTrending,
     isLoading: isFallbackLoading,
@@ -148,9 +181,9 @@ const PersonalizedRecommendations = ({ limit = 10, className }: PersonalizedReco
   const cards = useMemo(() => {
     if (!data?.data) return [];
     return data.data
-      .map(mapRecommendationToCard)
+      .map((item) => mapRecommendationToCard({ ...item, tour: item.tour ?? resolvedTours?.get(String(item.tour_id)) ?? null }))
       .filter((value): value is NonNullable<ReturnType<typeof mapRecommendationToCard>> => Boolean(value));
-  }, [data?.data]);
+  }, [data?.data, resolvedTours]);
 
   const fallbackCards = useMemo(() => {
     if (!fallbackTrending || !Array.isArray(fallbackTrending)) return [];

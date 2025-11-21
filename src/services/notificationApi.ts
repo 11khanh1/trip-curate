@@ -36,6 +36,7 @@ export const resolveNotificationAudience = (role?: string | null): NotificationA
 interface FetchNotificationsParams {
   page?: number;
   per_page?: number;
+  audience?: NotificationAudience;
 }
 
 export async function fetchNotifications(

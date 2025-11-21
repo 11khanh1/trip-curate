@@ -63,14 +63,21 @@ const RecentTours = () => {
         const tour = entry.tour;
         if (!tour) return null;
 
+        const mediaFirst = Array.isArray(tour.media) && tour.media.length > 0 ? tour.media[0] : null;
         const thumbnail =
-          (tour.media && tour.media.length > 0 ? tour.media[0] : null) ??
-          tour.thumbnail_url ??
-          tour.thumbnail ??
+          (typeof mediaFirst === "string" && mediaFirst.trim().length > 0 ? mediaFirst : null) ??
+          (typeof tour.thumbnail_url === "string" ? tour.thumbnail_url : null) ??
+          (typeof tour.thumbnail === "string" ? tour.thumbnail : null) ??
           "https://images.unsplash.com/photo-1541417904950-b855846fe074?auto=format&fit=crop&w=900&q=80";
 
-        const rating = typeof tour.rating_average === "number" ? tour.rating_average : null;
-        const ratingCount = typeof tour.rating_count === "number" ? tour.rating_count : null;
+        const rating =
+          typeof tour.rating_average === "number" && Number.isFinite(tour.rating_average)
+            ? tour.rating_average
+            : null;
+        const ratingCount =
+          typeof tour.rating_count === "number" && Number.isFinite(tour.rating_count)
+            ? tour.rating_count
+            : null;
 
         return (
           <Card key={`${tour.id}-${entry.viewed_at ?? "recent"}`} className="overflow-hidden">

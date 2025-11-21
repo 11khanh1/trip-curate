@@ -10,7 +10,6 @@ import {
   fetchUnreadCount,
   markNotificationRead,
   markAllNotificationsRead,
-  resolveNotificationAudience,
   type NotificationPayload,
   type NotificationAudience,
 } from "@/services/notificationApi";
@@ -50,15 +49,6 @@ const variantLabel: Record<NotificationInboxProps["variant"], { title: string; e
 const NotificationInbox = ({ variant }: NotificationInboxProps) => {
   const queryClient = useQueryClient();
   const { currentUser } = useUser();
-  const notificationAudience: NotificationAudience = useMemo(() => {
-    if (variant === "partner") return "partner";
-    if (variant === "admin") return "admin";
-    if (currentUser?.role) {
-      return resolveNotificationAudience(currentUser.role, "admin");
-    }
-    return variant === "partner" ? "partner" : "admin";
-  }, [currentUser?.role, variant]);
-
   const userScope = useMemo(() => {
     if (!currentUser) return "guest";
     if (currentUser.id !== undefined && currentUser.id !== null) {
@@ -70,15 +60,17 @@ const NotificationInbox = ({ variant }: NotificationInboxProps) => {
     return currentUser.name ? `name:${currentUser.name}` : "guest";
   }, [currentUser]);
 
+  const audience: NotificationAudience = variant === "partner" ? "partner" : "admin";
+
   const unreadQuery = useQuery({
-    queryKey: ["notifications-unread", variant, userScope, notificationAudience],
-    queryFn: () => fetchUnreadCount(notificationAudience),
+    queryKey: ["notifications-unread", variant, userScope],
+    queryFn: () => fetchUnreadCount(),
     refetchInterval: 60000,
   });
 
   const notificationsQuery = useQuery({
-    queryKey: ["notifications", userScope, variant, { per_page: 6, audience: notificationAudience }],
-    queryFn: () => fetchNotifications({ per_page: 6, audience: notificationAudience }),
+    queryKey: ["notifications", userScope, variant, { per_page: 6, audience }],
+    queryFn: () => fetchNotifications({ per_page: 6, audience }),
     staleTime: 30000,
   });
 
@@ -89,30 +81,51 @@ const NotificationInbox = ({ variant }: NotificationInboxProps) => {
         queryKey: ["notifications", userScope, variant],
       });
       void queryClient.invalidateQueries({
-        queryKey: ["notifications-unread", variant, userScope, notificationAudience],
+        queryKey: ["notifications-unread", variant, userScope],
       });
     },
   });
 
   const markAllMutation = useMutation({
-    mutationFn: () => markAllNotificationsRead(notificationAudience),
+    mutationFn: () => markAllNotificationsRead(),
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: ["notifications", userScope, variant],
       });
       void queryClient.invalidateQueries({
-        queryKey: ["notifications-unread", variant, userScope, notificationAudience],
+        queryKey: ["notifications-unread", variant, userScope],
       });
     },
   });
 
   const unread = unreadQuery.data?.unread ?? 0;
   const notifications = useMemo(
-    () => notificationsQuery.data?.data ?? [],
-    [notificationsQuery.data],
+    () =>
+      (notificationsQuery.data?.data ?? []).filter((item) => {
+        const notifAudience = (item.data as Record<string, unknown> | undefined)?.audience as string | undefined;
+        if (!notifAudience) return true;
+        return notifAudience === audience;
+      }),
+    [audience, notificationsQuery.data],
   );
 
   const { title, empty } = variantLabel[variant];
+
+  const resolveNotificationLink = (notification: NotificationPayload) => {
+    const data = (notification.data as Record<string, unknown> | undefined) ?? {};
+    const bookingId = (data["booking_id"] ?? data["bookingId"]) as string | undefined;
+    const tourId = (data["tour_id"] ?? data["tourId"]) as string | undefined;
+    const isPartner = variant === "partner";
+
+    if (bookingId) {
+      return isPartner ? `/partner/bookings?bookingId=${encodeURIComponent(bookingId)}` : `/bookings/${bookingId}`;
+    }
+    if (tourId) {
+      return isPartner ? `/partner/activities` : `/activity/${tourId}`;
+    }
+    const fallbackLink = typeof data.link === "string" ? data.link : null;
+    return fallbackLink;
+  };
 
   const renderItem = (notification: NotificationPayload) => {
     const isRead = Boolean(notification.read_at);
@@ -128,6 +141,10 @@ const NotificationInbox = ({ variant }: NotificationInboxProps) => {
         onClick={() => {
           if (!isRead && notification.id) {
             markReadMutation.mutate(notification.id);
+          }
+          const link = resolveNotificationLink(notification);
+          if (link) {
+            window.location.href = link;
           }
         }}
       >
