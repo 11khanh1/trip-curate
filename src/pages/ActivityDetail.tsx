@@ -824,6 +824,8 @@ const ActivityDetail = () => {
   const scheduleRecommendationRefresh = useRecommendationRealtimeRefresh();
   const queryClient = useQueryClient();
   const hasLoggedViewRef = useRef(false);
+  const priceCardRef = useRef<HTMLDivElement | null>(null);
+  const [isPriceCardVisible, setIsPriceCardVisible] = useState(true);
 
   const [editingCartItemId, setEditingCartItemId] = useState<string | null>(null);
   const [isWishlisted, setIsWishlisted] = useState(false);
@@ -1199,15 +1201,26 @@ useEffect(() => {
   const seatsCapacity = selectedScheduleSeatsTotal ?? null;
   const isEditingCartItem = Boolean(editingCartItemId);
 
-  useEffect(() => {
-    setSelectedImage(0);
-  }, [activity?.id]);
+useEffect(() => {
+  setSelectedImage(0);
+}, [activity?.id]);
 
-  useEffect(() => {
-    if (activity?.packages.length) {
-      const availableIds = new Set(activity.packages.map((pkg) => pkg.id));
-      const cheapestPackage = activity.packages.reduce<{
-        id: string | null;
+useEffect(() => {
+  const element = priceCardRef.current;
+  if (!element) return;
+  const observer = new IntersectionObserver(
+    ([entry]) => setIsPriceCardVisible(entry.isIntersecting),
+    { threshold: 0.4 },
+  );
+  observer.observe(element);
+  return () => observer.disconnect();
+}, []);
+
+useEffect(() => {
+  if (activity?.packages.length) {
+    const availableIds = new Set(activity.packages.map((pkg) => pkg.id));
+    const cheapestPackage = activity.packages.reduce<{
+      id: string | null;
         price: number;
       }>(
         (best, pkg) => {
@@ -1748,7 +1761,7 @@ useEffect(() => {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <TravelHeader />
-      <main className="container mx-auto flex-grow px-4 py-6">
+      <main className="container mx-auto flex-grow px-4 pt-6 pb-28 lg:pb-10">
         <Breadcrumb className="mb-4">
           <BreadcrumbList>
             <BreadcrumbItem>
@@ -2452,8 +2465,10 @@ useEffect(() => {
             )}
           </div>
 
+
+
           <div className="lg:col-span-1 space-y-6 lg:self-start">
-            <div className="lg:sticky lg:top-24 space-y-6">
+            <div ref={priceCardRef} className="sticky top-20 md:top-24 lg:top-28">
               <Card className="w-full shadow-xl">
                 <CardContent className="pt-6">
                   <div className="space-y-4">
@@ -2479,7 +2494,7 @@ useEffect(() => {
                         </div>
                       ) : (
                         <span className="text-sm text-muted-foreground">
-                          Giá sẽ được cập nhật trong thời gian sớm nhất.
+                          Giá sẽ đượcc cập nhật trong thời gian sớm nhất.
                         </span>
                       )}
                       {savingsAmount !== null && savingsAmount > 0 && (
@@ -2488,190 +2503,190 @@ useEffect(() => {
                         </p>
                       )}
                     </div>
-                      <Button
-                        onClick={handleSelectPackageClick}
-                        className="w-full bg-orange-500 hover:bg-orange-600 text-white text-base py-6"
-                      >
-                        Chọn các gói dịch vụ
-                      </Button>
+                    <Button
+                      onClick={handleSelectPackageClick}
+                      className="w-full bg-orange-500 hover:bg-orange-600 text-white text-base py-6"
+                    >
+                      Chọn các gói dịch vụ
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
+            </div>
 
-              <Card className="shadow-lg">
-                <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-0">
-                  <div>
-                    <CardTitle className="text-lg font-semibold text-foreground">Chi tiết gói dịch vụ</CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      Cập nhật nhanh về những gì bạn sẽ trải nghiệm
-                    </p>
+            <Card className="shadow-lg">
+              <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-0">
+                <div>
+                  <CardTitle className="text-lg font-semibold text-foreground">Chi tiết gói dịch vụ</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Cập nhật nhanh về những gì bạn sẽ trải nghiệm
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-muted-foreground hover:text-primary"
+                  onClick={handleSelectPackageClick}
+                  aria-label="Xem chi ti?t g?i d?ch v?"
+                >
+                  <ArrowUpRight className="h-4 w-4" />
+                </Button>
+              </CardHeader>
+              <CardContent className="pt-4 space-y-4">
+                {serviceHighlights.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {serviceHighlights.map((feature, index) => (
+                      <Badge
+                        key={`${feature}-${index}`}
+                        variant="outline"
+                        className="rounded-full border-dashed px-3 py-1 text-xs font-medium text-muted-foreground"
+                      >
+                        {feature}
+                      </Badge>
+                    ))}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-muted-foreground hover:text-primary"
-                    onClick={handleSelectPackageClick}
-                    aria-label="Xem chi tiết gói dịch vụ"
-                  >
-                    <ArrowUpRight className="h-4 w-4" />
-                  </Button>
-                </CardHeader>
-                <CardContent className="pt-4 space-y-4">
-                  {serviceHighlights.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {serviceHighlights.map((feature, index) => (
-                        <Badge
-                          key={`${feature}-${index}`}
-                          variant="outline"
-                          className="rounded-full border-dashed px-3 py-1 text-xs font-medium text-muted-foreground"
-                        >
-                          {feature}
-                        </Badge>
+                )}
+
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-semibold text-foreground">Lịch trình</h4>
+                    {hasServiceTimeline && (
+                      <span className="text-xs text-muted-foreground">
+                        {serviceTimeline.length} Điểm dừng
+                      </span>
+                    )}
+                  </div>
+
+                  {hasServiceTimeline ? (
+                    <div className="relative pl-5">
+                      <div className="absolute left-[6px] top-2 bottom-4 w-0.5 bg-border" />
+                      {serviceTimeline.map((item, index) => (
+                        <div key={`${item.title}-${index}`} className="relative pb-6 last:pb-0">
+                          <span className="absolute left-[-7px] top-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full border-2 border-background bg-primary shadow-sm" />
+                          <div className="ml-4 space-y-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              {item.time && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                                  <Clock className="h-3.5 w-3.5" />
+                                  {item.time}
+                                </span>
+                              )}
+                              <span className="font-medium text-sm text-foreground">{item.title}</span>
+                            </div>
+                            {item.description && (
+                              <p className="text-sm text-muted-foreground leading-relaxed">{item.description}</p>
+                            )}
+                          </div>
+                        </div>
                       ))}
                     </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      Lịch trình chi tiết sẽ được cập nhật sóm. Vui lòng xem thêm trong mục gói dịch vụ.
+                    </p>
                   )}
+                </div>
+              </CardContent>
+            </Card>
 
+            {hasQuickInfo && (
+              <Card>
+                <CardContent className="p-6 space-y-4">
+                  <h3 className="font-semibold text-lg text-foreground">Thông tin nhanh</h3>
                   <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-semibold text-foreground">Lịch trình</h4>
-                      {hasServiceTimeline && (
-                        <span className="text-xs text-muted-foreground">
-                          {serviceTimeline.length} điểm dừng
-                        </span>
-                      )}
-                    </div>
-
-                    {hasServiceTimeline ? (
-                      <div className="relative pl-5">
-                        <div className="absolute left-[6px] top-2 bottom-4 w-0.5 bg-border" />
-                        {serviceTimeline.map((item, index) => (
-                          <div key={`${item.title}-${index}`} className="relative pb-6 last:pb-0">
-                            <span className="absolute left-[-7px] top-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full border-2 border-background bg-primary shadow-sm" />
-                            <div className="ml-4 space-y-2">
-                              <div className="flex flex-wrap items-center gap-2">
-                                {item.time && (
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                                    <Clock className="h-3.5 w-3.5" />
-                                    {item.time}
-                                  </span>
-                                )}
-                                <span className="font-medium text-sm text-foreground">{item.title}</span>
-                              </div>
-                              {item.description && (
-                                <p className="text-sm text-muted-foreground leading-relaxed">{item.description}</p>
-                              )}
-                            </div>
+                    {quickInfoItems.map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <div key={item.label} className="flex items-start gap-3">
+                          <Icon className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm text-muted-foreground">{item.label}</p>
+                            <p className="font-medium text-foreground">{item.value}</p>
                           </div>
-                        ))}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {hasPolicySummary && (
+              <Card>
+                <CardContent className="p-6 space-y-4">
+                  <h3 className="font-semibold text-lg text-foreground flex items-center gap-2">
+                    <Shield className="h-5 w-5 text-primary" />
+                    Chính sách nổi bật
+                  </h3>
+                  <ul className="space-y-2">
+                    {policySummary.map((item, index) => (
+                      <li
+                        key={`${item}-${index}`}
+                        className="flex items-start gap-2 text-sm text-muted-foreground"
+                      >
+                        <span className="mt-1 text-primary">•</span>
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            )}
+
+            {partner && (
+              <Card>
+                <CardContent className="p-6 space-y-4">
+                  <div>
+                    <h3 className="font-semibold text-lg text-foreground">Nhà cung cấp</h3>
+                    {partner.companyName && (
+                      <p className="text-sm text-muted-foreground">{partner.companyName}</p>
+                    )}
+                  </div>
+                  <div className="space-y-2 text-sm text-muted-foreground">
+                    {partner.contactName && (
+                      <div className="flex items_center gap-2">
+                        <Users className="h-4 w-4 text-primary" />
+                        <span>{partner.contactName}</span>
                       </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">
-                        Lịch trình chi tiết sẽ được cập nhật sớm. Vui lòng xem thêm trong mục gói dịch vụ.
-                      </p>
+                    )}
+                    {partner.phone && (
+                      <div className="flex items_center gap-2">
+                        <Phone className="h-4 w-4 text-primary" />
+                        <span>{partner.phone}</span>
+                      </div>
+                    )}
+                    {partner.email && (
+                      <div className="flex items_center gap-2">
+                        <Mail className="h-4 w-4 text-primary" />
+                        <span className="break-all">{partner.email}</span>
+                      </div>
                     )}
                   </div>
                 </CardContent>
               </Card>
+            )}
 
-              {hasQuickInfo && (
-                <Card>
-                  <CardContent className="p-6 space-y-4">
-                    <h3 className="font-semibold text-lg text-foreground">Thông tin nhanh</h3>
-                    <div className="space-y-3">
-                      {quickInfoItems.map((item) => {
-                        const Icon = item.icon;
-                        return (
-                          <div key={item.label} className="flex items-start gap-3">
-                            <Icon className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
-                            <div>
-                              <p className="text-sm text-muted-foreground">{item.label}</p>
-                              <p className="font-medium text-foreground">{item.value}</p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {hasPolicySummary && (
-                <Card>
-                  <CardContent className="p-6 space-y-4">
-                    <h3 className="font-semibold text-lg text-foreground flex items-center gap-2">
-                      <Shield className="h-5 w-5 text-primary" />
-                      Chính sách nổi bật
-                    </h3>
-                    <ul className="space-y-2">
-                      {policySummary.map((item, index) => (
-                        <li
-                          key={`${item}-${index}`}
-                          className="flex items-start gap-2 text-sm text-muted-foreground"
-                        >
-                          <span className="mt-1 text-primary">•</span>
-                          <span>{item}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </CardContent>
-                </Card>
-              )}
-
-              {partner && (
-                <Card>
-                  <CardContent className="p-6 space-y-4">
-                    <div>
-                      <h3 className="font-semibold text-lg text-foreground">Nhà cung cấp</h3>
-                      {partner.companyName && (
-                        <p className="text-sm text-muted-foreground">{partner.companyName}</p>
-                      )}
-                    </div>
-                    <div className="space-y-2 text-sm text-muted-foreground">
-                      {partner.contactName && (
-                        <div className="flex items-center gap-2">
-                          <Users className="h-4 w-4 text-primary" />
-                          <span>{partner.contactName}</span>
-                        </div>
-                      )}
-                      {partner.phone && (
-                        <div className="flex items-center gap-2">
-                          <Phone className="h-4 w-4 text-primary" />
-                          <span>{partner.phone}</span>
-                        </div>
-                      )}
-                      {partner.email && (
-                        <div className="flex items-center gap-2">
-                          <Mail className="h-4 w-4 text-primary" />
-                          <span className="break-all">{partner.email}</span>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              <Card className="border-primary/20 bg-primary/5">
-                <CardContent className="p-6 space-y-3">
-                  <h3 className="font-semibold text-lg text-foreground">Cần hỗ trợ thêm?</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Đội ngũ của chúng tôi luôn sẵn sàng giúp bạn lên kế hoạch và giải đáp mọi thắc mắc.
-                  </p>
-                  <div className="space-y-2 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-2">
-                      <Phone className="h-4 w-4 text-primary" />
-                      <span>Hotline: 1900 636 789</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Mail className="h-4 w-4 text-primary" />
-                      <span className="break-all">support@example.com</span>
-                    </div>
+            <Card className="border-primary/20 bg-primary/5">
+              <CardContent className="p-6 space-y-3">
+                <h3 className="font-semibold text-lg text-foreground">Cần hỗ trợ thêm?</h3>
+                <p className="text-sm text-muted-foreground">
+                  Đội ngũ của chúng tôi luôn sẵn sàng giúp bạn lên kế hoạch và giải đáp mọi thắc mắc.
+                </p>
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <Phone className="h-4 w-4 text-primary" />
+                    <span>Hotline: 1900 636 789</span>
                   </div>
-                  <Button className="w-full" onClick={openChat}>
-                    Trò chuyện với chúng tôi
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-primary" />
+                    <span className="break-all">support@example.com</span>
+                  </div>
+                </div>
+                <Button className="w-full" onClick={openChat}>
+                  Trò  chuyện với chúng tôi
+                </Button>
+              </CardContent>
+            </Card>
 
             {activity.addOns && activity.addOns.length > 0 && (
               <Card>
@@ -2700,7 +2715,7 @@ useEffect(() => {
                           )}
                           {typeof addon.price === "number" && (
                             <p className="text-sm font-semibold text-primary mt-1">
-                              ₫ {addon.price.toLocaleString()}
+                              ? {addon.price.toLocaleString()}
                             </p>
                           )}
                         </div>
@@ -2730,85 +2745,115 @@ useEffect(() => {
           </div>
         )}
       </main>
-    <Dialog open={isGalleryOpen} onOpenChange={setIsGalleryOpen}>
-      <DialogContent className="max-w-7xl w-full p-0 border-none bg-transparent shadow-none">
-        <div className="flex h-[90vh] flex-col overflow-hidden rounded-lg  text-white">
-          <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
-            <h3 className="font-semibold truncate pr-4">{activity.title}</h3>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-white hover:bg-white/10 flex-shrink-0"
-              onClick={closeGallery}
-            >
-              <X className="h-5 w-5" />
-            </Button>
-          </div>
 
-          <div className="relative flex-1 px-16 py-4 min-h-0">
-            {totalImages > 1 && (
-              <button
-                type="button"
-                onClick={goPrevImage}
-                className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white transition hover:bg-black/60 z-10"
-                aria-label="Ảnh trước"
-              >
-                <ChevronLeft className="h-6 w-6" />
-              </button>
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 shadow-2xl px-4 py-3 lg:hidden">
+        <div className="flex items-center gap-3">
+          <div className="flex min-w-0 flex-col">
+            {showOriginalPrice && activity?.originalPrice && (
+              <span className="text-xs text-muted-foreground line-through">
+                ₫ {activity.originalPrice.toLocaleString("vi-VN")}
+              </span>
             )}
+            <div className="flex items-end gap-1">
+              <span className="text-xs text-muted-foreground">Chỉ từ</span>
+              <span className="text-2xl font-bold text-primary leading-none">
+                ₫ {displayPrice !== null ? displayPrice.toLocaleString("vi-VN") : "—"}
+              </span>
+            </div>
+            {savingsAmount !== null && savingsAmount > 0 && (
+              <span className="text-[11px] font-medium text-emerald-600">
+                Tiết kiệm ₫ {savingsAmount.toLocaleString("vi-VN")}
+              </span>
+            )}
+          </div>
+          <Button
+            onClick={handleSelectPackageClick}
+            className="flex-1 bg-orange-500 hover:bg-orange-600 text-white text-base py-4"
+          >
+            Chọn các gói dịch vụ
+          </Button>
+        </div>
+      </div>
 
-            <div className="relative flex h-full w-full items-center justify-center">
-              <img
-                src={activity.images[safeSelectedIndex] ?? mainImage}
-                alt={`${activity.title} ${safeSelectedIndex + 1}`}
-                className="max-h-full max-w-full rounded-lg object-contain"
-              />
-              <div className="absolute bottom-4 right-4 rounded-full bg-black/50 px-3 py-1 text-xs font-medium text-white/90">
-                {safeSelectedIndex + 1} / {totalImages}
-              </div>
+      <Dialog open={isGalleryOpen} onOpenChange={setIsGalleryOpen}>
+        <DialogContent className="max-w-7xl w-full p-0 border-none bg-transparent shadow-none">
+          <div className="flex h-[90vh] flex-col overflow-hidden rounded-lg  text-white">
+            <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
+              <h3 className="font-semibold truncate pr-4">{activity.title}</h3>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-white hover:bg-white/10 flex-shrink-0"
+                onClick={closeGallery}
+              >
+                <X className="h-5 w-5" />
+              </Button>
             </div>
 
-            {totalImages > 1 && (
-              <button
-                type="button"
-                onClick={goNextImage}
-                className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white transition hover:bg-black/60 z-10"
-                aria-label="Ảnh tiếp theo"
-              >
-                <ChevronRight className="h-6 w-6" />
-              </button>
-            )}
-          </div>
+            <div className="relative flex-1 px-16 py-4 min-h-0">
+              {totalImages > 1 && (
+                <button
+                  type="button"
+                  onClick={goPrevImage}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white transition hover:bg-black/60 z-10"
+                  aria-label="Ảnh trước"
+                >
+                  <ChevronLeft className="h-6 w-6" />
+                </button>
+              )}
 
-          {activity.images.length > 0 && (
-            <div className="border-t border-white/10 px-5 py-4">
-              <div className="flex justify-center">
-                <div className="flex gap-3 overflow-x-auto pb-1">
-                  {activity.images.map((image, index) => (
-                    <button
-                      key={`${index}-${image}`}
-                      type="button"
-                      onClick={() => setSelectedImage(index)}
-                      className={`relative h-16 w-24 flex-shrink-0 overflow-hidden rounded-md transition focus:outline-none ${
-                        safeSelectedIndex === index
-                          ? "ring-2 ring-white shadow-lg"
-                          : "opacity-60 hover:opacity-100"
-                      }`}
-                    >
-                      <img
-                        src={image}
-                        alt={`${activity.title} ${index + 1}`}
-                        className="h-full w-full object-cover"
-                      />
-                    </button>
-                  ))}
+              <div className="relative flex h-full w-full items-center justify-center">
+                <img
+                  src={activity.images[safeSelectedIndex] ?? mainImage}
+                  alt={`${activity.title} ${safeSelectedIndex + 1}`}
+                  className="max-h-full max-w-full rounded-lg object-contain"
+                />
+                <div className="absolute bottom-4 right-4 rounded-full bg-black/50 px-3 py-1 text-xs font-medium text-white/90">
+                  {safeSelectedIndex + 1} / {totalImages}
                 </div>
               </div>
+
+              {totalImages > 1 && (
+                <button
+                  type="button"
+                  onClick={goNextImage}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-black/40 p-2 text-white transition hover:bg-black/60 z-10"
+                  aria-label="Ảnh tiếp theo"
+                >
+                  <ChevronRight className="h-6 w-6" />
+                </button>
+              )}
             </div>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
+
+            {activity.images.length > 0 && (
+              <div className="border-t border-white/10 px-5 py-4">
+                <div className="flex justify-center">
+                  <div className="flex gap-3 overflow-x-auto pb-1">
+                    {activity.images.map((image, index) => (
+                      <button
+                        key={`${index}-${image}`}
+                        type="button"
+                        onClick={() => setSelectedImage(index)}
+                        className={`relative h-16 w-24 flex-shrink-0 overflow-hidden rounded-md transition focus:outline-none ${
+                          safeSelectedIndex === index
+                            ? "ring-2 ring-white shadow-lg"
+                            : "opacity-60 hover:opacity-100"
+                        }`}
+                      >
+                        <img
+                          src={image}
+                          alt={`${activity.title} ${index + 1}`}
+                          className="h-full w-full object-cover"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
       <Footer />
     </div>
   );

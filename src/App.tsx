@@ -6,7 +6,6 @@ import { ChatWidgetProvider } from "@/context/ChatWidgetContext";
 import FloatingChatWidget from "@/components/chat/FloatingChatWidget";
 import Index from "./pages/Index";
 import AllActivities from "./pages/AllActivities";
-import ActivityDetail from "./pages/ActivityDetail";
 import NotFound from "./pages/NotFound";
 import Partner from "./pages/partner/Partner";
 import Deals from "./pages/Deals";
@@ -49,6 +48,7 @@ import CartPage from "./pages/Cart";
 import Wishlist from "./pages/Wishlist";
 import RecentToursPage from "./pages/recent/RecentToursPage";
 import NotificationsPage from "./pages/notifications/NotificationsPage";
+import ActivityDetail from "./pages/ActivityDetail";
 
 const App = () => (
   <TooltipProvider>
