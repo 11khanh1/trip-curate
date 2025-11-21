@@ -8,6 +8,7 @@ import CollectionTourCard from "@/components/CollectionTourCard";
 import { useUser } from "@/context/UserContext";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { fetchPersonalizedRecommendations, type RecommendationItem } from "@/services/recommendationApi";
+import { fetchTrendingTours, type PublicTour } from "@/services/publicApi";
 import { getTourStartingPrice, formatCurrency as formatPrice } from "@/lib/tour-utils";
 import { cn } from "@/lib/utils";
 
@@ -92,6 +93,27 @@ const mapRecommendationToCard = (item: RecommendationItem) => {
   };
 };
 
+const mapTrendingTourToCard = (tour: PublicTour) => {
+  const price = getTourStartingPrice(tour);
+  const priceLabel = formatPrice(price);
+  const originalLabel =
+    typeof tour.season_price === "number" && Number.isFinite(tour.season_price) && tour.season_price > price
+      ? formatPrice(tour.season_price)
+      : undefined;
+  const entityId = String(tour.id ?? tour.uuid ?? `trending-${Math.random().toString(36).slice(2, 10)}`);
+  const reasons = [{ code: "popular", label: "Được nhiều khách quan tâm" }];
+  return {
+    id: entityId,
+    entityId,
+    tour,
+    reasons,
+    priceLabel,
+    originalLabel,
+    features: Array.isArray(tour.tags) ? tour.tags.slice(0, 2) : [],
+    image: resolveTourImage(tour),
+  };
+};
+
 const PersonalizedRecommendations = ({ limit = 10, className }: PersonalizedRecommendationsProps) => {
   const { currentUser } = useUser();
   const { trackEvent } = useAnalytics();
@@ -105,8 +127,22 @@ const PersonalizedRecommendations = ({ limit = 10, className }: PersonalizedReco
     queryKey: ["personalized-recommendations", { limit }],
     queryFn: () => fetchPersonalizedRecommendations(limit),
     enabled: Boolean(currentUser),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 60 * 1000,
     retry: false,
+  });
+
+  const hasPersonalizedError = Boolean(isError);
+  const hasPersonalizedData = Array.isArray(data?.data) && data.data.length > 0;
+  const shouldFetchFallback = !isLoading && (!hasPersonalizedData || hasPersonalizedError);
+
+  const {
+    data: fallbackTrending,
+    isLoading: isFallbackLoading,
+  } = useQuery({
+    queryKey: ["personalized-fallback-trending", { limit }],
+    queryFn: () => fetchTrendingTours({ limit, days: 60 }),
+    enabled: shouldFetchFallback,
+    staleTime: 10 * 60 * 1000,
   });
 
   const cards = useMemo(() => {
@@ -116,12 +152,26 @@ const PersonalizedRecommendations = ({ limit = 10, className }: PersonalizedReco
       .filter((value): value is NonNullable<ReturnType<typeof mapRecommendationToCard>> => Boolean(value));
   }, [data?.data]);
 
+  const fallbackCards = useMemo(() => {
+    if (!fallbackTrending || !Array.isArray(fallbackTrending)) return [];
+    return fallbackTrending
+      .map(mapTrendingTourToCard)
+      .filter((value): value is ReturnType<typeof mapTrendingTourToCard> => Boolean(value));
+  }, [fallbackTrending]);
+
+  const displayedCards = cards.length > 0 ? cards : fallbackCards;
+
   const meta = data?.meta ?? {};
   const recommendationCount =
     typeof meta.count === "number" && Number.isFinite(meta.count) ? meta.count : cards.length;
   const hasPersonalizedSignals =
     typeof meta.has_personalized_signals === "boolean" ? meta.has_personalized_signals : false;
-  const shouldShowEmptyState = !isLoading && !isError && recommendationCount === 0;
+  const shouldShowEmptyState =
+    !isLoading &&
+    !isFallbackLoading &&
+    !isError &&
+    recommendationCount === 0 &&
+    fallbackCards.length === 0;
 
   if (!currentUser) {
     return null;
@@ -166,7 +216,7 @@ const PersonalizedRecommendations = ({ limit = 10, className }: PersonalizedReco
 
         {!isLoading && cards.length > 0 ? (
           <div className="mt-6 grid gap-6 lg:grid-cols-2">
-            {cards.map((card) => (
+            {displayedCards.map((card) => (
               <CollectionTourCard
                 key={card.id}
                 className="border border-slate-200/70 shadow-sm transition hover:-translate-y-1 hover:shadow-lg"

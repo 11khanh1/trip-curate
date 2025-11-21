@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useUser, type User as AccountUser } from "@/context/UserContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +27,11 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { isPastDate, isValidVietnamPhone, normalizeVietnamPhone } from "@/lib/validators";
 import { fetchProfile, updateProfile, PROFILE_QUERY_KEY, type UserProfile, type UpdateProfilePayload } from "@/services/profileApi";
+import {
+  fetchNotificationSettings,
+  toggleNotifications,
+  type NotificationToggleResponse,
+} from "@/services/notificationApi";
 
 
 type SectionType = "profile" | "security" | "notifications" | "payment" | "preferences";
@@ -150,6 +155,7 @@ const AccountSettings = () => {
   const [paymentForm, setPaymentForm] = useState<PaymentFormState>(() => createEmptyPaymentForm());
   const queryClient = useQueryClient();
   const [isProfileSaving, setIsProfileSaving] = useState(false);
+  const [isNotificationSaving, setIsNotificationSaving] = useState(false);
   const {
     data: profileData,
     isLoading: isProfileLoading,
@@ -163,6 +169,21 @@ const AccountSettings = () => {
   });
   const profileLoadError = profileError instanceof Error ? profileError.message : null;
   const isProfileBusy = isProfileSaving || isProfileLoading;
+
+  const {
+    data: notificationSettings,
+    isLoading: isNotificationLoading,
+    refetch: refetchNotificationSettings,
+  } = useQuery<NotificationToggleResponse>({
+    queryKey: ["notification-settings"],
+    queryFn: () => fetchNotificationSettings(),
+    staleTime: 2 * 60 * 1000,
+  });
+
+  const notificationToggleMutation = useMutation({
+    mutationFn: (enabled: boolean) => toggleNotifications(enabled),
+    onSettled: () => refetchNotificationSettings(),
+  });
 
   const persistUserFromProfile = useCallback(
     (profile: UserProfile) => {
@@ -234,6 +255,27 @@ const AccountSettings = () => {
       console.error("Không thể tải cài đặt đã lưu:", error);
     }
   }, []);
+
+  useEffect(() => {
+    if (typeof notificationSettings?.notifications_enabled !== "boolean") return;
+    const enabled = notificationSettings.notifications_enabled;
+    setAccountSettings((prev) => {
+      const nextNotifications = Object.keys(prev.notifications).reduce<NotificationSettings>(
+        (acc, key) => ({
+          ...acc,
+          [key]: enabled,
+        }),
+        prev.notifications,
+      );
+      const nextState = { ...prev, notifications: nextNotifications };
+      try {
+        localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(nextState));
+      } catch (error) {
+        console.warn("Không thể lưu trạng thái thông báo:", error);
+      }
+      return nextState;
+    });
+  }, [notificationSettings?.notifications_enabled]);
 
   const menuItems = [
     { id: "profile" as SectionType, label: "Hồ sơ của tôi", icon: UserIcon },
@@ -399,14 +441,49 @@ const AccountSettings = () => {
   };
 
   const handleNotificationToggle = (key: NotificationKey, label: string, value: boolean) => {
-    persistSettings((prev) => ({
+    const nextNotifications = {
+      ...accountSettings.notifications,
+      [key]: value,
+    };
+    const enabled = Object.values(nextNotifications).some(Boolean);
+
+    setIsNotificationSaving(true);
+    setAccountSettings((prev) => ({
       ...prev,
-      notifications: {
-        ...prev.notifications,
-        [key]: value,
-      },
+      notifications: nextNotifications,
     }));
-    toast.success(`${value ? "Đã bật" : "Đã tắt"} ${label.toLowerCase()}`);
+
+    notificationToggleMutation.mutate(enabled, {
+      onSuccess: (data) => {
+        const finalEnabled =
+          typeof data?.notifications_enabled === "boolean" ? data.notifications_enabled : enabled;
+        const updated = Object.keys(nextNotifications).reduce<NotificationSettings>((acc, currentKey) => {
+          const currentValue = nextNotifications[currentKey as NotificationKey];
+          return {
+            ...acc,
+            [currentKey]: finalEnabled ? currentValue : false,
+          };
+        }, nextNotifications);
+        persistSettings(
+          (prev) => ({
+            ...prev,
+            notifications: updated,
+          }),
+          `${finalEnabled ? "Đã bật" : "Đã tắt"} ${label.toLowerCase()}`,
+        );
+      },
+      onError: (error) => {
+        setAccountSettings((prev) => ({
+          ...prev,
+          notifications: {
+            ...prev.notifications,
+            [key]: !value,
+          },
+        }));
+        toast.error(getErrorMessage(error, "Không thể cập nhật cài đặt thông báo."));
+      },
+      onSettled: () => setIsNotificationSaving(false),
+    });
   };
 
   const handleToggleTwoFactor = (value: boolean) => {
@@ -939,6 +1016,7 @@ const AccountSettings = () => {
                           </span>
                           <Switch
                             checked={accountSettings.notifications[option.key]}
+                            disabled={isNotificationSaving || isNotificationLoading || notificationToggleMutation.isPending}
                             onCheckedChange={(checked) => handleNotificationToggle(option.key, option.title, checked)}
                           />
                         </div>

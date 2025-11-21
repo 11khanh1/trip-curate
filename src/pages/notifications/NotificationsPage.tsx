@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import TravelHeader from "@/components/TravelHeader";
@@ -15,9 +15,10 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
   toggleNotifications,
-  resolveNotificationAudience,
   type NotificationPayload,
-  type NotificationAudience,
+  type NotificationListResponse,
+  type UnreadCountResponse,
+  type NotificationToggleResponse,
 } from "@/services/notificationApi";
 import { Loader2, BellRing, BellOff, ArrowRight, Inbox, CheckCircle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
@@ -26,7 +27,7 @@ import { cn } from "@/lib/utils";
 import { getNotificationCopy, getNotificationTypeLabel } from "@/lib/notification-utils";
 import { useUser } from "@/context/UserContext";
 
-const PER_PAGE = 20;
+const PER_PAGE = 5;
 
 const renderRelativeTime = (value?: string | null) => {
   if (!value) return "Vừa cập nhật";
@@ -40,78 +41,97 @@ const NotificationsPage = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { currentUser } = useUser();
+  const canFetchNotifications = Boolean(currentUser);
 
-  const notificationAudience: NotificationAudience = useMemo(() => {
-    if (!currentUser?.role) return "customer";
-    return resolveNotificationAudience(currentUser.role);
-  }, [currentUser?.role]);
-
-  const notificationsQuery = useQuery({
-    queryKey: ["notifications", { page, audience: notificationAudience }],
-    queryFn: () => fetchNotifications({ page, per_page: PER_PAGE, audience: notificationAudience }),
-    keepPreviousData: true,
+  const notificationsQuery = useQuery<NotificationListResponse>({
+    queryKey: ["notifications", { page, per_page: PER_PAGE }],
+    queryFn: () => fetchNotifications({ page, per_page: PER_PAGE }),
+    enabled: canFetchNotifications,
   });
 
-  const unreadQuery = useQuery({
-    queryKey: ["notifications-unread", notificationAudience],
-    queryFn: () => fetchUnreadCount(notificationAudience),
+  const unreadQuery = useQuery<UnreadCountResponse>({
+    queryKey: ["notifications-unread"],
+    queryFn: () => fetchUnreadCount(),
     refetchInterval: 60000,
   });
 
-  const settingsQuery = useQuery({
-    queryKey: ["notifications-settings", notificationAudience],
-    queryFn: () => fetchNotificationSettings(notificationAudience),
+  const settingsQuery = useQuery<NotificationToggleResponse>({
+    queryKey: ["notifications-settings"],
+    queryFn: () => fetchNotificationSettings(),
   });
 
   const markReadMutation = useMutation({
     mutationFn: (id: string | number) => markNotificationRead(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({
-        queryKey: ["notifications", { page, audience: notificationAudience }],
+        queryKey: ["notifications"],
       });
       void queryClient.invalidateQueries({
-        queryKey: ["notifications-unread", notificationAudience],
+        queryKey: ["notifications-unread"],
       });
     },
   });
 
   const markAllMutation = useMutation({
-    mutationFn: () => markAllNotificationsRead(notificationAudience),
+    mutationFn: () => markAllNotificationsRead(),
     onSuccess: () => {
       void queryClient.invalidateQueries({
-        queryKey: ["notifications", { page, audience: notificationAudience }],
+        queryKey: ["notifications"],
       });
       void queryClient.invalidateQueries({
-        queryKey: ["notifications-unread", notificationAudience],
+        queryKey: ["notifications-unread"],
       });
     },
   });
 
   const toggleMutation = useMutation({
-    mutationFn: (enabled: boolean) => toggleNotifications(enabled, notificationAudience),
+    mutationFn: (enabled: boolean) => toggleNotifications(enabled),
     onSuccess: (data) => {
-      queryClient.setQueryData(["notifications-settings", notificationAudience], data);
+      queryClient.setQueryData(["notifications-settings"], data);
     },
   });
 
   const notificationsEnabled =
-    settingsQuery.data?.notifications_enabled ??
-    notificationsQuery.data?.notifications_enabled ??
-    true;
+    typeof settingsQuery.data?.enabled === "boolean"
+      ? settingsQuery.data.enabled
+      : typeof notificationsQuery.data?.enabled === "boolean"
+      ? notificationsQuery.data.enabled
+      : true;
 
   const notifications = notificationsQuery.data?.data ?? [];
   const unreadCount = unreadQuery.data?.unread ?? 0;
 
   const meta = notificationsQuery.data?.meta ?? {};
   const currentPage =
-    typeof meta?.current_page === "number" ? meta.current_page : page;
-  const lastPage =
-    typeof meta?.last_page === "number" ? meta.last_page : currentPage;
-  const hasNextPage = lastPage ? currentPage < lastPage : notifications.length === PER_PAGE;
+    typeof meta?.current_page === "number" && meta.current_page > 0 ? meta.current_page : page;
+  const lastPageMeta =
+    typeof meta?.last_page === "number" && meta.last_page > 0 ? meta.last_page : null;
+  const totalPages =
+    lastPageMeta ??
+    (notifications.length === PER_PAGE ? currentPage + 1 : currentPage);
+  const hasNextPage = totalPages ? currentPage < totalPages : notifications.length === PER_PAGE;
   const hasPrevPage = currentPage > 1;
+  const pageNumbers = useMemo(() => {
+    const maxPage = Math.max(totalPages ?? 1, 1);
+    if (maxPage <= 6) {
+      return Array.from({ length: maxPage }, (_, index) => index + 1);
+    }
+    const pages = new Set<number>([1, maxPage, currentPage]);
+    for (let offset = -2; offset <= 2; offset += 1) {
+      const candidate = currentPage + offset;
+      if (candidate > 1 && candidate < maxPage) pages.add(candidate);
+    }
+    return Array.from(pages).sort((a, b) => a - b);
+  }, [currentPage, totalPages]);
 
   const isLoading = notificationsQuery.isLoading;
   const isError = Boolean(notificationsQuery.error);
+
+  const handleGoToPage = (target: number) => {
+    const safeTotal = Math.max(totalPages ?? target, 1);
+    const next = Math.min(Math.max(1, target), safeTotal);
+    setPage(next);
+  };
 
   const handleItemClick = (notification: NotificationPayload) => {
     const bookingId =
@@ -324,26 +344,39 @@ const NotificationsPage = () => {
               <div className="flex flex-wrap items-center justify-between gap-3 border-t p-4 text-sm">
                 <span className="text-muted-foreground">
                   Trang {currentPage}
-                  {lastPage ? ` / ${lastPage}` : null}
+                  {totalPages ? ` / ${totalPages}` : null}
                 </span>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Button
                     variant="outline"
                     size="sm"
                     disabled={!hasPrevPage || notificationsQuery.isFetching}
-                    onClick={() => {
-                      if (hasPrevPage) setPage((prev) => Math.max(1, prev - 1));
-                    }}
+                    onClick={() => hasPrevPage && handleGoToPage(currentPage - 1)}
                   >
                     Trước
                   </Button>
+                  {pageNumbers.map((pageNumber, index) => {
+                    const prev = pageNumbers[index - 1];
+                    const showEllipsis = prev && pageNumber - prev > 1;
+                    return (
+                      <div key={pageNumber} className="flex items-center gap-2">
+                        {showEllipsis && <span className="text-muted-foreground">…</span>}
+                        <Button
+                          variant={pageNumber === currentPage ? "default" : "outline"}
+                          size="sm"
+                          disabled={notificationsQuery.isFetching}
+                          onClick={() => handleGoToPage(pageNumber)}
+                        >
+                          {pageNumber}
+                        </Button>
+                      </div>
+                    );
+                  })}
                   <Button
                     variant="outline"
                     size="sm"
                     disabled={!hasNextPage || notificationsQuery.isFetching}
-                    onClick={() => {
-                      if (hasNextPage) setPage((prev) => prev + 1);
-                    }}
+                    onClick={() => hasNextPage && handleGoToPage(currentPage + 1)}
                   >
                     Sau
                   </Button>
