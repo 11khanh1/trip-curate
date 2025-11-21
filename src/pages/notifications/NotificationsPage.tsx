@@ -10,7 +10,6 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
   fetchNotifications,
-  fetchNotificationSettings,
   fetchUnreadCount,
   markAllNotificationsRead,
   markNotificationRead,
@@ -79,7 +78,7 @@ const NotificationsPage = () => {
 
   const settingsQuery = useQuery<NotificationToggleResponse>({
     queryKey: ["notifications-settings"],
-    queryFn: () => fetchNotificationSettings(),
+    queryFn: async () => ({ enabled: true }),
   });
 
   const markReadMutation = useMutation({

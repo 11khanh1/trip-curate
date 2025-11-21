@@ -75,13 +75,6 @@ export async function toggleNotifications(enabled: boolean): Promise<Notificatio
 }
 
 export async function fetchNotificationSettings(): Promise<NotificationToggleResponse> {
-  try {
-    const res = await apiClient.get("/notifications/toggle");
-    if (res.data && typeof res.data === "object" && "enabled" in res.data) {
-      return res.data as NotificationToggleResponse;
-    }
-  } catch {
-    // Endpoint optional; fall back to enabled = true
-  }
+  // API hiện không hỗ trợ GET trạng thái, chỉ POST để bật/tắt → mặc định true
   return { enabled: true };
 }

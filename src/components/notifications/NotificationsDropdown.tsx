@@ -5,7 +5,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   fetchNotifications,
   fetchUnreadCount,
-  fetchNotificationSettings,
   markNotificationRead,
   markAllNotificationsRead,
   toggleNotifications,
@@ -77,7 +76,7 @@ const NotificationDropdown = () => {
 
   const settingsQuery = useQuery({
     queryKey: ["notifications-settings", userScope],
-    queryFn: () => fetchNotificationSettings(),
+    queryFn: async () => ({ enabled: true }),
     enabled: canFetchNotifications,
     retry: false,
   });
