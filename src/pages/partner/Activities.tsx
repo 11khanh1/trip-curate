@@ -779,8 +779,20 @@ const fetchTourDetail = useCallback(async (id: string): Promise<Tour> => {
                 min_participants:
                   typeof editingTour.schedule.min_participants === "number" &&
                   Number.isFinite(editingTour.schedule.min_participants)
-                    ? Math.max(1, Math.trunc(editingTour.schedule.min_participants))
-                    : 1,
+                  ? Math.max(1, Math.trunc(editingTour.schedule.min_participants))
+                  : 1,
+                departure_location:
+                  editingTour.schedule.departure_location
+                    ? String(editingTour.schedule.departure_location)
+                    : (editingTour.schedule as Record<string, unknown> | undefined)?.departureLocation
+                    ? String((editingTour.schedule as Record<string, unknown>).departureLocation)
+                    : "",
+                departure_time:
+                  editingTour.schedule.departure_time
+                    ? String(editingTour.schedule.departure_time)
+                    : (editingTour.schedule as Record<string, unknown> | undefined)?.departureTime
+                    ? String((editingTour.schedule as Record<string, unknown>).departureTime)
+                    : "",
                 bookings_count:
                   typeof editingTour.schedule.bookings_count === "number" &&
                   Number.isFinite(editingTour.schedule.bookings_count)
@@ -1397,18 +1409,45 @@ const handleMoveItinerary = (index: number, delta: number) => {
 
   // ---------------------------- RENDER ----------------------------
   return (
-    <div className="space-y-6">
+    <div className="min-h-screen bg-gradient-to-b from-[#f6f9ff] via-white to-[#fff8f0]">
+      <div className="container mx-auto px-4 py-8 space-y-8">
+        <div className="overflow-hidden rounded-3xl border border-orange-100 bg-white/90 p-6 shadow-lg">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-2">
+              <p className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-orange-700 border border-orange-100">
+                Quản lý tour đối tác
+              </p>
+              <h1 className="text-2xl font-bold text-foreground md:text-3xl">Trang quản lý Tour</h1>
+              <p className="text-sm text-muted-foreground">
+                Tạo, chỉnh sửa và xuất bản tour. Các tour mới sẽ chuyển về trạng thái chờ duyệt trước khi hiển thị công khai.
+              </p>
+              <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                <span className="rounded-full bg-blue-50 px-2 py-1 text-blue-700">Nháp</span>
+                <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-700">Chờ duyệt</span>
+                <span className="rounded-full bg-emerald-50 px-2 py-1 text-emerald-700">Đã duyệt</span>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={handleAddTour}>
+                Tour mới
+              </Button>
+              <Button onClick={() => setIsFormOpen(true)} className="bg-orange-600 text-white hover:bg-orange-700">
+                Mở form chỉnh sửa
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-6">
       <Collapsible open={isFormOpen} onOpenChange={setIsFormOpen}>
-        <Card className="border border-primary/25 bg-white/95 shadow-md">
-          <CardHeader className="space-y-4 lg:flex lg:items-center lg:justify-between">
+        <Card className="border border-orange-100 bg-white/95 shadow-lg">
+          <CardHeader className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
             <div className="space-y-1">
-              <CardTitle className="text-foreground">
-                {editingTour ? "Cập nhật tour" : "Thêm tour mới"}
-              </CardTitle>
+              <CardTitle className="text-lg font-semibold text-foreground">Form chi tiết tour</CardTitle>
               <CardDescription className="text-muted-foreground">
                 {editingTour
-                  ? "Điều chỉnh thông tin tour. Sau khi lưu, tour sẽ quay về trạng thái chờ duyệt."
-                  : "Nhập thông tin chi tiết để tạo tour mới trên hệ thống."}
+                  ? "Đang chỉnh sửa tour. Lưu lại để gửi duyệt."
+                  : "Nhập thông tin để tạo tour mới."}
               </CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -1420,7 +1459,7 @@ const handleMoveItinerary = (index: number, delta: number) => {
                     : "border-emerald-200 bg-emerald-50 text-emerald-700"
                 }
               >
-                {editingTour ? `Đang chỉnh: ${editingLabel.slice(0, 28)}` : "Chế độ tạo tour"}
+                {editingTour ? `Đang chỉnh: ${editingLabel.slice(0, 24)}` : "Chế độ tạo tour"}
               </Badge>
               <Button type="button" variant="outline" size="sm" onClick={handleAddTour}>
                 Tour mới
@@ -1428,14 +1467,11 @@ const handleMoveItinerary = (index: number, delta: number) => {
               <CollapsibleTrigger asChild>
                 <Button
                   size="sm"
-                  variant={isFormOpen ? "secondary" : "default"}
-                  className="shadow"
+                  variant="outline"
+                  className="border-orange-200 text-orange-700 hover:bg-orange-50"
+                  onClick={() => setIsFormOpen(!isFormOpen)}
                 >
-                  {isFormOpen
-                    ? "Thu gọn form"
-                    : editingTour
-                    ? "Mở form chỉnh sửa"
-                    : "Mở form thêm"}
+                  {isFormOpen ? "Thu gọn" : "Mở form"}
                 </Button>
               </CollapsibleTrigger>
             </div>
@@ -1450,7 +1486,7 @@ const handleMoveItinerary = (index: number, delta: number) => {
               </div>
             )}
             <fieldset disabled={isSubmitting || isFormLoading} className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-4 rounded-2xl border border-orange-100 bg-white/80 p-4 shadow-sm md:grid-cols-2 xl:grid-cols-3">
               <div className="space-y-2">
                 <Label htmlFor="title">Tên tour *</Label>
                 <Input
@@ -1564,7 +1600,7 @@ const handleMoveItinerary = (index: number, delta: number) => {
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 rounded-2xl border border-slate-100 bg-white/80 p-4 shadow-sm md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="description">Mô tả tổng quan *</Label>
                 <Textarea
@@ -2453,7 +2489,7 @@ const handleMoveItinerary = (index: number, delta: number) => {
           </div>
         </DialogContent>
       </Dialog>
-      <Card>
+      <Card className="border border-orange-100 bg-white/95 shadow-lg">
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle>Danh sách Tour đã đăng</CardTitle>
@@ -2633,6 +2669,8 @@ const handleMoveItinerary = (index: number, delta: number) => {
           </div>
         )}
       </Card>
+        </div>
+      </div>
     </div>
   );
 }

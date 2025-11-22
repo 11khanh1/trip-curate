@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Gift, Clock, Percent, Tag } from "lucide-react";
+import { Gift, Clock, Percent, Tag, Sparkles } from "lucide-react";
 import { fetchActivePromotions, type HomePromotion } from "@/services/publicApi";
+import { useToast } from "@/hooks/use-toast";
 
 const GRADIENTS = [
   "from-cyan-400 to-cyan-600",
@@ -196,6 +197,7 @@ const Deals = () => {
     queryFn: () => fetchActivePromotions(PROMOTION_LIMIT),
     staleTime: 5 * 60 * 1000,
   });
+  const { toast } = useToast();
 
   const promotions = promotionsQuery.data ?? [];
 
@@ -260,11 +262,24 @@ const Deals = () => {
       </section>
 
       {/* Deal Codes Section */}
-      <section className="py-16 bg-background">
-        <div className="container mx-auto px-4">
-          <div className="flex items-center gap-3 mb-8">
-            <Gift className="w-8 h-8 text-primary" />
-            <h2 className="text-3xl font-bold">Mã giảm giá</h2>
+      <section className="relative py-16 bg-gradient-to-b from-[#f7f9ff] via-white to-[#fff7f0]">
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute left-10 top-8 h-24 w-24 rounded-full bg-orange-200/40 blur-3xl" />
+          <div className="absolute right-6 bottom-10 h-28 w-28 rounded-full bg-blue-200/40 blur-3xl" />
+        </div>
+        <div className="container relative mx-auto px-4">
+          <div className="flex flex-col gap-3 mb-8 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-3">
+              <Gift className="w-9 h-9 text-orange-600" />
+              <div>
+                <h2 className="text-3xl font-bold text-foreground">Mã giảm giá</h2>
+                <p className="text-sm text-muted-foreground">Nhận ưu đãi, nhập mã và tiết kiệm cho chuyến đi của bạn</p>
+              </div>
+            </div>
+            <Badge className="flex items-center gap-1 rounded-full bg-orange-50 text-orange-700 border border-orange-200">
+              <Sparkles className="h-4 w-4" />
+              Ưu đãi nổi bật
+            </Badge>
           </div>
 
           <div className="grid md:grid-cols-2 gap-6">
@@ -273,7 +288,10 @@ const Deals = () => {
                   <Skeleton key={index} className="h-48 rounded-2xl" />
                 ))
               : dealItems.map((deal) => (
-                  <Card key={deal.id} className="hover:shadow-lg transition-shadow">
+                  <Card
+                    key={deal.id}
+                    className="hover:shadow-lg transition hover:-translate-y-1 border border-orange-100 bg-white/90 backdrop-blur"
+                  >
                     <CardContent className="p-6">
                       <div className="flex items-start gap-4">
                         <div className="p-3 bg-primary/10 rounded-lg text-primary">
@@ -305,7 +323,30 @@ const Deals = () => {
                           </div>
 
                           <div className="flex items-center gap-3">
-                            <Button className="flex-1">Lưu mã</Button>
+                            <Button
+                              className="flex-1"
+                              onClick={() => {
+                                if (navigator?.clipboard?.writeText) {
+                                  navigator.clipboard
+                                    .writeText(deal.code)
+                                    .then(() => {
+                                      toast({
+                                        title: "Đã sao chép mã khuyến mãi",
+                                        description: `${deal.code} đã được lưu vào bộ nhớ tạm.`,
+                                      });
+                                    })
+                                    .catch(() => {
+                                      toast({
+                                        title: "Không thể sao chép",
+                                        description: "Vui lòng thử lại hoặc tự sao chép mã.",
+                                        variant: "destructive",
+                                      });
+                                    });
+                                }
+                              }}
+                            >
+                              Lưu mã
+                            </Button>
                             {deal.appOnly && (
                               <Badge variant="secondary" className="text-xs">
                                 Chỉ trên App

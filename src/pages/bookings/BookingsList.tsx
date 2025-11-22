@@ -397,7 +397,7 @@ interface DeleteReviewVariables {
 const BookingsSkeleton = () => (
   <div className="space-y-4">
     {Array.from({ length: 3 }).map((_, index) => (
-      <Card key={index}>
+      <Card key={index} className="border border-orange-100 bg-white shadow-md">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <div className="space-y-2">
             <Skeleton className="h-4 w-24" />
@@ -420,16 +420,16 @@ const BookingsSkeleton = () => (
 );
 
 const EmptyState = () => (
-  <Card>
+  <Card className="border border-orange-100 bg-white shadow-md">
     <CardContent className="flex flex-col items-center justify-center space-y-3 py-12 text-center">
-      <Ticket className="h-10 w-10 text-muted-foreground" />
+      <Ticket className="h-10 w-10 text-orange-500" />
       <div>
-        <h3 className="text-lg font-semibold">Bạn chưa có booking nào</h3>
+        <h3 className="text-lg font-semibold text-foreground">Bạn chưa có booking nào</h3>
         <p className="text-sm text-muted-foreground">
           Hãy khám phá các hoạt động thú vị và đặt ngay để lưu giữ khoảnh khắc.
         </p>
       </div>
-      <Button asChild>
+      <Button asChild className="bg-orange-600 text-white hover:bg-orange-700">
         <Link to="/activities">Khám phá hoạt động</Link>
       </Button>
     </CardContent>
@@ -833,9 +833,9 @@ const BookingsList = () => {
     "Tour";
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="flex min-h-screen flex-col bg-[#f2f4fb]">
       <TravelHeader />
-      <main className="container mx-auto flex-1 px-4 py-8">
+      <main className="container mx-auto flex-1 px-4 py-10">
         <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-semibold text-foreground">Đơn đặt của tôi</h1>
@@ -967,7 +967,10 @@ const BookingsList = () => {
               const headerStatusVariant = isAwaitingConfirmation ? "default" : statusVariant(booking.status);
 
               return (
-                <Card key={booking.id}>
+                <Card
+                  key={booking.id}
+                  className="border border-orange-100 bg-white shadow-md transition hover:-translate-y-[2px] hover:shadow-lg"
+                >
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-base font-semibold">{tourName}</CardTitle>
                     <div className="flex items-center gap-2">
