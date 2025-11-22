@@ -2127,10 +2127,18 @@ useEffect(() => {
                     </CardContent>
                   </Card>
 
-                  <Sheet open={passengerSheetOpen} onOpenChange={setPassengerSheetOpen}>
-                    <SheetContent side="right" className="w-full max-w-3xl bg-white px-6 py-8">
+                  <Sheet
+                    open={passengerSheetOpen}
+                    onOpenChange={(open) => {
+                      setPassengerSheetOpen(open);
+                      if (!open) setActivePassengerIndex(null);
+                    }}
+                  >
+                    <SheetContent side="right" className="w-full max-w-[60vw] min-w-[580px] bg-white px-6 py-8">
                       <SheetHeader className="mb-4">
-                        <SheetTitle className="text-xl text-foreground">Cập nhật thông tin hành khách</SheetTitle>
+                        <SheetTitle className="text-xl text-foreground">
+                          {activePassengerIndex === null ? "Cập nhật thông tin hành khách" : "Chỉnh sửa hành khách"}
+                        </SheetTitle>
                         <p className="text-sm text-muted-foreground">
                           Điền đầy đủ họ tên, ngày sinh và giấy tờ tùy thân (nếu bắt buộc) cho mỗi hành khách.
                         </p>
@@ -2149,69 +2157,75 @@ useEffect(() => {
                               <p>{childAgeRequirementLabel}</p>
                             </AlertDescription>
                           </Alert>
-                          {passengers.map((passenger, index) => (
-                            <div
-                              key={`passenger-sheet-${index}`}
-                              className="rounded-xl border border-[#ffd7ae] bg-white p-4 shadow-sm"
-                            >
-                              <p className="mb-3 text-sm font-semibold text-foreground">
-                                Hành khách {index + 1} · {passenger.type === "child" ? "Trẻ em" : "Người lớn"}
-                              </p>
-                              <div className="grid gap-4 md:grid-cols-2">
-                                <FormField
-                                  control={form.control}
-                                  name={`passengers.${index}.full_name`}
-                                  render={({ field }) => (
-                                    <FormItem className="md:col-span-2">
-                                      <FormLabel>Họ và tên</FormLabel>
-                                      <FormControl>
-                                        <Input placeholder="Nhập họ và tên" {...field} />
-                                      </FormControl>
-                                      <FormMessage />
-                                    </FormItem>
-                                  )}
-                                />
-                                <FormField
-                                  control={form.control}
-                                  name={`passengers.${index}.date_of_birth`}
-                                  render={({ field }) => (
-                                    <FormItem>
-                                      <FormLabel>
-                                        {passenger.type === "child" ? "Ngày sinh (bắt buộc)" : "Ngày sinh"}
-                                      </FormLabel>
-                                      <FormControl>
-                                        <Input type="date" {...field} />
-                                      </FormControl>
-                                      <FormMessage />
-                                    </FormItem>
-                                  )}
-                                />
-                                <FormField
-                                  control={form.control}
-                                  name={`passengers.${index}.document_number`}
-                                  render={({ field }) => (
-                                    <FormItem>
-                                      <FormLabel>
-                                        {requiresDocument ? "Giấy tờ hộ chiếu/visa (bắt buộc)" : "Giấy tờ tùy thân (tùy chọn)"}
-                                      </FormLabel>
-                                      <FormControl>
-                                        <Input
-                                          placeholder={requiresDocument ? "Số hộ chiếu/visa" : "CMND/Hộ chiếu"}
-                                          {...field}
-                                        />
-                                      </FormControl>
-                                      <p className="text-xs text-muted-foreground">
-                                        {requiresDocument
-                                          ? "Nhập chính xác dãy chữ số ghi trên giấy tờ sẽ xuất trình."
-                                          : "Nếu có, nhập CMND/CCCD hoặc hộ chiếu để hỗ trợ đối soát."}
-                                      </p>
-                                      <FormMessage />
-                                    </FormItem>
-                                  )}
-                                />
-                              </div>
-                            </div>
-                          ))}
+                          {(activePassengerIndex === null ? passengers.map((_, idx) => idx) : [activePassengerIndex]).map(
+                            (index) => {
+                              const passenger = passengers[index];
+                              if (!passenger) return null;
+                              return (
+                                <div
+                                  key={`passenger-sheet-${index}`}
+                                  className="rounded-xl border border-[#ffd7ae] bg-white p-4 shadow-sm"
+                                >
+                                  <p className="mb-3 text-sm font-semibold text-foreground">
+                                    Hành khách {index + 1} · {passenger.type === "child" ? "Trẻ em" : "Người lớn"}
+                                  </p>
+                                  <div className="grid gap-4 md:grid-cols-2">
+                                    <FormField
+                                      control={form.control}
+                                      name={`passengers.${index}.full_name`}
+                                      render={({ field }) => (
+                                        <FormItem className="md:col-span-2">
+                                          <FormLabel>Họ và tên</FormLabel>
+                                          <FormControl>
+                                            <Input placeholder="Nhập họ và tên" {...field} />
+                                          </FormControl>
+                                          <FormMessage />
+                                        </FormItem>
+                                      )}
+                                    />
+                                    <FormField
+                                      control={form.control}
+                                      name={`passengers.${index}.date_of_birth`}
+                                      render={({ field }) => (
+                                        <FormItem>
+                                          <FormLabel>
+                                            {passenger.type === "child" ? "Ngày sinh (bắt buộc)" : "Ngày sinh"}
+                                          </FormLabel>
+                                          <FormControl>
+                                            <Input type="date" {...field} />
+                                          </FormControl>
+                                          <FormMessage />
+                                        </FormItem>
+                                      )}
+                                    />
+                                    <FormField
+                                      control={form.control}
+                                      name={`passengers.${index}.document_number`}
+                                      render={({ field }) => (
+                                        <FormItem>
+                                          <FormLabel>
+                                            {requiresDocument ? "Giấy tờ hộ chiếu/visa (bắt buộc)" : "Giấy tờ tùy thân (tùy chọn)"}
+                                          </FormLabel>
+                                          <FormControl>
+                                            <Input
+                                              placeholder={requiresDocument ? "Số hộ chiếu/visa" : "CMND/Hộ chiếu"}
+                                              {...field}
+                                            />
+                                          </FormControl>
+                                          <p className="text-xs text-muted-foreground">
+                                            {requiresDocument
+                                              ? "Nhập chính xác dãy chữ số ghi trên giấy tờ sẽ xuất trình."
+                                              : "Nếu có, nhập CMND/CCCD hoặc hộ chiếu để hỗ trợ đối soát."}
+                                          </p>
+                                          <FormMessage />
+                                        </FormItem>
+                                      )}
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            },
+                          )}
                         </div>
                       )}
                       <SheetFooter className="mt-6 flex flex-row items-center justify-end gap-3">

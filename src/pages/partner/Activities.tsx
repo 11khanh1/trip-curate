@@ -125,6 +125,8 @@ interface Tour {
     seats_available: number;
     season_price: number;
     min_participants?: number | null;
+    departure_location?: string | null;
+    departure_time?: string | null;
     bookings_count?: number | null;
     has_booking?: boolean | null;
   } | null;
@@ -136,6 +138,8 @@ interface Tour {
     seats_available?: number | null;
     season_price?: number | null;
     min_participants?: number | null;
+    departure_location?: string | null;
+    departure_time?: string | null;
     created_at?: string | null;
     updated_at?: string | null;
     bookings_count?: number | null;
@@ -173,6 +177,8 @@ type FormSchedule = {
   seats_available: number;
   season_price: number;
   min_participants: number;
+  departure_location: string;
+  departure_time: string;
   bookings_count?: number | null;
   has_booking?: boolean | null;
 };
@@ -244,6 +250,8 @@ const createInitialFormData = (): FormData => ({
       seats_available: 0,
       season_price: 0,
       min_participants: 1,
+      departure_location: "",
+      departure_time: "",
     },
   ],
   packages: [
@@ -478,6 +486,8 @@ export default function PartnerActivities() {
       seats_available: coerceNumber(raw.seats_available, 0) ?? 0,
       season_price: coerceNumber(raw.season_price, 0) ?? 0,
       min_participants: coerceNumber(raw.min_participants, 1) ?? 1,
+      departure_location: raw.departure_location ? String(raw.departure_location) : "",
+      departure_time: raw.departure_time ? String(raw.departure_time) : "",
       bookings_count: bookingsCount,
       has_booking: hasBookingFlag,
       created_at: raw.created_at ? String(raw.created_at) : undefined,
@@ -740,6 +750,8 @@ const fetchTourDetail = useCallback(async (id: string): Promise<Tour> => {
                 typeof schedule?.min_participants === "number" && Number.isFinite(schedule.min_participants)
                   ? Math.max(1, Math.trunc(schedule.min_participants))
                   : 1,
+              departure_location: schedule?.departure_location ? String(schedule.departure_location) : "",
+              departure_time: schedule?.departure_time ? String(schedule.departure_time) : "",
               bookings_count:
                 typeof schedule?.bookings_count === "number" && Number.isFinite(schedule.bookings_count)
                   ? schedule.bookings_count
@@ -1017,6 +1029,8 @@ const handleMoveItinerary = (index: number, delta: number) => {
       const target = { ...next[index] };
       if (field === "start_date" || field === "end_date") {
         target[field] = typeof value === "string" ? value : String(value);
+      } else if (field === "departure_location" || field === "departure_time") {
+        target[field] = typeof value === "string" ? value : String(value);
       } else {
         const numeric = Number(value) || 0;
         if (field === "seats_total") {
@@ -1046,6 +1060,8 @@ const handleMoveItinerary = (index: number, delta: number) => {
           seats_available: 0,
           season_price: 0,
           min_participants: 1,
+          departure_location: "",
+          departure_time: "",
         },
       ],
     }));
@@ -1260,6 +1276,8 @@ const handleMoveItinerary = (index: number, delta: number) => {
       ),
       season_price: Number(schedule.season_price) || 0,
       min_participants: Math.max(1, Number(schedule.min_participants) || 1),
+      departure_location: schedule.departure_location?.trim() || null,
+      departure_time: schedule.departure_time?.trim() || null,
     }));
 
     const packagesPayload = formData.packages.map((pkg) => ({
@@ -1614,8 +1632,30 @@ const handleMoveItinerary = (index: number, delta: number) => {
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
+                        <div className="space-y-1">
+                          <Label>Giờ khởi hành</Label>
+                          <Input
+                            type="text"
+                            placeholder="Ví dụ: 07:30"
+                            value={schedule.departure_time}
+                            onChange={(event) =>
+                              handleScheduleChange(index, "departure_time", event.target.value)
+                            }
+                          />
+                        </div>
+                        <div className="space-y-1 lg:col-span-2">
+                          <Label>Địa điểm khởi hành</Label>
+                          <Input
+                            type="text"
+                            placeholder="Ví dụ: Bến xe trung tâm, sân bay..."
+                            value={schedule.departure_location}
+                            onChange={(event) =>
+                              handleScheduleChange(index, "departure_location", event.target.value)
+                            }
+                          />
+                        </div>
                       </CardHeader>
-                      <CardContent className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+                      <CardContent className="grid gap-3 md:grid-cols-2 lg:grid-cols-6">
                         <div className="space-y-1">
                           <Label>Ngày bắt đầu</Label>
                           <Input

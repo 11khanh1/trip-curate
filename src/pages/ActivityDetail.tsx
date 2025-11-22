@@ -2121,6 +2121,14 @@ useEffect(() => {
                                       (schedule as Record<string, unknown>)?.min_participants,
                                       (schedule as Record<string, unknown>)?.minParticipants,
                                     );
+                                    const departureLocation =
+                                      (schedule as Record<string, unknown>)?.departure_location ??
+                                      (schedule as Record<string, unknown>)?.departureLocation ??
+                                      null;
+                                    const departureTime =
+                                      (schedule as Record<string, unknown>)?.departure_time ??
+                                      (schedule as Record<string, unknown>)?.departureTime ??
+                                      null;
                                     const tokens = [
                                       schedule.title,
                                       date ? `- ${date}` : null,
@@ -2135,6 +2143,8 @@ useEffect(() => {
                                       typeof minValue === "number"
                                         ? `• Tối thiểu ${Math.max(1, Math.trunc(minValue))} khách`
                                         : null,
+                                      departureTime ? `• Giờ khởi hành: ${departureTime}` : null,
+                                      departureLocation ? `• Địa điểm: ${departureLocation}` : null,
                                       isPastSchedule ? "• Đã qua ngày" : null,
                                     ].filter(Boolean);
                                     return (
