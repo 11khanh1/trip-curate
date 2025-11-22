@@ -121,7 +121,7 @@ const mapTrendingTourToCard = (tour: PublicTour) => {
 };
 
 const PersonalizedRecommendations = ({
-  limit = 10,
+  limit = 8,
   className,
   initialData,
   initialMeta,

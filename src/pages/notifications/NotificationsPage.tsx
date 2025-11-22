@@ -54,13 +54,13 @@ const NotificationsPage = () => {
 
   const notificationAudience = useMemo(() => {
     const role = currentUser?.role?.toLowerCase() ?? "";
-    if (role.includes("admin")) return "admin";
+    if (role.includes("admin")) return undefined;
     if (role.includes("partner")) return "partner";
     return "customer";
   }, [currentUser]);
 
   const notificationsQuery = useQuery<NotificationListResponse>({
-    queryKey: ["notifications", { page, per_page: PER_PAGE, audience: notificationAudience }],
+    queryKey: ["notifications", { page, per_page: PER_PAGE, audience: notificationAudience ?? "all" }],
     queryFn: async () => {
       const primary = await fetchNotifications({
         page,
@@ -131,6 +131,7 @@ const NotificationsPage = () => {
     if (!notifications.length) return [];
     return notifications.filter((item) => {
       const audience = (item.data as Record<string, unknown> | undefined)?.audience;
+      if (!notificationAudience) return true;
       if (typeof audience === "string" && audience.trim().length > 0) {
         return audience === notificationAudience;
       }

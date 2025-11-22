@@ -1248,7 +1248,19 @@ useEffect(() => {
   useEffect(() => {
     if (scheduleIdParam) return;
     if (Array.isArray(tourDetail?.schedules) && tourDetail.schedules.length > 0) {
-      const firstAvailableScheduleId = String(tourDetail.schedules[0]?.id ?? "");
+      const today = new Date();
+      const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const firstFutureSchedule =
+        tourDetail.schedules.find((schedule) => {
+          const rawStart =
+            schedule.start_date ??
+            (schedule as Record<string, unknown>)?.startDate ??
+            (schedule as Record<string, unknown>)?.start_date;
+          if (!rawStart) return false;
+          const parsed = new Date(rawStart as string);
+          return !Number.isNaN(parsed.getTime()) && parsed >= startOfToday;
+        }) ?? tourDetail.schedules[0];
+      const firstAvailableScheduleId = String(firstFutureSchedule?.id ?? "");
       setSelectedScheduleId(firstAvailableScheduleId);
     } else {
       setSelectedScheduleId(null);

@@ -60,7 +60,7 @@ const NotificationInbox = ({ variant }: NotificationInboxProps) => {
     return currentUser.name ? `name:${currentUser.name}` : "guest";
   }, [currentUser]);
 
-  const audience: NotificationAudience = variant === "partner" ? "partner" : "admin";
+  const audience: NotificationAudience | undefined = variant === "partner" ? "partner" : undefined;
 
   const unreadQuery = useQuery({
     queryKey: ["notifications-unread", variant, userScope],
@@ -69,7 +69,7 @@ const NotificationInbox = ({ variant }: NotificationInboxProps) => {
   });
 
   const notificationsQuery = useQuery({
-    queryKey: ["notifications", userScope, variant, { per_page: 6, audience }],
+    queryKey: ["notifications", userScope, variant, { per_page: 6, audience: audience ?? "all" }],
     queryFn: () => fetchNotifications({ per_page: 6, audience }),
     staleTime: 30000,
   });
@@ -103,6 +103,7 @@ const NotificationInbox = ({ variant }: NotificationInboxProps) => {
     () =>
       (notificationsQuery.data?.data ?? []).filter((item) => {
         const notifAudience = (item.data as Record<string, unknown> | undefined)?.audience as string | undefined;
+        if (!audience) return true;
         if (!notifAudience) return true;
         return notifAudience === audience;
       }),

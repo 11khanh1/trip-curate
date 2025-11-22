@@ -48,12 +48,12 @@ const NotificationDropdown = () => {
       return false;
     }
   }, []);
-  const notificationAudience: NotificationAudience =
-    currentUser?.role?.toLowerCase().includes("admin")
-      ? "admin"
-      : currentUser?.role?.toLowerCase().includes("partner")
-      ? "partner"
-      : "customer";
+  const role = currentUser?.role?.toLowerCase() ?? "";
+  const notificationAudience: NotificationAudience | undefined = role.includes("admin")
+    ? undefined
+    : role.includes("partner")
+    ? "partner"
+    : "customer";
   const userScope = useMemo(() => {
     if (!currentUser) return hasAuthToken ? "token" : "guest";
     if (currentUser.id !== undefined && currentUser.id !== null) {
@@ -83,7 +83,7 @@ const NotificationDropdown = () => {
   });
 
   const notificationsQuery = useQuery({
-    queryKey: ["notifications", userScope, { page: 1, audience: notificationAudience }],
+    queryKey: ["notifications", userScope, { page: 1, audience: notificationAudience ?? "all" }],
     queryFn: async () => {
       const primary = await fetchNotifications({ per_page: MAX_ITEMS, audience: notificationAudience });
       const total = Number((primary.meta as Record<string, unknown> | undefined)?.total ?? primary.data?.length ?? 0);
@@ -181,7 +181,7 @@ const NotificationDropdown = () => {
   const apiNotifications = notificationsQuery.data?.data ?? [];
   const filteredNotifications = apiNotifications.filter((item) => {
     const audience = (item.data as Record<string, unknown> | undefined)?.audience as string | undefined;
-    if (!audience) return true;
+    if (!notificationAudience) return true;
     return audience === notificationAudience;
   });
   const shouldUseFallback =

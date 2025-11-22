@@ -24,6 +24,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import OrderHistory from "@/components/orders/OrderHistory";
 import CheckoutProgress, { type CheckoutStep } from "@/components/checkout/CheckoutProgress";
 import { CheckCircle2, Info, Loader2 } from "lucide-react";
@@ -515,6 +524,9 @@ const BookingCheckout = () => {
     queryFn: () => fetchTourDetail(tourId),
     enabled: Boolean(tourId),
   });
+  const [contactSheetOpen, setContactSheetOpen] = useState(false);
+  const [passengerSheetOpen, setPassengerSheetOpen] = useState(false);
+  const [activePassengerIndex, setActivePassengerIndex] = useState<number | null>(null);
   const tourPriceInfo = useMemo(() => (tour ? getTourPriceInfo(tour) : null), [tour]);
   const profileContactName = profile?.name?.trim() ?? "";
   const profileContactEmail = profile?.email?.trim() ?? "";
@@ -549,6 +561,11 @@ const BookingCheckout = () => {
     : "Giấy tờ tùy thân giúp làm thủ tục nhanh hơn nhưng không bắt buộc.";
   const childAgeRequirementLabel =
     childAgeLimit !== null ? `Áp dụng cho trẻ em ≤ ${childAgeLimit} tuổi.` : "Giới hạn tuổi trẻ em tùy theo gói dịch vụ.";
+
+  const contactNameValue = form.watch("contact_name")?.trim() ?? "";
+  const contactEmailValue = form.watch("contact_email")?.trim() ?? "";
+  const contactPhoneValue = form.watch("contact_phone")?.trim() ?? "";
+  const passengers = form.watch("passengers");
 
   // Effect to set default package
   useEffect(() => {
@@ -1476,10 +1493,10 @@ useEffect(() => {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-muted/10">
+    <div className="flex min-h-screen flex-col bg-[#f4f6fb]">
       <TravelHeader />
-      <main className="flex-1 bg-gradient-to-b from-muted/40 via-transparent to-transparent">
-        <div className="container mx-auto px-4 py-10 space-y-8">
+      <main className="flex-1 bg-gradient-to-b from-[#f4f6fb] via-[#fdfdfd] to-white">
+        <div className="mx-auto max-w-6xl px-4 py-10 space-y-8">
           <CheckoutProgress steps={steps} />
           {!tourId ? (
             <Alert variant="destructive">
@@ -1505,7 +1522,7 @@ useEffect(() => {
           </Alert>
         ) : sepayPanel ? (
           <div className="space-y-6">
-            <Alert className="border-l-4 border-amber-500 bg-amber-50 text-amber-900">
+            <Alert className="border-l-4 border-[#ffb347] bg-orange-50/90 text-orange-900 shadow-sm">
               <AlertTitle className="flex items-center gap-2 text-sm font-medium">
                 <Info className="h-4 w-4" />
                 Lưu ý quan trọng
@@ -1516,7 +1533,7 @@ useEffect(() => {
               </AlertDescription>
             </Alert>
 
-            <Card className="overflow-hidden border-none shadow-lg">
+            <Card className="overflow-hidden border border-[#ffd7ae] shadow-lg">
               <CardHeader className="bg-white pb-4 text-center shadow-sm">
                 <div className="flex flex-col items-center gap-2">
                   <p className="text-sm font-medium text-blue-600">SePay QR</p>
@@ -1740,7 +1757,7 @@ useEffect(() => {
                 className="grid gap-8 lg:grid-cols-[2fr_1fr] lg:items-start"
               >
                 <div className="space-y-6">
-                  <Card className="border-none bg-white shadow-sm">
+            <Card className="border border-[#ffd7ae] bg-white shadow-md">
                     <CardHeader>
                       <CardTitle>Thông tin đặt chỗ</CardTitle>
                     </CardHeader>
@@ -1773,40 +1790,50 @@ useEffect(() => {
                     <FormField
                       control={form.control}
                       name="schedule_id"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Lịch khởi hành</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Chọn lịch khởi hành" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {schedules.map((schedule) => {
-                                if (!schedule) return null;
-                                const past = isSchedulePast(schedule);
-                                const baseLabel =
-                                  schedule.title ??
-                                  (schedule.start_date
-                                    ? new Date(schedule.start_date).toLocaleDateString("vi-VN")
-                                    : `Lịch ${schedule.id}`);
-                                return (
-                                  <SelectItem
-                                    key={String(schedule.id)}
-                                    value={String(schedule.id)}
-                                    disabled={past}
-                                  >
-                                    {baseLabel}
-                                    {past ? " (Đã kết thúc)" : ""}
-                                  </SelectItem>
-                                );
-                              })}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
+                      render={({ field, fieldState }) => {
+                        const hasError = Boolean(fieldState.error);
+                        return (
+                          <FormItem>
+                            <FormLabel>Lịch khởi hành</FormLabel>
+                            <Select
+                              onValueChange={(value) => {
+                                field.onChange(value);
+                                if (value) form.clearErrors("schedule_id");
+                              }}
+                              value={field.value}
+                            >
+                              <FormControl>
+                                <SelectTrigger className={hasError ? "border-red-500 focus:ring-red-500" : ""}>
+                                  <SelectValue placeholder="Chọn lịch khởi hành" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {schedules.map((schedule) => {
+                                  if (!schedule) return null;
+                                  const past = isSchedulePast(schedule);
+                                  const baseLabel =
+                                    schedule.title ??
+                                    (schedule.start_date
+                                      ? new Date(schedule.start_date).toLocaleDateString("vi-VN")
+                                      : `Lịch ${schedule.id}`);
+                                  return (
+                                    <SelectItem
+                                      key={String(schedule.id)}
+                                      value={String(schedule.id)}
+                                      disabled={past}
+                                      className={past ? "opacity-50" : ""}
+                                    >
+                                      {baseLabel}
+                                      {past ? " (Đã kết thúc)" : ""}
+                                    </SelectItem>
+                                  );
+                                })}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        );
+                      }}
                     />
 
                       <div className="grid gap-4 md:grid-cols-2">
@@ -1850,25 +1877,113 @@ useEffect(() => {
                     </CardContent>
                   </Card>
 
-                  <Card className="border-none bg-white shadow-sm">
-                    <CardHeader>
-                      <CardTitle>Thông tin liên hệ</CardTitle>
+                  <Sheet open={contactSheetOpen} onOpenChange={setContactSheetOpen}>
+                    <SheetContent side="right" className="w-full max-w-2xl bg-white px-6 py-8">
+                      <SheetHeader className="mb-4">
+                        <SheetTitle className="text-xl text-foreground">Thêm thông tin liên lạc</SheetTitle>
+                        <p className="text-sm text-muted-foreground">
+                          Chúng tôi sẽ dùng thông tin này để liên hệ khi cần cập nhật đơn hàng.
+                        </p>
+                      </SheetHeader>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <FormField
+                          control={form.control}
+                          name="contact_name"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Họ và tên *</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Viết không dấu (VD: Nguyen Van A)" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="contact_phone"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Số điện thoại *</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Vui lòng nhập" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="contact_email"
+                          render={({ field }) => (
+                            <FormItem className="md:col-span-2">
+                              <FormLabel>Địa chỉ email *</FormLabel>
+                              <FormControl>
+                                <Input type="email" placeholder="Vui lòng nhập" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="notes"
+                          render={({ field }) => (
+                            <FormItem className="md:col-span-2">
+                              <FormLabel>Ghi chú (tùy chọn)</FormLabel>
+                              <FormControl>
+                                <Textarea rows={3} placeholder="Yêu cầu đặc biệt (nếu có)" {...field} />
+                              </FormControl>
+                              <p className="text-xs text-muted-foreground">
+                                Thông tin ID chỉ dùng cho đặt dịch vụ; chúng tôi bảo vệ dữ liệu bằng mã hóa và không chia sẻ ngoài mục đích giao dịch.
+                              </p>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      <SheetFooter className="mt-6 flex flex-row items-center justify-end gap-3">
+                        <SheetClose asChild>
+                          <Button variant="outline">Hủy bỏ</Button>
+                        </SheetClose>
+                        <Button
+                          onClick={async () => {
+                            const valid = await form.trigger(["contact_name", "contact_email", "contact_phone"]);
+                            if (valid) {
+                              setContactSheetOpen(false);
+                            }
+                          }}
+                        >
+                          Lưu
+                        </Button>
+                      </SheetFooter>
+                    </SheetContent>
+                  </Sheet>
+
+                  <Card className="border border-[#ffd7ae] bg-white shadow-md">
+                    <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                      <div className="space-y-1">
+                        <CardTitle>Thông tin liên hệ</CardTitle>
+                        <p className="text-sm text-muted-foreground">
+                          Chúng tôi sẽ thông báo mọi thay đổi về đơn hàng cho bạn.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          className="border-orange-500 text-orange-500 hover:bg-orange-50"
+                          onClick={() => setContactSheetOpen(true)}
+                        >
+                          Chỉnh sửa
+                        </Button>
+                      </div>
                     </CardHeader>
-                    <CardContent>
-                      {!profileHasCompleteContact && (
-                        <Alert className="mb-4 border-amber-200 bg-amber-50 text-amber-900">
-                          <AlertTitle>Hồ sơ chưa đầy đủ</AlertTitle>
-                          <AlertDescription className="text-sm">
-                            Vui lòng cập nhật {profileMissingContactFields.join(", ")} tại{" "}
-                            <Link to="/account-settings" className="font-semibold text-primary underline">
-                              trang hồ sơ
-                            </Link>{" "}
-                            để hệ thống có thể liên hệ khi cần.
-                          </AlertDescription>
-                        </Alert>
+                    <CardContent className="space-y-4">
+                      {(isProfileLoading || isProfileFetching) && (
+                        <p className="text-sm text-gray-500">Đang đồng bộ dữ liệu hồ sơ...</p>
                       )}
                       {profileError && !profile && (
-                        <Alert variant="destructive" className="mb-4">
+                        <Alert variant="destructive" className="border border-red-200 bg-red-50">
                           <AlertTitle>Không thể tải thông tin hồ sơ</AlertTitle>
                           <AlertDescription>
                             {profileError instanceof Error
@@ -1877,72 +1992,73 @@ useEffect(() => {
                           </AlertDescription>
                         </Alert>
                       )}
-                      {(isProfileLoading || isProfileFetching) && (
-                        <p className="mb-4 text-sm text-gray-500">Đang đồng bộ dữ liệu hồ sơ...</p>
-                      )}
-                      <div className="grid gap-4 md:grid-cols-2">
-                      <FormField
-                        control={form.control}
-                        name="contact_name"
-                        render={({ field }) => (
-                          <FormItem className="md:col-span-2">
-                            <FormLabel>Họ và tên</FormLabel>
-                            <FormControl>
-                              <Input placeholder="Nguyễn Văn A" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="contact_email"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Email</FormLabel>
-                            <FormControl>
-                              <Input type="email" placeholder="tenban@example.com" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="contact_phone"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Số điện thoại</FormLabel>
-                            <FormControl>
-                              <Input placeholder="0123456789" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="notes"
-                        render={({ field }) => (
-                          <FormItem className="md:col-span-2">
-                            <FormLabel>Ghi chú</FormLabel>
-                            <FormControl>
-                              <Textarea rows={3} placeholder="Yêu cầu đặc biệt (nếu có)" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                      <div className="overflow-hidden rounded-2xl border border-[#ffd7ae] bg-white shadow-sm">
+                        <div className="flex items-center justify-between border-b border-[#ffe4c4] px-4 py-3">
+                          <div className="flex items-center gap-2 text-sm font-semibold text-orange-600">
+                            <span className="h-5 w-1 rounded-full bg-orange-500" />
+                            Thông tin liên lạc
+                          </div>
+                          <button
+                            type="button"
+                            className="text-sm font-semibold text-orange-600 underline"
+                            onClick={() => setContactSheetOpen(true)}
+                          >
+                            Chỉnh sửa
+                          </button>
+                        </div>
+                        <div className="grid gap-x-6 gap-y-3 px-4 py-4 md:grid-cols-2">
+                          <div className="space-y-1">
+                            <p className="text-sm text-muted-foreground">Họ và tên</p>
+                            <p className={contactNameValue ? "text-base font-semibold text-foreground" : "text-sm font-semibold text-red-500"}>
+                              {contactNameValue || "Vui lòng nhập"}
+                            </p>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-sm text-muted-foreground">Số điện thoại</p>
+                            <p className={contactPhoneValue ? "text-base font-semibold text-foreground" : "text-sm font-semibold text-red-500"}>
+                              {contactPhoneValue || "Vui lòng nhập"}
+                            </p>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-sm text-muted-foreground">Địa chỉ email</p>
+                            <p className={contactEmailValue ? "text-base font-semibold text-foreground" : "text-sm font-semibold text-red-500"}>
+                              {contactEmailValue || "Vui lòng nhập"}
+                            </p>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-sm text-muted-foreground">Ghi chú</p>
+                            <p className={form.watch("notes") ? "text-base text-foreground" : "text-sm text-muted-foreground"}>
+                              {form.watch("notes")?.trim() || "Không có ghi chú"}
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
 
-                  <Card className="border-none bg-white shadow-sm">
-                    <CardHeader>
-                      <CardTitle>Thông tin hành khách</CardTitle>
+                  <Card className="border bg-white shadow-sm border-[#ffd7ae]">
+                    <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                      <div className="space-y-1">
+                        <CardTitle>Thông tin hành khách</CardTitle>
+                        <p className="text-sm text-muted-foreground">
+                          Kiểm tra thông tin hành khách trước khi tiếp tục.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          className="border-orange-500 text-orange-500 hover:bg-orange-50"
+                          onClick={() => {
+                            setActivePassengerIndex(null);
+                            setPassengerSheetOpen(true);
+                          }}
+                        >
+                          Chỉnh sửa
+                        </Button>
+                      </div>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      {form.getValues("passengers").length === 0 ? (
+                      {passengers.length === 0 ? (
                         <p className="text-sm text-muted-foreground">
                           Tăng số lượng người lớn hoặc trẻ em để thêm hành khách.
                         </p>
@@ -1956,74 +2072,176 @@ useEffect(() => {
                               <p>{childAgeRequirementLabel}</p>
                             </AlertDescription>
                           </Alert>
-                          {form.getValues("passengers").map((passenger, index) => (
-                          <div key={`passenger-${index}`} className="rounded-lg border p-4">
-                            <p className="mb-3 text-sm font-semibold text-foreground">
-                              Hành khách {index + 1} · {passenger.type === "child" ? "Trẻ em" : "Người lớn"}
-                            </p>
-                            <div className="grid gap-4 md:grid-cols-2">
-                              <FormField
-                                control={form.control}
-                                name={`passengers.${index}.full_name`}
-                                render={({ field }) => (
-                                  <FormItem className="md:col-span-2">
-                                    <FormLabel>Họ và tên</FormLabel>
-                                    <FormControl>
-                                      <Input placeholder="Nhập họ và tên" {...field} />
-                                    </FormControl>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
-                              <FormField
-                                control={form.control}
-                                name={`passengers.${index}.date_of_birth`}
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel>
-                                      {passenger.type === "child" ? "Ngày sinh (bắt buộc)" : "Ngày sinh"}
-                                    </FormLabel>
-                                    <FormControl>
-                                      <Input type="date" {...field} />
-                                    </FormControl>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
-                              <FormField
-                                control={form.control}
-                                name={`passengers.${index}.document_number`}
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel>
-                                      {requiresDocument ? "Giấy tờ hộ chiếu/visa (bắt buộc)" : "Giấy tờ tùy thân (tùy chọn)"}
-                                    </FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        placeholder={requiresDocument ? "Số hộ chiếu/visa" : "CMND/Hộ chiếu"}
-                                        {...field}
-                                      />
-                                    </FormControl>
-                                    <p className="text-xs text-muted-foreground">
-                                      {requiresDocument
-                                        ? "Nhập chính xác dãy chữ số ghi trên giấy tờ sẽ xuất trình."
-                                        : "Nếu có, nhập CMND/CCCD hoặc hộ chiếu để hỗ trợ đối soát."}
+                          <div className="space-y-3">
+                            {passengers.map((passenger, index) => {
+                              const fullName = (passenger.full_name ?? "").trim();
+                              const dob = (passenger.date_of_birth ?? "").trim();
+                              const doc = (passenger.document_number ?? "").trim();
+                              const isChild = passenger.type === "child";
+                              return (
+                                <div
+                                  key={`passenger-summary-${index}`}
+                                  className="rounded-2xl border border-[#ffd7ae] bg-white px-4 py-3 shadow-sm"
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <p className="text-sm font-semibold text-foreground">
+                                      Hành khách {index + 1} · {isChild ? "Trẻ em" : "Người lớn"}
                                     </p>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
-                            </div>
+                                    <button
+                                      type="button"
+                                      className="text-sm font-semibold text-orange-600 underline"
+                                      onClick={() => {
+                                        setActivePassengerIndex(index);
+                                        setPassengerSheetOpen(true);
+                                      }}
+                                    >
+                                      Chỉnh sửa
+                                    </button>
+                                  </div>
+                                  <div className="mt-2 grid gap-x-6 gap-y-1 md:grid-cols-2">
+                                    <p className="text-sm text-muted-foreground">
+                                      Họ và tên:{" "}
+                                      <span className={fullName ? "font-semibold text-foreground" : "font-semibold text-red-500"}>
+                                        {fullName || "Vui lòng nhập"}
+                                      </span>
+                                    </p>
+                                    <p className="text-sm text-muted-foreground">
+                                      Ngày sinh:{" "}
+                                      <span className={isChild && !dob ? "font-semibold text-red-500" : "font-semibold text-foreground"}>
+                                        {dob || (isChild ? "Vui lòng nhập" : "Tuỳ chọn")}
+                                      </span>
+                                    </p>
+                                    <p className="text-sm text-muted-foreground">
+                                      Giấy tờ:{" "}
+                                      <span className={requiresDocument && !doc ? "font-semibold text-red-500" : "font-semibold text-foreground"}>
+                                        {doc || (requiresDocument ? "Bắt buộc" : "Tuỳ chọn")}
+                                      </span>
+                                    </p>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
-                          ))}
                         </>
                       )}
                     </CardContent>
                   </Card>
+
+                  <Sheet open={passengerSheetOpen} onOpenChange={setPassengerSheetOpen}>
+                    <SheetContent side="right" className="w-full max-w-3xl bg-white px-6 py-8">
+                      <SheetHeader className="mb-4">
+                        <SheetTitle className="text-xl text-foreground">Cập nhật thông tin hành khách</SheetTitle>
+                        <p className="text-sm text-muted-foreground">
+                          Điền đầy đủ họ tên, ngày sinh và giấy tờ tùy thân (nếu bắt buộc) cho mỗi hành khách.
+                        </p>
+                      </SheetHeader>
+                      {passengers.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          Tăng số lượng người lớn hoặc trẻ em để thêm hành khách.
+                        </p>
+                      ) : (
+                        <div className="space-y-4">
+                          <Alert>
+                            <AlertTitle>Yêu cầu khi tham gia</AlertTitle>
+                            <AlertDescription className="space-y-1">
+                              {tourTypeLabel ? <p>Loại tour: {tourTypeLabel}</p> : null}
+                              <p>{documentRequirementLabel}</p>
+                              <p>{childAgeRequirementLabel}</p>
+                            </AlertDescription>
+                          </Alert>
+                          {passengers.map((passenger, index) => (
+                            <div
+                              key={`passenger-sheet-${index}`}
+                              className="rounded-xl border border-[#ffd7ae] bg-white p-4 shadow-sm"
+                            >
+                              <p className="mb-3 text-sm font-semibold text-foreground">
+                                Hành khách {index + 1} · {passenger.type === "child" ? "Trẻ em" : "Người lớn"}
+                              </p>
+                              <div className="grid gap-4 md:grid-cols-2">
+                                <FormField
+                                  control={form.control}
+                                  name={`passengers.${index}.full_name`}
+                                  render={({ field }) => (
+                                    <FormItem className="md:col-span-2">
+                                      <FormLabel>Họ và tên</FormLabel>
+                                      <FormControl>
+                                        <Input placeholder="Nhập họ và tên" {...field} />
+                                      </FormControl>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name={`passengers.${index}.date_of_birth`}
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormLabel>
+                                        {passenger.type === "child" ? "Ngày sinh (bắt buộc)" : "Ngày sinh"}
+                                      </FormLabel>
+                                      <FormControl>
+                                        <Input type="date" {...field} />
+                                      </FormControl>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name={`passengers.${index}.document_number`}
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormLabel>
+                                        {requiresDocument ? "Giấy tờ hộ chiếu/visa (bắt buộc)" : "Giấy tờ tùy thân (tùy chọn)"}
+                                      </FormLabel>
+                                      <FormControl>
+                                        <Input
+                                          placeholder={requiresDocument ? "Số hộ chiếu/visa" : "CMND/Hộ chiếu"}
+                                          {...field}
+                                        />
+                                      </FormControl>
+                                      <p className="text-xs text-muted-foreground">
+                                        {requiresDocument
+                                          ? "Nhập chính xác dãy chữ số ghi trên giấy tờ sẽ xuất trình."
+                                          : "Nếu có, nhập CMND/CCCD hoặc hộ chiếu để hỗ trợ đối soát."}
+                                      </p>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <SheetFooter className="mt-6 flex flex-row items-center justify-end gap-3">
+                        <SheetClose asChild>
+                          <Button variant="outline">Hủy bỏ</Button>
+                        </SheetClose>
+                        <Button
+                          onClick={async () => {
+                            const fields: Array<`passengers.${number}.full_name` | `passengers.${number}.date_of_birth` | `passengers.${number}.document_number`> =
+                              [];
+                            passengers.forEach((_, idx) => {
+                              fields.push(`passengers.${idx}.full_name`);
+                              fields.push(`passengers.${idx}.date_of_birth`);
+                              fields.push(`passengers.${idx}.document_number`);
+                            });
+                            const valid = await form.trigger(fields);
+                            if (valid) {
+                              setPassengerSheetOpen(false);
+                            }
+                          }}
+                        >
+                          Lưu
+                        </Button>
+                      </SheetFooter>
+                    </SheetContent>
+                  </Sheet>
                 </div>
 
                 <div className="lg:sticky lg:top-24">
-                  <Card className="border-none bg-white shadow-lg">
+                  <Card className="border border-[#ffd7ae] bg-white shadow-lg">
                     <CardHeader>
                       <CardTitle>Tóm tắt đơn hàng</CardTitle>
                     </CardHeader>

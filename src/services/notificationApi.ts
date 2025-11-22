@@ -63,7 +63,12 @@ export async function markNotificationRead(id: string | number): Promise<void> {
 }
 
 export async function markAllNotificationsRead(): Promise<void> {
-  await apiClient.post("/notifications/mark-all");
+  try {
+    await apiClient.post("/notifications/read-all");
+  } catch {
+    // fallback cho BE cũ
+    await apiClient.post("/notifications/mark-all");
+  }
 }
 
 export async function toggleNotifications(enabled: boolean): Promise<NotificationToggleResponse> {
