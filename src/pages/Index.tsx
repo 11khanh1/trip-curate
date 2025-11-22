@@ -28,7 +28,10 @@ const Index = () => {
       <HeroSection />
       <FeaturedDeals promotions={homeData?.promotions} />
       <PopularActivities tours={homeData?.trending} />
-      <PersonalizedRecommendations />
+      <PersonalizedRecommendations
+        initialData={homeData?.recommended}
+        initialMeta={homeData?.recommendations_meta}
+      />
       <FeaturesSection />
       <TopDestinations categories={homeData?.categories} />
       <Footer />

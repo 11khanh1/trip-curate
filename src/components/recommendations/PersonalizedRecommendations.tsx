@@ -7,7 +7,11 @@ import { Compass, Sparkles } from "lucide-react";
 import CollectionTourCard from "@/components/CollectionTourCard";
 import { useUser } from "@/context/UserContext";
 import { useAnalytics } from "@/hooks/useAnalytics";
-import { fetchPersonalizedRecommendations, type RecommendationItem } from "@/services/recommendationApi";
+import {
+  fetchPersonalizedRecommendations,
+  type RecommendationItem,
+  type RecommendationMeta,
+} from "@/services/recommendationApi";
 import { fetchTrendingTours, fetchTourDetail, type PublicTour } from "@/services/publicApi";
 import { getTourStartingPrice, formatCurrency as formatPrice } from "@/lib/tour-utils";
 import { cn } from "@/lib/utils";
@@ -59,6 +63,8 @@ const formatDuration = (value?: number | string | null) => {
 interface PersonalizedRecommendationsProps {
   limit?: number;
   className?: string;
+  initialData?: RecommendationItem[] | null;
+  initialMeta?: RecommendationMeta | null;
 }
 
 const mapRecommendationToCard = (item: RecommendationItem) => {
@@ -114,9 +120,15 @@ const mapTrendingTourToCard = (tour: PublicTour) => {
   };
 };
 
-const PersonalizedRecommendations = ({ limit = 10, className }: PersonalizedRecommendationsProps) => {
+const PersonalizedRecommendations = ({
+  limit = 10,
+  className,
+  initialData,
+  initialMeta,
+}: PersonalizedRecommendationsProps) => {
   const { currentUser } = useUser();
   const { trackEvent } = useAnalytics();
+  const hasInitialData = Array.isArray(initialData) && initialData.length > 0;
 
   const {
     data,
@@ -126,13 +138,16 @@ const PersonalizedRecommendations = ({ limit = 10, className }: PersonalizedReco
   } = useQuery({
     queryKey: ["personalized-recommendations", { limit }],
     queryFn: () => fetchPersonalizedRecommendations(limit),
-    enabled: Boolean(currentUser),
+    enabled: !hasInitialData && Boolean(currentUser),
     staleTime: 60 * 1000,
     retry: false,
   });
 
+  const personalizedData = hasInitialData ? initialData ?? [] : data?.data ?? [];
+  const personalizedMeta = (hasInitialData ? initialMeta : data?.meta) ?? {};
+
   const hasPersonalizedError = Boolean(isError);
-  const hasPersonalizedData = Array.isArray(data?.data) && data.data.length > 0;
+  const hasPersonalizedData = personalizedData.length > 0;
   const shouldFetchFallback = !isLoading && (!hasPersonalizedData || hasPersonalizedError);
 
   const missingTourIds = useMemo(() => {
@@ -179,11 +194,16 @@ const PersonalizedRecommendations = ({ limit = 10, className }: PersonalizedReco
   });
 
   const cards = useMemo(() => {
-    if (!data?.data) return [];
-    return data.data
-      .map((item) => mapRecommendationToCard({ ...item, tour: item.tour ?? resolvedTours?.get(String(item.tour_id)) ?? null }))
+    if (!personalizedData) return [];
+    return personalizedData
+      .map((item) =>
+        mapRecommendationToCard({
+          ...item,
+          tour: item.tour ?? resolvedTours?.get(String(item.tour_id)) ?? null,
+        }),
+      )
       .filter((value): value is NonNullable<ReturnType<typeof mapRecommendationToCard>> => Boolean(value));
-  }, [data?.data, resolvedTours]);
+  }, [personalizedData, resolvedTours]);
 
   const fallbackCards = useMemo(() => {
     if (!fallbackTrending || !Array.isArray(fallbackTrending)) return [];
@@ -194,24 +214,22 @@ const PersonalizedRecommendations = ({ limit = 10, className }: PersonalizedReco
 
   const displayedCards = cards.length > 0 ? cards : fallbackCards;
 
-  const meta = data?.meta ?? {};
+  const meta = personalizedMeta ?? {};
   const recommendationCount =
     typeof meta.count === "number" && Number.isFinite(meta.count) ? meta.count : cards.length;
   const hasPersonalizedSignals =
     typeof meta.has_personalized_signals === "boolean" ? meta.has_personalized_signals : false;
+  const personalizedResults =
+    typeof meta.personalized_results === "boolean" ? meta.personalized_results : hasPersonalizedData;
   const shouldShowEmptyState =
     !isLoading &&
     !isFallbackLoading &&
     !isError &&
-    recommendationCount === 0 &&
+    (recommendationCount === 0 || !personalizedResults) &&
     fallbackCards.length === 0;
 
-  if (!currentUser) {
-    return null;
-  }
-
   const hasError = Boolean(isError);
-  if (hasError) {
+  if (hasError && !hasInitialData) {
     console.error("Không thể tải gợi ý cá nhân hóa:", error);
   }
 
@@ -239,7 +257,7 @@ const PersonalizedRecommendations = ({ limit = 10, className }: PersonalizedReco
           </div>
         </div>
 
-        {isLoading ? (
+        {isLoading && !hasInitialData ? (
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             {Array.from({ length: limit }).map((_, index) => (
               <div key={`recommend-skeleton-${index}`} className="h-48 animate-pulse rounded-2xl bg-slate-200/60" />

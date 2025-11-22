@@ -1,4 +1,5 @@
 import { apiClient, extractData } from "@/lib/api-client";
+import type { RecommendationItem, RecommendationMeta } from "./recommendationApi";
 
 // ----- Home -----
 
@@ -135,7 +136,8 @@ export interface HomeResponse {
   categories?: HomeCategory[];
   promotions?: HomePromotion[];
   trending?: PublicTour[];
-  recommended?: PublicTour[];
+  recommended?: RecommendationItem[];
+  recommendations_meta?: RecommendationMeta;
 }
 
 export interface HomeParams {
