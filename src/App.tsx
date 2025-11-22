@@ -36,6 +36,7 @@ import PartnerBookings from "./pages/partner/Bookings";
 import PartnerSettings from "./pages/partner/Settings";
 import PartnerPromotions from "./pages/partner/Promotions";
 import PartnerRefundRequests from "./pages/partner/RefundRequests";
+import PartnerSignup from "./pages/partner/PartnerSignup";
 import AuthCallback from "./pages/AuthCallback";
 import ResultSearch from "./pages/ResultSearch";
 import ScrollToTop from "@/components/ScrollToTop";
@@ -79,6 +80,7 @@ const App = () => (
             <Route path="/about/press" element={<Press />} />
             <Route path="/about/partnership" element={<Partnership />} />
             <Route path="/about/affiliate" element={<Affiliate />} />
+            <Route path="/partner/register" element={<PartnerSignup />} />
             <Route path="/support/help-center" element={<HelpCenter />} />
             <Route path="/support/cancellation-policy" element={<CancellationPolicy />} />
             <Route path="/support/privacy-policy" element={<PrivacyPolicy />} />

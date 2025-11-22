@@ -4,6 +4,7 @@ import HeroSection from "@/components/HeroSection";
 import FeaturedDeals from "@/components/FeaturedDeals";
 import PopularActivities from "@/components/PopularActivities";
 import PersonalizedRecommendations from "@/components/recommendations/PersonalizedRecommendations";
+import PartnerCTA from "@/components/PartnerCTA";
 import FeaturesSection from "@/components/FeaturesSection";
 import TopDestinations from "@/components/TopDestinations";
 import Footer from "@/components/Footer";
@@ -34,6 +35,10 @@ const Index = () => {
       />
       <FeaturesSection />
       <TopDestinations categories={homeData?.categories} />
+      <div className="px-4">
+        <PartnerCTA className="mt-8 mb-8" />
+      </div>
+
       <Footer />
     </div>
   );
