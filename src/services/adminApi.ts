@@ -67,6 +67,59 @@ export interface DashboardResponse {
   [key: string]: unknown;
 }
 
+// Reports
+export interface AdminReportPeriod {
+  from?: string;
+  to?: string;
+}
+
+export interface AdminReportMonthlyRevenue {
+  month: string;
+  revenue: number;
+}
+
+export interface AdminReportMonthlyBooking {
+  month: string;
+  count: number;
+}
+
+export interface AdminReportTopPartner {
+  id?: string | number;
+  name?: string | null;
+  company_name?: string | null;
+  revenue?: number;
+  bookings_count?: number;
+  [key: string]: unknown;
+}
+
+export interface AdminReportMetrics {
+  revenue_total?: number;
+  bookings_total?: number;
+  new_customers?: number;
+  partners_total?: number;
+  partners_active?: number;
+  partners_new?: number;
+  revenue_monthly?: AdminReportMonthlyRevenue[];
+  bookings_monthly?: AdminReportMonthlyBooking[];
+  top_partners?: AdminReportTopPartner[];
+  [key: string]: unknown;
+}
+
+export interface AdminReportSummary {
+  period?: AdminReportPeriod;
+  metrics?: AdminReportMetrics;
+  revenue_monthly?: AdminReportMonthlyRevenue[];
+  bookings_monthly?: AdminReportMonthlyBooking[];
+  top_partners?: AdminReportTopPartner[];
+  raw?: unknown;
+  [key: string]: unknown;
+}
+
+export interface AdminReportQueryParams {
+  from?: string;
+  to?: string;
+}
+
 // Users
 export interface AdminUser {
   id: string | number;
@@ -274,6 +327,16 @@ export async function fetchAdminDashboard(): Promise<DashboardResponse> {
   const data = extractData<DashboardResponse>(res);
   data.raw = res.data;
   return data;
+}
+
+export async function fetchAdminReportSummary(params: AdminReportQueryParams = {}): Promise<AdminReportSummary> {
+  const query: Record<string, string> = {};
+  if (params.from) query.from = params.from;
+  if (params.to) query.to = params.to;
+
+  const res = await apiClient.get("/admin/reports/summary", { params: query });
+  const data = extractData<AdminReportSummary>(res);
+  return { ...data, raw: data.raw ?? res.data };
 }
 
 export async function fetchAdminUsers(params: AdminUsersParams = {}): Promise<PaginatedResponse<AdminUser>> {
@@ -493,15 +556,20 @@ export interface PaginatedResponse<T> {
   meta?: Record<string, unknown>;
 }
 
-function extractPaginated<T>(res: any): PaginatedResponse<T> {
-  const json = res?.data ?? res;
+function extractPaginated<T>(res: unknown): PaginatedResponse<T> {
+  const container = res as { data?: unknown; links?: Record<string, unknown>; meta?: Record<string, unknown> };
+  const json = container?.data ?? res;
   if (!json) return { data: [] };
-  if (Array.isArray(json)) return { data: json };
-  return {
-    data: Array.isArray(json.data) ? (json.data as T[]) : [],
-    links: json.links,
-    meta: json.meta,
-  };
+  if (Array.isArray(json)) return { data: json as T[] };
+  if (typeof json === "object" && json !== null) {
+    const obj = json as { data?: unknown; links?: Record<string, unknown>; meta?: Record<string, unknown> };
+    return {
+      data: Array.isArray(obj.data) ? (obj.data as T[]) : [],
+      links: obj.links,
+      meta: obj.meta,
+    };
+  }
+  return { data: [] };
 }
 
 export async function fetchAdminPromotions(params?: { page?: number; per_page?: number }): Promise<PaginatedResponse<AdminPromotion>> {
