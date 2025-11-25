@@ -30,6 +30,7 @@ const FloatingChatWidget = () => {
   const { isOpen, openChat, closeChat, toggleChat } = useChatWidget();
   const [chatMessage, setChatMessage] = useState("");
   const [chatLanguage, setChatLanguage] = useState<ChatbotLanguage>("vi");
+  const [showSuggestions, setShowSuggestions] = useState(true);
   const [chatHistory, setChatHistory] = useState<
     Array<{
       id: string;
@@ -43,25 +44,27 @@ const FloatingChatWidget = () => {
 
   const normalizeSources = (sources?: Array<ChatbotSource | string>): ChatbotSource[] => {
     if (!Array.isArray(sources)) return [];
-    return sources
-      .map((entry) => {
-        if (typeof entry === "string") {
-          const urlCandidate = entry.startsWith("http") ? entry : undefined;
-          return {
-            title: entry,
-            url: urlCandidate,
-          };
-        }
-        if (entry && typeof entry === "object") {
-          return {
-            title: entry.title ?? entry.url ?? undefined,
-            url: entry.url ?? undefined,
-            snippet: entry.snippet ?? undefined,
-          };
-        }
-        return null;
-      })
-      .filter((item): item is ChatbotSource => Boolean(item));
+    const normalized: ChatbotSource[] = [];
+
+    sources.forEach((entry) => {
+      if (typeof entry === "string") {
+        normalized.push({
+          title: entry,
+          url: entry.startsWith("http") ? entry : undefined,
+        });
+        return;
+      }
+
+      if (entry && typeof entry === "object") {
+        normalized.push({
+          title: entry.title ?? entry.url ?? undefined,
+          url: entry.url ?? undefined,
+          snippet: entry.snippet ?? undefined,
+        });
+      }
+    });
+
+    return normalized;
   };
 
   const chatbotMutation = useMutation({
@@ -122,6 +125,8 @@ const FloatingChatWidget = () => {
       return;
     }
 
+    setShowSuggestions(false);
+
     const turnId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const turnLanguage = presetLanguage ?? chatLanguage;
 
@@ -156,6 +161,7 @@ const FloatingChatWidget = () => {
   };
 
   const handleQuickReply = (text: string) => {
+    setShowSuggestions(false);
     handleSendMessage(text);
   };
 
@@ -199,19 +205,21 @@ const FloatingChatWidget = () => {
                     "radial-gradient(circle at 12% 18%, rgba(249,115,22,0.08) 0, transparent 45%), radial-gradient(circle at 80% 5%, rgba(59,130,246,0.08) 0, transparent 35%)",
                 }}
               >
-                <div className="flex flex-wrap gap-2">
-                  {quickReplies.map((reply) => (
-                    <Button
-                      key={reply}
-                      variant="outline"
-                      className="rounded-full border border-orange-300 bg-white px-4 text-xs font-medium text-orange-600 hover:bg-orange-50"
-                      onClick={() => handleQuickReply(reply)}
-                      disabled={chatbotMutation.isPending}
-                    >
-                      {reply}
-                    </Button>
-                  ))}
-                </div>
+                {showSuggestions && chatHistory.length === 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {quickReplies.map((reply) => (
+                      <Button
+                        key={reply}
+                        variant="outline"
+                        className="rounded-full border border-orange-300 bg-white px-4 text-xs font-medium text-orange-600 hover:bg-orange-50"
+                        onClick={() => handleQuickReply(reply)}
+                        disabled={chatbotMutation.isPending}
+                      >
+                        {reply}
+                      </Button>
+                    ))}
+                  </div>
+                )}
 
                 <div className="rounded-2xl border border-slate-100 bg-white/70 p-3">
                   <ScrollArea className="h-36 pr-2">
@@ -275,27 +283,7 @@ const FloatingChatWidget = () => {
                   </ScrollArea>
                 </div>
 
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <div className="flex items-center gap-2">
-                    <Select
-                      value={chatLanguage}
-                      onValueChange={(value) => setChatLanguage(value as ChatbotLanguage)}
-                      disabled={chatbotMutation.isPending}
-                    >
-                      <SelectTrigger className="w-32 border-orange-200 text-xs text-orange-600">
-                        <SelectValue placeholder="Language" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="vi">Tiếng Việt</SelectItem>
-                        <SelectItem value="en">English</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <span className="rounded-full bg-orange-50 px-2 py-1 font-medium text-orange-600">
-                      {languageLabel[chatLanguage]}
-                    </span>
-                  </div>
-                  <span>Ctrl ⌘ + Enter để gửi nhanh.</span>
-                </div>
+                <div className="h-1" />
               </div>
             </div>
 
