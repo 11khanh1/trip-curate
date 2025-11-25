@@ -1427,14 +1427,6 @@ const handleMoveItinerary = (index: number, delta: number) => {
                 <span className="rounded-full bg-emerald-50 px-2 py-1 text-emerald-700">Đã duyệt</span>
               </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={handleAddTour}>
-                Tour mới
-              </Button>
-              <Button onClick={() => setIsFormOpen(true)} className="bg-orange-600 text-white hover:bg-orange-700">
-                Mở form chỉnh sửa
-              </Button>
-            </div>
           </div>
         </div>
 
