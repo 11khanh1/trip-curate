@@ -197,9 +197,9 @@ const FloatingChatWidget = () => {
               </Button>
             </div>
 
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-hidden">
               <div
-                className="space-y-4 px-4 py-5"
+                className="flex h-full flex-col space-y-4 px-4 py-5"
                 style={{
                   backgroundImage:
                     "radial-gradient(circle at 12% 18%, rgba(249,115,22,0.08) 0, transparent 45%), radial-gradient(circle at 80% 5%, rgba(59,130,246,0.08) 0, transparent 35%)",
@@ -221,8 +221,8 @@ const FloatingChatWidget = () => {
                   </div>
                 )}
 
-                <div className="rounded-2xl border border-slate-100 bg-white/70 p-3">
-                  <ScrollArea className="h-36 pr-2">
+                <div className="flex-1 min-h-[260px] rounded-2xl border border-slate-100 bg-white/70 p-3">
+                  <ScrollArea className="h-full max-h-full pr-2">
                     {chatHistory.length === 0 ? (
                       <p className="text-center text-sm text-muted-foreground">
                         Chưa có cuộc trò chuyện. Hãy chọn gợi ý nhanh hoặc nhập câu hỏi bên dưới.
