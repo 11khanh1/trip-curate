@@ -29,7 +29,7 @@ const FloatingChatWidget = () => {
   const { toast } = useToast();
   const { isOpen, openChat, closeChat, toggleChat } = useChatWidget();
   const [chatMessage, setChatMessage] = useState("");
-  const [chatLanguage, setChatLanguage] = useState<ChatbotLanguage>("en");
+  const [chatLanguage, setChatLanguage] = useState<ChatbotLanguage>("vi");
   const [chatHistory, setChatHistory] = useState<
     Array<{
       id: string;
@@ -70,17 +70,26 @@ const FloatingChatWidget = () => {
 
   const resolveChatbotErrorMessage = (error: unknown): string => {
     if (isAxiosError(error)) {
-      const backendMessage =
-        (error.response?.data as { message?: string; error?: string })?.message ??
-        (error.response?.data as { error?: string })?.error ??
-        error.message;
-
-      if (error.response?.status === 429) {
-        return "Bạn đang gửi quá nhanh. Chatbot chỉ hỗ trợ tối đa 30 yêu cầu mỗi phút.";
+      if (error.code === "ERR_NETWORK" || !error.response) {
+        return "Không thể kết nối máy chủ, thử lại sau.";
       }
 
-      if (backendMessage && backendMessage.toLowerCase().includes("openai")) {
-        return "Chatbot đang tạm nghỉ vì thiếu cấu hình OPENAI_API_KEY. Vui lòng thử lại sau.";
+      const { status, data } = error.response;
+      const validationMessage =
+        Array.isArray((data as any)?.errors?.message) && (data as any)?.errors?.message.length > 0
+          ? (data as any).errors.message[0]
+          : typeof (data as any)?.errors?.message === "string"
+            ? (data as any).errors.message
+            : null;
+
+      const backendMessage =
+        validationMessage ??
+        (data as { message?: string; error?: string })?.message ??
+        (data as { error?: string })?.error ??
+        error.message;
+
+      if (status === 429) {
+        return "Thao tác quá nhanh, thử lại sau.";
       }
 
       if (backendMessage) {
@@ -89,7 +98,7 @@ const FloatingChatWidget = () => {
     } else if (error instanceof Error) {
       return error.message;
     }
-    return "Chatbot đang bận. Vui lòng thử lại sau ít phút.";
+    return "Dịch vụ AI tạm gián đoạn, vui lòng thử lại sau.";
   };
 
   const handleSendMessage = (preset?: string, presetLanguage?: ChatbotLanguage) => {
@@ -328,7 +337,7 @@ const FloatingChatWidget = () => {
                 {chatbotMutation.isPending && (
                   <span className="flex items-center gap-1 text-orange-500">
                     <Loader2 className="h-3 w-3 animate-spin" />
-                    GPT-4o đang trả lời...
+                    Chatbot đang trả lời...
                   </span>
                 )}
               </div>
