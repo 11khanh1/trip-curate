@@ -1,4 +1,4 @@
-import type { NotificationPayload } from "@/services/notificationApi";
+import type { NotificationPayload, NotificationAudience } from "@/services/notificationApi";
 
 export interface NotificationCopy {
   title: string;
@@ -119,6 +119,60 @@ const extractBookingCode = (data?: Record<string, unknown> | null) => {
     if (value) return value;
   }
   return null;
+};
+
+type ResolveNotificationLinkOptions = {
+  role?: string | null;
+  audience?: NotificationAudience;
+};
+
+const resolveAudience = (options?: ResolveNotificationLinkOptions): NotificationAudience => {
+  if (options?.audience) return options.audience;
+  const role = normalize(options?.role);
+  if (role.includes("admin")) return "admin";
+  if (role.includes("partner")) return "partner";
+  return "customer";
+};
+
+const resolveNotificationKind = (
+  notification: NotificationPayload,
+  data: Record<string, unknown>,
+) => normalize(coerceString(data.type)) || normalize(notification.type);
+
+export const resolveNotificationLink = (
+  notification: NotificationPayload,
+  options?: ResolveNotificationLinkOptions,
+) => {
+  const data = (notification.data as Record<string, unknown> | undefined) ?? {};
+  const audience = resolveAudience(options);
+  const targetAudience = normalize(coerceString(data.audience)) || audience;
+  const isPartner = targetAudience === "partner";
+  const isAdmin = targetAudience === "admin";
+  const bookingId = (data["booking_id"] ?? data["bookingId"]) as string | undefined;
+  const tourId = (data["tour_id"] ?? data["tourId"]) as string | undefined;
+  const explicitLink = typeof data.link === "string" ? data.link : null;
+  const kind = resolveNotificationKind(notification, data);
+
+  if (isAdmin) {
+    const adminTourTypes = new Set([
+      "tour_submitted",
+      "tour_updated_pending",
+      "tour_pending_review",
+      "tour_need_review",
+      "partner_profile_submitted",
+    ]);
+    if (adminTourTypes.has(kind) || tourId) {
+      return "/admin/tours";
+    }
+  }
+
+  if (bookingId) {
+    return isPartner ? `/partner/bookings?bookingId=${encodeURIComponent(bookingId)}` : `/bookings/${bookingId}`;
+  }
+  if (tourId) {
+    return isPartner ? `/partner/activities` : `/activity/${tourId}`;
+  }
+  return explicitLink;
 };
 
 export const getNotificationTypeLabel = (type?: string | null) => {

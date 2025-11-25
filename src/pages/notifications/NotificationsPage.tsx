@@ -23,7 +23,7 @@ import { Loader2, BellRing, BellOff, ArrowRight, Inbox, CheckCircle } from "luci
 import { formatDistanceToNow } from "date-fns";
 import { vi } from "date-fns/locale";
 import { cn } from "@/lib/utils";
-import { getNotificationCopy, getNotificationTypeLabel } from "@/lib/notification-utils";
+import { getNotificationCopy, getNotificationTypeLabel, resolveNotificationLink } from "@/lib/notification-utils";
 import { useUser } from "@/context/UserContext";
 
 const PER_PAGE = 5;
@@ -175,31 +175,12 @@ const NotificationsPage = () => {
     setPage(next);
   };
 
-const handleItemClick = (notification: NotificationPayload) => {
-  const data = (notification.data as Record<string, unknown> | undefined) ?? {};
-  const bookingId = (data["booking_id"] ?? data["bookingId"]) as string | undefined;
-  const tourId = (data["tour_id"] ?? data["tourId"]) as string | undefined;
-  const isPartner = currentUser?.role?.toLowerCase().includes("partner");
-
-  if (bookingId) {
-    const target = isPartner
-      ? `/partner/bookings?bookingId=${encodeURIComponent(bookingId)}`
-      : `/bookings/${bookingId}`;
-    navigate(target);
-    return;
-  }
-
-  if (tourId) {
-    const target = isPartner ? "/partner/activities" : `/activity/${tourId}`;
-    navigate(target);
-    return;
-  }
-
-  const fallback = typeof data.link === "string" ? data.link : null;
-  if (fallback) {
-    navigate(fallback);
-  }
-};
+  const handleItemClick = (notification: NotificationPayload) => {
+    const target = resolveNotificationLink(notification, { role: currentUser?.role, audience: notificationAudience });
+    if (target) {
+      navigate(target);
+    }
+  };
 
   const summaryItems = useMemo(
     () => [
@@ -341,9 +322,10 @@ const handleItemClick = (notification: NotificationPayload) => {
                   <div className="divide-y">
                     {filteredNotifications.map((notification) => {
                       const { title, message } = getNotificationCopy(notification);
-                      const bookingId =
-                        (notification.data?.["booking_id"] ??
-                          notification.data?.["bookingId"]) as string | undefined;
+                      const targetLink = resolveNotificationLink(notification, {
+                        role: currentUser?.role,
+                        audience: notificationAudience,
+                      });
                       const isRead = Boolean(notification.read_at);
                       return (
                         <div
@@ -376,7 +358,7 @@ const handleItemClick = (notification: NotificationPayload) => {
                               size="sm"
                               className="px-2"
                               onClick={() => handleItemClick(notification)}
-                              disabled={!bookingId}
+                              disabled={!targetLink}
                             >
                               Xem chi tiết
                               <ArrowRight className="ml-1 h-3 w-3" />

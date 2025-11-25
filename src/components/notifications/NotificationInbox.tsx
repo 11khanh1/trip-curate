@@ -13,7 +13,7 @@ import {
   type NotificationPayload,
   type NotificationAudience,
 } from "@/services/notificationApi";
-import { getNotificationCopy, getNotificationTypeLabel } from "@/lib/notification-utils";
+import { getNotificationCopy, getNotificationTypeLabel, resolveNotificationLink } from "@/lib/notification-utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -112,26 +112,14 @@ const NotificationInbox = ({ variant }: NotificationInboxProps) => {
 
   const { title, empty } = variantLabel[variant];
 
-  const resolveNotificationLink = (notification: NotificationPayload) => {
-    const data = (notification.data as Record<string, unknown> | undefined) ?? {};
-    const bookingId = (data["booking_id"] ?? data["bookingId"]) as string | undefined;
-    const tourId = (data["tour_id"] ?? data["tourId"]) as string | undefined;
-    const isPartner = variant === "partner";
-
-    if (bookingId) {
-      return isPartner ? `/partner/bookings?bookingId=${encodeURIComponent(bookingId)}` : `/bookings/${bookingId}`;
-    }
-    if (tourId) {
-      return isPartner ? `/partner/activities` : `/activity/${tourId}`;
-    }
-    const fallbackLink = typeof data.link === "string" ? data.link : null;
-    return fallbackLink;
-  };
-
   const renderItem = (notification: NotificationPayload) => {
     const isRead = Boolean(notification.read_at);
     const { title: notifTitle, message } = getNotificationCopy(notification);
     const typeLabel = getNotificationTypeLabel(notification.type);
+    const targetLink = resolveNotificationLink(notification, {
+      role: currentUser?.role,
+      audience: variant === "partner" ? "partner" : "admin",
+    });
     return (
       <button
         key={notification.id}
@@ -143,9 +131,8 @@ const NotificationInbox = ({ variant }: NotificationInboxProps) => {
           if (!isRead && notification.id) {
             markReadMutation.mutate(notification.id);
           }
-          const link = resolveNotificationLink(notification);
-          if (link) {
-            window.location.href = link;
+          if (targetLink) {
+            window.location.href = targetLink;
           }
         }}
       >

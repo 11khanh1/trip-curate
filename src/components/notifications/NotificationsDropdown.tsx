@@ -21,7 +21,7 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
-import { getNotificationCopy } from "@/lib/notification-utils";
+import { getNotificationCopy, resolveNotificationLink } from "@/lib/notification-utils";
 import { useUser } from "@/context/UserContext";
 
 const MAX_ITEMS = 8;
@@ -195,28 +195,15 @@ const NotificationDropdown = () => {
       ? notificationsQuery.data.enabled
       : true;
 
-  const resolveNotificationLink = (notification: NotificationPayload) => {
-    const data = (notification.data as Record<string, unknown> | undefined) ?? {};
-    const bookingId = (data["booking_id"] ?? data["bookingId"]) as string | undefined;
-    const tourId = (data["tour_id"] ?? data["tourId"]) as string | undefined;
-    const isPartner = currentUser?.role?.toLowerCase().includes("partner");
-
-    if (bookingId) {
-      return isPartner ? `/partner/bookings?bookingId=${encodeURIComponent(bookingId)}` : `/bookings/${bookingId}`;
-    }
-    if (tourId) {
-      return isPartner ? `/partner/activities` : `/activity/${tourId}`;
-    }
-    const fallbackLink = typeof data.link === "string" ? data.link : null;
-    return fallbackLink;
-  };
-
   const handleItemClick = (notification: NotificationPayload) => {
     if (!notification.id) return;
 
     const notificationData = (notification.data as Record<string, unknown> | undefined) ?? {};
     const isDemoNotification = Boolean(notificationData.is_demo);
-    const targetLink = resolveNotificationLink(notification);
+    const targetLink = resolveNotificationLink(notification, {
+      role: currentUser?.role,
+      audience: notificationAudience,
+    });
 
     if (!isDemoNotification) {
       markReadMutation.mutate(notification.id);
