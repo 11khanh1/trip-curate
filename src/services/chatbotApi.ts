@@ -5,6 +5,12 @@ export type ChatbotLanguage = "vi" | "en";
 export interface ChatbotRequestPayload {
   message: string;
   language?: ChatbotLanguage;
+  history?: ChatbotHistoryEntry[];
+}
+
+export interface ChatbotHistoryEntry {
+  role: "user" | "assistant";
+  content: string;
 }
 
 export interface ChatbotSource {
@@ -25,6 +31,7 @@ const MAX_MESSAGE_LENGTH = 2000;
 export const sendChatbotMessage = async ({
   message,
   language = "vi",
+  history,
 }: ChatbotRequestPayload): Promise<ChatbotResponse> => {
   const trimmed = message.trim();
   if (!trimmed) {
@@ -37,6 +44,7 @@ export const sendChatbotMessage = async ({
   const res = await apiClient.post<ChatbotResponse>("/chatbot", {
     message: trimmed,
     language,
+    history,
   });
   return res.data ?? (res as unknown as ChatbotResponse);
 };

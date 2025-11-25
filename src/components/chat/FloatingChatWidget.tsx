@@ -9,7 +9,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
-import { sendChatbotMessage, type ChatbotLanguage, type ChatbotSource } from "@/services/chatbotApi";
+import {
+  sendChatbotMessage,
+  type ChatbotHistoryEntry,
+  type ChatbotLanguage,
+  type ChatbotSource,
+} from "@/services/chatbotApi";
 import { useChatWidget } from "@/context/ChatWidgetContext";
 
 const MAX_CHATBOT_MESSAGE_LENGTH = 2000;
@@ -104,6 +109,19 @@ const FloatingChatWidget = () => {
     return "Dịch vụ AI tạm gián đoạn, vui lòng thử lại sau.";
   };
 
+  const buildHistoryPayload = (): ChatbotHistoryEntry[] => {
+    const entries: ChatbotHistoryEntry[] = [];
+    chatHistory.forEach((turn) => {
+      if (turn.question) {
+        entries.push({ role: "user", content: turn.question });
+      }
+      if (turn.answer) {
+        entries.push({ role: "assistant", content: turn.answer });
+      }
+    });
+    return entries.slice(-10);
+  };
+
   const handleSendMessage = (preset?: string, presetLanguage?: ChatbotLanguage) => {
     const raw = typeof preset === "string" ? preset : chatMessage;
     const trimmed = raw.trim();
@@ -133,8 +151,10 @@ const FloatingChatWidget = () => {
     setChatHistory((prev) => [...prev, { id: turnId, question: trimmed, language: turnLanguage }]);
     setChatMessage("");
 
+    const history = buildHistoryPayload();
+
     chatbotMutation.mutate(
-      { message: trimmed, language: turnLanguage },
+      { message: trimmed, language: turnLanguage, history },
       {
         onSuccess: (data) => {
           const normalizedSources = normalizeSources(
@@ -288,7 +308,7 @@ const FloatingChatWidget = () => {
             </div>
 
             <div className="border-t bg-slate-50 px-4 py-3">
-              <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3">
+              <div className="flex items-center gap-2 rounded-2xl bg-white px-3">
                 <Button
                   type="button"
                   variant="ghost"
@@ -301,7 +321,7 @@ const FloatingChatWidget = () => {
                 <Textarea
                   rows={2}
                   placeholder="Nhập tin nhắn..."
-                  className="border-none px-0 py-3 text-sm shadow-none focus-visible:ring-0"
+                  className="border-none px-0 py-3 text-sm shadow-none outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
                   value={chatMessage}
                   onChange={(event) => setChatMessage(event.target.value)}
                   onKeyDown={handleChatKeyDown}
