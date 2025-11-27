@@ -1703,6 +1703,27 @@ useEffect(() => {
     return ["Hủy miễn phí 24 giờ", "Xác nhận trong 24 giờ", "Nhóm nhỏ linh hoạt"];
   })();
 
+  const splitItineraryText = (text: string): string[] => {
+    return text
+      .split(/\r?\n+/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+  };
+
+  const parseLineToTimeline = (line: string, fallbackIndex: number) => {
+    const timeRegex = /^((ngày\s*\d+|day\s*\d+|thứ\s*\d+|\d{1,2}[:h]\d{0,2}))\s*[-–:,\s]*\s*(.*)$/i;
+    const match = line.match(timeRegex);
+    if (match) {
+      const timeLabel = match[1]?.trim() ?? null;
+      const title = (match[3] ?? "").trim() || line.trim() || `Hoạt động ${fallbackIndex}`;
+      return { time: timeLabel, title };
+    }
+    return {
+      time: null,
+      title: line.trim() || `Hoạt động ${fallbackIndex}`,
+    };
+  };
+
   const serviceTimeline = (() => {
     if (!Array.isArray(itineraryItems) || itineraryItems.length === 0) {
       return [];
@@ -1710,12 +1731,18 @@ useEffect(() => {
 
     return itineraryItems.map((entry, index) => {
       if (typeof entry === "string") {
-        const text = entry.trim();
-        return {
-          time: null,
-          title: text.length > 0 ? text : `Hoạt động ${index + 1}`,
+        const lines = splitItineraryText(entry);
+        if (lines.length === 0) {
+          return {
+            time: null,
+            title: `Hoạt động ${index + 1}`,
+            description: undefined,
+          };
+        }
+        return lines.map((line, lineIndex) => ({
+          ...parseLineToTimeline(line, index + lineIndex + 1),
           description: undefined,
-        };
+        }));
       }
       if (entry && typeof entry === "object") {
         const time =
@@ -1728,8 +1755,20 @@ useEffect(() => {
             : `Hoạt động ${index + 1}`;
         const description =
           typeof entry.description === "string" && entry.description.trim().length > 0
-            ? entry.description.trim()
+            ? entry.description
             : undefined;
+        if (description) {
+          const descriptionLines = splitItineraryText(description);
+          if (descriptionLines.length > 1) {
+            return [
+              { time, title, description: descriptionLines[0] },
+              ...descriptionLines.slice(1).map((line, lineIndex) => ({
+                ...parseLineToTimeline(line, index + lineIndex + 1),
+                description: undefined,
+              })),
+            ];
+          }
+        }
         return { time, title, description };
       }
       return {
@@ -1737,7 +1776,7 @@ useEffect(() => {
         title: `Hoạt động ${index + 1}`,
         description: undefined,
       };
-    });
+    }).flat();
   })();
 
   const hasServiceTimeline = serviceTimeline.length > 0;
@@ -2618,7 +2657,9 @@ useEffect(() => {
                               <span className="font-medium text-sm text-foreground">{item.title}</span>
                             </div>
                             {item.description && (
-                              <p className="text-sm text-muted-foreground leading-relaxed">{item.description}</p>
+                              <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
+                                {item.description}
+                              </p>
                             )}
                           </div>
                         </div>
