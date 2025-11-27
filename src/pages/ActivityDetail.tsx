@@ -830,6 +830,7 @@ const ActivityDetail = () => {
   const [editingCartItemId, setEditingCartItemId] = useState<string | null>(null);
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [wishlistItemId, setWishlistItemId] = useState<string | null>(null);
+  const [showItineraryModal, setShowItineraryModal] = useState(false);
   const wishlistQueryKey = ["wishlist", currentUser?.id != null ? String(currentUser.id) : "guest"] as const;
 
   const cartItemIdParam = searchParams.get("cartItemId");
@@ -1703,6 +1704,21 @@ useEffect(() => {
     return ["Hủy miễn phí 24 giờ", "Xác nhận trong 24 giờ", "Nhóm nhỏ linh hoạt"];
   })();
 
+  const splitTextIntoPoints = (text: string): string[] => {
+    if (!text) return [];
+    const byLine = text
+      .split(/\r?\n+/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (byLine.length > 1) return byLine;
+    const single = byLine[0] ?? text.trim();
+    const bySentence = single
+      .split(/(?<=[.!?])\s+|[-–•·]\s+/)
+      .map((part) => part.trim())
+      .filter(Boolean);
+    return bySentence.length > 1 ? bySentence : [single];
+  };
+
   const splitItineraryText = (text: string): string[] => {
     return text
       .split(/\r?\n+/)
@@ -1729,17 +1745,19 @@ useEffect(() => {
       return [];
     }
 
-    return itineraryItems.map((entry, index) => {
+    return itineraryItems.flatMap((entry, index) => {
       if (typeof entry === "string") {
-        const lines = splitItineraryText(entry);
-        if (lines.length === 0) {
-          return {
-            time: null,
-            title: `Hoạt động ${index + 1}`,
-            description: undefined,
-          };
+        const points = splitTextIntoPoints(entry);
+        if (points.length === 0) {
+          return [
+            {
+              time: null,
+              title: `Hoạt động ${index + 1}`,
+              description: undefined,
+            },
+          ];
         }
-        return lines.map((line, lineIndex) => ({
+        return points.map((line, lineIndex) => ({
           ...parseLineToTimeline(line, index + lineIndex + 1),
           description: undefined,
         }));
@@ -1769,14 +1787,19 @@ useEffect(() => {
             ];
           }
         }
-        return { time, title, description };
+        const descriptionPoints = description ? splitTextIntoPoints(description) : [];
+        const normalizedDescription =
+          descriptionPoints.length > 1
+            ? descriptionPoints.map((p) => `• ${p}`).join("\n")
+            : description ?? undefined;
+        return { time, title, description: normalizedDescription };
       }
       return {
         time: null,
         title: `Hoạt động ${index + 1}`,
         description: undefined,
       };
-    }).flat();
+    });
   })();
 
   const hasServiceTimeline = serviceTimeline.length > 0;
@@ -2551,7 +2574,7 @@ useEffect(() => {
 
 
           <div className="lg:col-span-1 space-y-6 lg:self-start">
-            <div ref={priceCardRef} className="sticky top-20 md:top-24 lg:top-28">
+            <div ref={priceCardRef} className="lg:sticky lg:top-28 lg:z-30">
               <Card className="w-full shadow-xl">
                 <CardContent className="pt-6">
                   <div className="space-y-4">
@@ -2638,6 +2661,19 @@ useEffect(() => {
                         {serviceTimeline.length} Điểm dừng
                       </span>
                     )}
+                    <div className="ml-auto">
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8"
+                        onClick={() => setShowItineraryModal(true)}
+                        aria-label="Xem chi tiết lịch trình"
+                        disabled={!hasServiceTimeline}
+                      >
+                        <ArrowUpRight className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
 
                   {hasServiceTimeline ? (
@@ -2673,6 +2709,47 @@ useEffect(() => {
                 </div>
               </CardContent>
             </Card>
+
+            <Dialog open={showItineraryModal} onOpenChange={setShowItineraryModal}>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Chi tiết lịch trình</DialogTitle>
+                  <DialogDescription>
+                    Xem toàn bộ lịch trình đã tách theo ngày/giờ. Mỗi dòng được hiển thị riêng để dễ theo dõi.
+                  </DialogDescription>
+                </DialogHeader>
+                {hasServiceTimeline ? (
+                  <div className="relative pl-5 pt-2">
+                    <div className="absolute left-[6px] top-2 bottom-4 w-0.5 bg-border" />
+                    {serviceTimeline.map((item, index) => (
+                      <div key={`${item.title}-${index}`} className="relative pb-5 last:pb-0">
+                        <span className="absolute left-[-7px] top-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full border-2 border-background bg-primary shadow-sm" />
+                        <div className="ml-4 space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {item.time && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                                <Clock className="h-3.5 w-3.5" />
+                                {item.time}
+                              </span>
+                            )}
+                            <span className="font-medium text-sm text-foreground">{item.title}</span>
+                          </div>
+                          {item.description && (
+                            <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
+                              {item.description}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Chưa có nội dung lịch trình chi tiết.
+                  </p>
+                )}
+              </DialogContent>
+            </Dialog>
 
             {hasQuickInfo && (
               <Card>
