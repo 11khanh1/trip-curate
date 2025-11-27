@@ -261,8 +261,8 @@ const AccountSettings = () => {
   }, []);
 
   useEffect(() => {
-    if (typeof notificationSettings?.notifications_enabled !== "boolean") return;
-    const enabled = notificationSettings.notifications_enabled;
+    if (typeof notificationSettings?.enabled !== "boolean") return;
+    const enabled = notificationSettings.enabled;
     setAccountSettings((prev) => {
       const nextNotifications = Object.keys(prev.notifications).reduce<NotificationSettings>(
         (acc, key) => ({
@@ -279,7 +279,7 @@ const AccountSettings = () => {
       }
       return nextState;
     });
-  }, [notificationSettings?.notifications_enabled]);
+  }, [notificationSettings?.enabled]);
 
   const menuItems = [
     { id: "profile" as SectionType, label: "Hồ sơ của tôi", icon: UserIcon },
@@ -356,11 +356,12 @@ const AccountSettings = () => {
     }
 
     const payload: UpdateProfilePayload = {};
+    type UpdateProfileStringKey = Exclude<keyof UpdateProfilePayload, "preferences">;
     const previous = profileData ?? null;
     const appendIfChanged = (
       value: string,
       original: string | null | undefined,
-      key: keyof UpdateProfilePayload,
+      key: UpdateProfileStringKey,
       transform?: (val: string) => string,
     ) => {
       const trimmed = value.trim();
@@ -468,7 +469,7 @@ const AccountSettings = () => {
     notificationToggleMutation.mutate(enabled, {
       onSuccess: (data) => {
         const finalEnabled =
-          typeof data?.notifications_enabled === "boolean" ? data.notifications_enabled : enabled;
+          typeof data?.enabled === "boolean" ? data.enabled : enabled;
         const updated = Object.keys(nextNotifications).reduce<NotificationSettings>((acc, currentKey) => {
           const currentValue = nextNotifications[currentKey as NotificationKey];
           return {
@@ -800,15 +801,7 @@ const AccountSettings = () => {
                             className="h-11"
                           />
                         </div>
-                        <div className="space-y-2 pt-2">
-                          <PreferencesSelector
-                            value={profilePreferences}
-                            onChange={setProfilePreferences}
-                            label="Sở thích du lịch"
-                            description="Chọn từ gợi ý hoặc nhập tự do. Tối đa 10 mục, mỗi mục tối đa 50 ký tự."
-                            disabled={isProfileBusy}
-                          />
-                        </div>
+                        
                         <div className="grid gap-4 md:grid-cols-2">
                           <div className="space-y-2">
                             <Label htmlFor="addressLine1" className="text-sm font-medium">
@@ -896,6 +889,15 @@ const AccountSettings = () => {
                           </div>
                         </div>
                       </div>
+                      <div className="space-y-2 pt-2">
+                          <PreferencesSelector
+                            value={profilePreferences}
+                            onChange={setProfilePreferences}
+                            label="Sở thích du lịch"
+                            description="Chọn từ gợi ý hoặc nhập tự do. Tối đa 10 mục, mỗi mục tối đa 50 ký tự."
+                            disabled={isProfileBusy}
+                          />
+                        </div>
 
                         <div className="flex justify-end pt-4 border-t">
                           <Button type="submit" className="bg-primary hover:bg-primary/90 px-8" disabled={isProfileBusy}>

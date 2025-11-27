@@ -128,9 +128,7 @@ const PreferencesSelector = ({
             Thêm
           </Button>
         </div>
-        <p className="text-xs text-gray-500">
-          Nhấn Enter để thêm nhanh. Sở thích có thể từ gợi ý hoặc tự nhập (tối đa 10 mục, mỗi mục tối đa 50 ký tự).
-        </p>
+     
         {notice ? <p className="text-xs text-amber-600">{notice}</p> : null}
       </div>
 
@@ -160,7 +158,7 @@ const PreferencesSelector = ({
           })}
         </div>
       ) : (
-        <p className="text-sm text-gray-500">Chưa có sở thích nào. Hãy chọn tối đa 10 mục bạn quan tâm.</p>
+        <p className="text-sm text-gray-500"></p>
       )}
 
       <div className="rounded-lg border bg-white p-3">
