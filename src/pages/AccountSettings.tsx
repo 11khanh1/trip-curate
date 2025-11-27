@@ -32,6 +32,8 @@ import {
   toggleNotifications,
   type NotificationToggleResponse,
 } from "@/services/notificationApi";
+import PreferencesSelector from "@/components/preferences/PreferencesSelector";
+import { sanitizePreferencesList, arePreferencesEqual } from "@/lib/preferences";
 
 
 type SectionType = "profile" | "security" | "notifications" | "payment" | "preferences";
@@ -151,6 +153,7 @@ const AccountSettings = () => {
     confirmPassword: "",
   });
   const [accountSettings, setAccountSettings] = useState<AccountLocalSettings>(() => createDefaultSettings());
+  const [profilePreferences, setProfilePreferences] = useState<string[]>([]);
   const [preferencesForm, setPreferencesForm] = useState<PreferenceSettings>(() => createDefaultSettings().preferences);
   const [paymentForm, setPaymentForm] = useState<PaymentFormState>(() => createEmptyPaymentForm());
   const queryClient = useQueryClient();
@@ -238,6 +241,7 @@ const AccountSettings = () => {
       postalCode: profileData.postal_code || "",
       country: profileData.country || "",
     }));
+    setProfilePreferences(sanitizePreferencesList(profileData.preferences ?? []));
     persistUserFromProfile(profileData);
   }, [profileData, persistUserFromProfile]);
 
@@ -378,6 +382,11 @@ const AccountSettings = () => {
     appendIfChanged(formData.state, previous?.state, "state");
     appendIfChanged(formData.postalCode, previous?.postal_code, "postal_code");
     appendIfChanged(formData.country, previous?.country, "country");
+    const cleanedPreferences = sanitizePreferencesList(profilePreferences);
+    const previousPreferences = sanitizePreferencesList(previous?.preferences ?? []);
+    if (!arePreferencesEqual(cleanedPreferences, previousPreferences)) {
+      payload.preferences = cleanedPreferences;
+    }
 
     if (Object.keys(payload).length === 0) {
       toast.info("Không có thay đổi nào cần lưu.");
@@ -392,6 +401,9 @@ const AccountSettings = () => {
         ...payload,
         ...(result.profile ?? {}),
       };
+      if (payload.preferences) {
+        setProfilePreferences(payload.preferences);
+      }
       queryClient.setQueryData(PROFILE_QUERY_KEY, mergedProfile);
       persistUserFromProfile(mergedProfile);
       toast.success(result.message || "Cập nhật thông tin thành công!");
@@ -779,15 +791,24 @@ const AccountSettings = () => {
                               <Calendar className="w-4 h-4" />
                               Ngày sinh
                             </Label>
-                            <Input
-                              id="dateOfBirth"
-                              name="dateOfBirth"
-                              type="date"
-                              value={formData.dateOfBirth}
-                              onChange={handleInputChange}
-                              className="h-11"
-                            />
-                          </div>
+                          <Input
+                            id="dateOfBirth"
+                            name="dateOfBirth"
+                            type="date"
+                            value={formData.dateOfBirth}
+                            onChange={handleInputChange}
+                            className="h-11"
+                          />
+                        </div>
+                        <div className="space-y-2 pt-2">
+                          <PreferencesSelector
+                            value={profilePreferences}
+                            onChange={setProfilePreferences}
+                            label="Sở thích du lịch"
+                            description="Chọn từ gợi ý hoặc nhập tự do. Tối đa 10 mục, mỗi mục tối đa 50 ký tự."
+                            disabled={isProfileBusy}
+                          />
+                        </div>
                         <div className="grid gap-4 md:grid-cols-2">
                           <div className="space-y-2">
                             <Label htmlFor="addressLine1" className="text-sm font-medium">

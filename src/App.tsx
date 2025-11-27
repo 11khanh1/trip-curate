@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ChatWidgetProvider } from "@/context/ChatWidgetContext";
 import FloatingChatWidget from "@/components/chat/FloatingChatWidget";
+import PreferencesOnboarding from "@/components/preferences/PreferencesOnboarding";
 import Index from "./pages/Index";
 import AllActivities from "./pages/AllActivities";
 import NotFound from "./pages/NotFound";
@@ -56,6 +57,7 @@ const App = () => (
     <ChatWidgetProvider>
       <Toaster />
       <Sonner />
+      <PreferencesOnboarding />
       <BrowserRouter>
           <ScrollToTop />
           <Routes>

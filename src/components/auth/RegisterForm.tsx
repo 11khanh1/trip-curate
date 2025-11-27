@@ -7,6 +7,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useUser } from "@/context/UserContext";
 import { apiClient, ensureCsrfToken, persistAuthToken } from "@/lib/api-client";
+import PreferencesSelector from "@/components/preferences/PreferencesSelector";
+import { sanitizePreferencesList } from "@/lib/preferences";
+import { updateProfile } from "@/services/profileApi";
 
 
 interface RegisterFormProps {
@@ -37,6 +40,7 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }: RegisterFormProps) => {
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const [resendIn, setResendIn] = useState(0);
+  const [preferences, setPreferences] = useState<string[]>([]);
   const timerRef = useRef<number | null>(null);
   const isProd = import.meta.env.MODE === "production";
   const BASE_URL = isProd
@@ -219,6 +223,7 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }: RegisterFormProps) => {
     e.preventDefault();
     if ((formData.password || "").length < 8) return alert("Mật khẩu phải từ 8 ký tự");
     if (formData.password !== formData.confirmPassword) return alert("Xác nhận mật khẩu không khớp");
+    const cleanedPreferences = sanitizePreferencesList(preferences);
     setLoading(true);
     try {
       await ensureCsrfToken();
@@ -229,6 +234,7 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }: RegisterFormProps) => {
         otp: formData.otp,
         password: formData.password,
         password_confirmation: formData.confirmPassword,
+        preferences: cleanedPreferences,
       });
       const data = response.data;
       if (!data) throw new Error("Thiết lập mật khẩu thất bại");
@@ -238,6 +244,13 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }: RegisterFormProps) => {
       if (data.user) {
         localStorage.setItem("user", JSON.stringify(data.user));
         setCurrentUser(data.user);
+      }
+      if (cleanedPreferences.length > 0 && (token || data.access_token || data.token)) {
+        try {
+          await updateProfile({ preferences: cleanedPreferences });
+        } catch (prefError) {
+          console.warn("Không thể lưu sở thích khi đăng ký:", prefError);
+        }
       }
       alert("Thiết lập mật khẩu thành công! Bạn đã được đăng nhập.");
       if (onSuccess) onSuccess(); else onSwitchToLogin(formData.email);
@@ -470,6 +483,13 @@ const RegisterForm = ({ onSwitchToLogin, onSuccess }: RegisterFormProps) => {
               value={formData.confirmPassword}
               onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
               required
+            />
+            <PreferencesSelector
+              value={preferences}
+              onChange={setPreferences}
+              label="Sở thích du lịch"
+              description="Chọn tối đa 10 mục, có thể nhập tự do nếu không có trong gợi ý."
+              disabled={loading}
             />
             <Button
               type="submit"

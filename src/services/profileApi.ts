@@ -5,6 +5,7 @@ export interface UserProfile {
   name?: string | null;
   email?: string | null;
   phone?: string | null;
+  preferences?: string[] | null;
   gender?: string | null;
   date_of_birth?: string | null;
   address_line1?: string | null;
@@ -19,6 +20,7 @@ export type UpdateProfilePayload = Partial<{
   name: string;
   email: string;
   phone: string;
+  preferences: string[];
   gender: string;
   date_of_birth: string;
   address_line1: string;
