@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { apiClient, ensureCsrfToken, persistAuthToken } from "@/lib/api-client";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useToast } from "@/hooks/use-toast";
+import { fetchPartnerProfile } from "@/services/partnerApi";
 
 interface LoginFormProps {
   onSwitchToRegister: () => void;
@@ -88,6 +89,40 @@ const LoginForm = ({ onSwitchToRegister, onForgotPassword, onSuccess }: LoginFor
     }
   };
 
+  const enrichPartnerDisplayName = async (user: ReturnType<typeof normalizeUser>) => {
+    if (!user || user.role !== "partner") return user;
+    try {
+      const profile = await fetchPartnerProfile();
+      const companyName = (profile?.company_name ?? "").toString().trim();
+      if (companyName) {
+        return { ...user, name: companyName };
+      }
+    } catch (error) {
+      console.error("Không thể tải hồ sơ đối tác:", error);
+    }
+    return user;
+  };
+
+  const persistUserAfterLogin = async (rawUser: any) => {
+    const normalizedUser = normalizeUser(rawUser);
+    if (!normalizedUser) return null;
+    if (isAccountSuspended((normalizedUser as { status?: string | null }).status)) {
+      persistAuthToken(null);
+      try {
+        window.localStorage.removeItem("user");
+      } catch {
+        // ignore storage errors
+      }
+      alert("Tài khoản của bạn đã bị tạm ngưng. Vui lòng liên hệ quản trị viên để được hỗ trợ.");
+      return null;
+    }
+
+    const userForState = await enrichPartnerDisplayName(normalizedUser);
+    localStorage.setItem("user", JSON.stringify(userForState));
+    setCurrentUser(userForState);
+    return userForState;
+  };
+
   const handleChange = (field: "email" | "otp" | "password", value: string) =>
     setFormData((prev) => ({ ...prev, [field]: value }));
 
@@ -123,24 +158,9 @@ const LoginForm = ({ onSwitchToRegister, onForgotPassword, onSuccess }: LoginFor
             headers: { Authorization: `Bearer ${token}` },
           }).catch(() => null);
           if (me && me.status === 200) {
-            const normalizedUser = normalizeUser(me.data);
-            if (normalizedUser) {
-              if (isAccountSuspended((normalizedUser as { status?: string | null }).status)) {
-                persistAuthToken(null);
-                try {
-                  window.localStorage.removeItem("user");
-                } catch {
-                  // ignore storage errors
-                }
-                alert("Tài khoản của bạn đã bị tạm ngưng. Vui lòng liên hệ quản trị viên để được hỗ trợ.");
-                return;
-              }
-              localStorage.setItem("user", JSON.stringify(normalizedUser));
-              setCurrentUser(normalizedUser);
-              navigate(redirectAfterLogin(normalizedUser.role));
-            } else {
-              navigate("/");
-            }
+            const finalUser = await persistUserAfterLogin(me.data);
+            if (!finalUser) return;
+            navigate(redirectAfterLogin(finalUser.role));
           }
           alert("Đăng nhập thành công!");
           onSuccess();
@@ -259,24 +279,11 @@ const LoginForm = ({ onSwitchToRegister, onForgotPassword, onSuccess }: LoginFor
       if (token) {
         persistAuthToken(token);
       }
-      const normalizedUser = normalizeUser(data.user);
-      if (normalizedUser) {
-        if (isAccountSuspended((normalizedUser as { status?: string | null }).status)) {
-          persistAuthToken(null);
-          try {
-            window.localStorage.removeItem("user");
-          } catch {
-            // ignore storage errors
-          }
-          alert("Tài khoản của bạn đã bị tạm ngưng. Vui lòng liên hệ quản trị viên để được hỗ trợ.");
-          return;
-        }
-        localStorage.setItem("user", JSON.stringify(normalizedUser));
-        setCurrentUser(normalizedUser);
-      }
+      const finalUser = await persistUserAfterLogin(data.user);
+      if (!finalUser) return;
       alert("Đăng nhập thành công!");
       onSuccess();
-      navigate(redirectAfterLogin(normalizedUser?.role));
+      navigate(redirectAfterLogin(finalUser?.role));
     } catch (error) {
       const response = (error as any)?.response;
       const message =
@@ -307,24 +314,11 @@ const LoginForm = ({ onSwitchToRegister, onForgotPassword, onSuccess }: LoginFor
       if (token) {
         persistAuthToken(token);
       }
-      const normalizedUser = normalizeUser(data.user);
-      if (normalizedUser) {
-        if (isAccountSuspended((normalizedUser as { status?: string | null }).status)) {
-          persistAuthToken(null);
-          try {
-            window.localStorage.removeItem("user");
-          } catch {
-            // ignore storage errors
-          }
-          alert("Tài khoản của bạn đã bị tạm ngưng. Vui lòng liên hệ quản trị viên để được hỗ trợ.");
-          return;
-        }
-        localStorage.setItem("user", JSON.stringify(normalizedUser));
-        setCurrentUser(normalizedUser);
-      }
+      const finalUser = await persistUserAfterLogin(data.user);
+      if (!finalUser) return;
       alert("Đăng nhập thành công!");
       onSuccess();
-      navigate(redirectAfterLogin(normalizedUser?.role));
+      navigate(redirectAfterLogin(finalUser?.role));
     } catch (error) {
       const response = (error as any)?.response;
       if (response?.status === 419) {
