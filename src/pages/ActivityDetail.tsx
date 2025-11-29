@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef, useCallback } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback, type MouseEvent as ReactMouseEvent } from "react";
 import { useParams, Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import TravelHeader from "@/components/TravelHeader";
@@ -19,6 +19,8 @@ import {
   Clock,
   ArrowUpRight,
   X,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -807,6 +809,8 @@ const ActivityDetail = () => {
   const { id } = useParams();
   const [selectedImage, setSelectedImage] = useState(0);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
+  const [isZoomed, setIsZoomed] = useState(false);
+  const [zoomOrigin, setZoomOrigin] = useState({ x: 50, y: 50 });
   const [activeTab, setActiveTab] = useState("overview");
   const tabsRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -1820,17 +1824,35 @@ useEffect(() => {
   const hasQuickInfo = quickInfoItems.length > 0;
   const openGallery = (index: number) => {
     setSelectedImage(index);
+    setIsZoomed(false);
     setIsGalleryOpen(true);
   };
   const closeGallery = () => setIsGalleryOpen(false);
   const goPrevImage = () => {
     if (totalImages <= 1) return;
     setSelectedImage((prev) => (prev - 1 + totalImages) % totalImages);
+    setIsZoomed(false);
   };
   const goNextImage = () => {
     if (totalImages <= 1) return;
     setSelectedImage((prev) => (prev + 1) % totalImages);
+    setIsZoomed(false);
   };
+
+  const handleToggleZoom = () => setIsZoomed((prev) => !prev);
+
+  const handleZoomMove = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (!isZoomed) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = ((event.clientX - rect.left) / rect.width) * 100;
+    const y = ((event.clientY - rect.top) / rect.height) * 100;
+    setZoomOrigin({
+      x: Math.min(100, Math.max(0, x)),
+      y: Math.min(100, Math.max(0, y)),
+    });
+  };
+
+  const handleZoomOff = () => setIsZoomed(false);
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -2964,14 +2986,41 @@ useEffect(() => {
                 </button>
               )}
 
-              <div className="relative flex h-full w-full items-center justify-center">
+              <div
+                className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-lg"
+                onMouseMove={handleZoomMove}
+                onMouseLeave={handleZoomOff}
+                onClick={handleToggleZoom}
+              >
                 <img
                   src={activity.images[safeSelectedIndex] ?? mainImage}
                   alt={`${activity.title} ${safeSelectedIndex + 1}`}
-                  className="max-h-full max-w-full rounded-lg object-contain"
+                  className="max-h-full max-w-full select-none transition-transform duration-200"
+                  style={{
+                    transform: isZoomed ? "scale(1.7)" : "scale(1)",
+                    transformOrigin: `${zoomOrigin.x}% ${zoomOrigin.y}%`,
+                    cursor: isZoomed ? "zoom-out" : "zoom-in",
+                  }}
                 />
-                <div className="absolute bottom-4 right-4 rounded-full bg-black/50 px-3 py-1 text-xs font-medium text-white/90">
+                <div className="pointer-events-none absolute bottom-4 right-4 rounded-full bg-black/50 px-3 py-1 text-xs font-medium text-white/90">
                   {safeSelectedIndex + 1} / {totalImages}
+                </div>
+                <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="secondary"
+                    className="bg-black/50 text-white hover:bg-black/70 border border-white/10"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleToggleZoom();
+                    }}
+                  >
+                    {isZoomed ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                  </Button>
+                  <span className="hidden sm:inline-block rounded-full bg-black/40 px-3 py-1 text-xs text-white/90">
+                    {isZoomed ? "Nhấn để thu nhỏ" : "Nhấn để phóng to • Di chuột để xoay vùng xem"}
+                  </span>
                 </div>
               </div>
 
