@@ -3,7 +3,8 @@ import { useMutation } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import { Paperclip, Send, Loader2, MessageSquare, X } from "lucide-react";
 
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -201,6 +202,10 @@ const FloatingChatWidget = () => {
           overlayClassName="bg-transparent"
           className="left-4 right-4 bottom-20 sm:bottom-24 sm:left-auto sm:right-6 w-[min(100%,360px)] border-none bg-transparent p-0 shadow-none"
         >
+          <VisuallyHidden>
+            <DialogTitle>Trợ lý VietTravel</DialogTitle>
+            <DialogDescription>Trò chuyện với trợ lý du lịch và nhận gợi ý tour</DialogDescription>
+          </VisuallyHidden>
           <div className="flex h-[70vh] max-h-[600px] w-full flex-col overflow-hidden rounded-[28px] bg-white shadow-2xl shadow-orange-500/25 sm:h-[620px] sm:w-[360px]">
             <div className="flex items-center justify-between bg-gradient-to-r from-[#f97316] to-[#fb923c] px-4 py-3 text-white">
               <div>

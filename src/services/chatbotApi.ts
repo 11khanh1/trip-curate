@@ -43,14 +43,16 @@ export const sendChatbotMessage = async ({
     throw new Error("Tin nhắn quá dài, vui lòng rút gọn nội dung (≤ 2000 ký tự).");
   }
 
-  // Chuẩn hoá lịch sử, map role theo backend (user/model), bỏ role lạ
+  // Chuẩn hoá lịch sử: backend yêu cầu role "user" | "model"
   const normalizedHistory =
     Array.isArray(history)
       ? history
           .map((entry) => {
             if (!entry || typeof entry.content !== "string") return null;
-            if (entry.role === "assistant") return { role: "model" as const, content: entry.content };
-            if (entry.role === "model" || entry.role === "user") return { role: entry.role, content: entry.content };
+            if (entry.role === "user") return { role: "user" as const, content: entry.content };
+            if (entry.role === "assistant" || entry.role === "model") {
+              return { role: "model" as const, content: entry.content };
+            }
             // Bỏ qua role system/khác để tránh 422
             return null;
           })
