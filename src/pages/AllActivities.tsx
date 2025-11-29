@@ -159,11 +159,7 @@ const mapTourToCard = (tour: PublicTour) => {
       ? `Khởi hành ${new Date(firstSchedule.start_date).toLocaleDateString("vi-VN")}`
       : undefined;
 
-  const features = [
-    scheduleLabel ?? "Lịch trình linh hoạt",
-    tour.partner?.user?.name ? `Đối tác: ${tour.partner.user.name}` : "Hỗ trợ 24/7",
-    "Miễn phí huỷ trong 24h",
-  ];
+  const features = [scheduleLabel ?? "Khởi hành linh hoạt", "Miễn phí huỷ trong 24h"];
 
   const fallbackId =
     typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"

@@ -110,11 +110,7 @@ const mapTourToCard = (tour: PublicTour): TourCardProps => {
       ? tour.categories[0]?.name ?? "Tour"
       : tour.partner?.company_name ?? "Tour";
 
-  const features = [
-    featureFromSchedule(tour),
-    tour.partner?.user?.name ? `Đối tác: ${tour.partner.user.name}` : "Hỗ trợ 24/7",
-    "Miễn phí huỷ trong 24h",
-  ];
+  const features = [featureFromSchedule(tour), "Miễn phí huỷ trong 24h"];
 
   const id =
     tour.id ??

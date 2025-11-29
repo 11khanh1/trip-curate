@@ -432,7 +432,6 @@ const WishlistPage = () => {
           : typeof scheduleSeatsTotal === "number"
           ? `Sức chứa ${Math.max(0, Math.trunc(scheduleSeatsTotal))} chỗ`
           : null,
-        partnerName ? `Đối tác: ${partnerName}` : null,
         childLimitLabel,
         documentLabel,
         cancellationLabel,
