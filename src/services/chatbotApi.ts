@@ -10,7 +10,7 @@ export interface ChatbotRequestPayload {
 }
 
 export interface ChatbotHistoryEntry {
-  role: "system" | "user" | "assistant";
+  role: "user" | "assistant" | "model" | "system";
   content: string;
 }
 
@@ -43,29 +43,25 @@ export const sendChatbotMessage = async ({
     throw new Error("Tin nhắn quá dài, vui lòng rút gọn nội dung (≤ 2000 ký tự).");
   }
 
-  // Chuẩn hoá lịch sử để chỉ gửi các role hợp lệ theo chuẩn OpenAI (system/user/assistant)
-  const validRoles: ChatbotHistoryEntry["role"][] = ["system", "user", "assistant"];
+  // Chuẩn hoá lịch sử, map role theo backend (user/model), bỏ role lạ
   const normalizedHistory =
     Array.isArray(history)
-      ? history.filter(
-          (entry): entry is ChatbotHistoryEntry =>
-            !!entry &&
-            typeof entry.content === "string" &&
-            (validRoles as string[]).includes(entry.role),
-        )
+      ? history
+          .map((entry) => {
+            if (!entry || typeof entry.content !== "string") return null;
+            if (entry.role === "assistant") return { role: "model" as const, content: entry.content };
+            if (entry.role === "model" || entry.role === "user") return { role: entry.role, content: entry.content };
+            // Bỏ qua role system/khác để tránh 422
+            return null;
+          })
+          .filter((entry): entry is { role: "user" | "model"; content: string } => Boolean(entry))
       : [];
-
-  const messages = [
-    ...(systemPrompt ? [{ role: "system" as const, content: systemPrompt }] : []),
-    ...normalizedHistory,
-    { role: "user" as const, content: trimmed },
-  ];
 
   const res = await apiClient.post<ChatbotResponse>("/chatbot", {
     message: trimmed,
     language,
     history: normalizedHistory,
-    messages,
+    // systemPrompt bỏ qua để tránh gửi role lạ (backend chỉ nhận user/model)
   });
   return res.data ?? (res as unknown as ChatbotResponse);
 };

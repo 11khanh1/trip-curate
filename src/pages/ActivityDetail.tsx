@@ -47,6 +47,7 @@ import TourCard from "@/components/TourCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import {
   fetchTourDetail,
   fetchTrendingTours,
@@ -2961,6 +2962,10 @@ useEffect(() => {
 
       <Dialog open={isGalleryOpen} onOpenChange={setIsGalleryOpen}>
         <DialogContent className="max-w-7xl w-full p-0 border-none bg-transparent shadow-none">
+          <VisuallyHidden>
+            <DialogTitle>Thư viện ảnh tour</DialogTitle>
+            <DialogDescription>Phóng to ảnh và xem toàn màn hình</DialogDescription>
+          </VisuallyHidden>
           <div className="flex h-[90vh] flex-col overflow-hidden rounded-lg  text-white">
             <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
               <h3 className="font-semibold truncate pr-4">{activity.title}</h3>
