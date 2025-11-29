@@ -116,9 +116,7 @@ const FloatingChatWidget = () => {
       if (turn.question) {
         entries.push({ role: "user", content: turn.question });
       }
-      if (turn.answer) {
-        entries.push({ role: "assistant", content: turn.answer });
-      }
+      // Không gửi lại câu trả lời để tránh role invalid trên backend
     });
     return entries.slice(-10);
   };
