@@ -7,6 +7,12 @@ export interface ChatbotRequestPayload {
   language?: ChatbotLanguage;
   history?: ChatbotHistoryEntry[];
   systemPrompt?: string;
+  user?: {
+    id?: string | number | null;
+    name?: string | null;
+    email?: string | null;
+    role?: string | null;
+  };
 }
 
 export interface ChatbotHistoryEntry {
@@ -34,6 +40,7 @@ export const sendChatbotMessage = async ({
   language = "vi",
   history,
   systemPrompt,
+  user,
 }: ChatbotRequestPayload): Promise<ChatbotResponse> => {
   const trimmed = message.trim();
   if (!trimmed) {
@@ -60,6 +67,7 @@ export const sendChatbotMessage = async ({
     message: trimmed,
     language,
     history: normalizedHistory,
+    user,
     // systemPrompt bỏ qua để tránh gửi role lạ (backend chỉ nhận user/model)
   });
   return res.data ?? (res as unknown as ChatbotResponse);

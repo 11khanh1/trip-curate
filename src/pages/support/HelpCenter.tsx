@@ -24,7 +24,6 @@ const HelpCenter = () => {
       icon: <BookOpen className="w-8 h-8" />,
       title: "Đặt chỗ",
       description: "Hướng dẫn đặt và quản lý đơn hàng",
-      articles: 25,
       items: [
         "Cách đặt tour và chọn lịch khởi hành",
         "Theo dõi & xác nhận trạng thái đơn",
@@ -37,7 +36,6 @@ const HelpCenter = () => {
       icon: <CreditCard className="w-8 h-8" />,
       title: "Thanh toán",
       description: "Phương thức thanh toán và hoàn tiền",
-      articles: 18,
       items: [
         "Phương thức thanh toán hỗ trợ (thẻ, ví, chuyển khoản)",
         "Nhập mã giảm giá và kiểm tra số tiền sau giảm",
@@ -50,7 +48,6 @@ const HelpCenter = () => {
       icon: <MapPin className="w-8 h-8" />,
       title: "Hoạt động",
       description: "Thông tin về các hoạt động và tour",
-      articles: 32,
       items: [
         "Đọc thông tin tour: lịch trình, giá, chính sách",
         "Kiểm tra chỗ trống & số khách tối thiểu",
@@ -63,7 +60,6 @@ const HelpCenter = () => {
       icon: <Phone className="w-8 h-8" />,
       title: "Tài khoản",
       description: "Quản lý tài khoản và bảo mật",
-      articles: 15,
       items: [
         "Đăng ký/đăng nhập và xác minh email/số điện thoại",
         "Đặt lại mật khẩu và bảo mật 2 lớp (nếu có)",
@@ -75,6 +71,8 @@ const HelpCenter = () => {
   ];
 
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+
+  const countArticles = (items: string[]) => items.length;
 
   const popularArticles = [
     {
@@ -149,7 +147,7 @@ const HelpCenter = () => {
                     </div>
                     <h3 className="font-semibold text-lg mb-2">{category.title}</h3>
                     <p className="text-sm text-muted-foreground mb-3">{category.description}</p>
-                    <p className="text-xs text-primary">{category.articles} bài viết</p>
+                    <p className="text-xs text-primary">{countArticles(category.items)} bài viết</p>
                   </CardContent>
                 </Card>
               ))}
@@ -178,7 +176,7 @@ const HelpCenter = () => {
                       </div>
                       <div>
                         <h4 className="font-semibold text-foreground">{category.title}</h4>
-                        <p className="text-xs text-muted-foreground">{category.articles} bài viết</p>
+                        <p className="text-xs text-muted-foreground">{countArticles(category.items)} bài viết</p>
                       </div>
                     </div>
                     <ul className="space-y-2 text-sm text-muted-foreground">
@@ -290,6 +288,24 @@ const HelpCenter = () => {
               </Card>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="pb-16">
+        <div className="container mx-auto px-4">
+          <Card>
+            <CardContent className="p-6 space-y-3">
+              <h3 className="text-lg font-semibold">Tài nguyên liên quan</h3>
+              <p className="text-sm text-muted-foreground">
+                Tham khảo nhanh các chính sách quan trọng trước khi đặt tour.
+              </p>
+              <div className="flex flex-wrap gap-3 text-sm font-medium text-primary">
+                <a href="/support/cancellation-policy" className="underline">Chính sách hủy</a>
+                <a href="/support/privacy-policy" className="underline">Chính sách bảo mật</a>
+                <a href="/support/terms-of-service" className="underline">Điều khoản sử dụng</a>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </section>
 

@@ -1,98 +1,104 @@
 import TravelHeader from "@/components/TravelHeader";
 import Footer from "@/components/Footer";
-import { Heart, Globe, Users, Award } from "lucide-react";
+import { Heart, Globe, Users, Award, Sparkles, Compass, Plane } from "lucide-react";
+
+const milestones = [
+  { year: "2014", title: "Khởi hành", desc: "Nhóm 5 người đam mê du lịch xây dựng sản phẩm đặt tour đầu tiên." },
+  { year: "2018", title: "Mở rộng khu vực", desc: "Hơn 2000 đối tác, 15 điểm đến Đông Nam Á, ứng dụng mobile ra mắt." },
+  { year: "2021", title: "Tăng tốc số", desc: "Cá nhân hoá bằng AI, quản lý booking real-time cho đối tác." },
+  { year: "2024", title: "Toàn cầu", desc: "5.000+ hoạt động, 40+ điểm đến, hỗ trợ 24/7 đa ngôn ngữ." },
+];
+
+const values = [
+  { icon: <Heart className="w-5 h-5 text-rose-500" />, title: "Lấy khách hàng làm trung tâm", desc: "Thiết kế trải nghiệm tối giản, rõ ràng, hỗ trợ tức thời." },
+  { icon: <Globe className="w-5 h-5 text-sky-500" />, title: "Kết nối không biên giới", desc: "Liên tục mở rộng điểm đến và đối tác địa phương." },
+  { icon: <Award className="w-5 h-5 text-amber-500" />, title: "Chất lượng & minh bạch", desc: "Chính sách rõ ràng, giá hiển thị trọn gói, hoàn tiền minh bạch." },
+  { icon: <Users className="w-5 h-5 text-emerald-500" />, title: "Cộng đồng bền vững", desc: "Hợp tác với nhà cung cấp địa phương, thúc đẩy du lịch xanh." },
+];
 
 const OurStory = () => {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-slate-950 text-white">
       <TravelHeader />
-      
-      {/* Hero Section */}
-      <section className="relative py-20 bg-gradient-to-br from-primary/10 to-purple-100">
-        <div className="container mx-auto px-4">
-          <div className="max-w-3xl mx-auto text-center">
-            <h1 className="text-5xl font-bold mb-6">Câu chuyện của chúng tôi</h1>
-            <p className="text-xl text-muted-foreground">
-              Từ một ý tưởng nhỏ đến nền tảng du lịch hàng đầu châu Á
-            </p>
+
+      <section className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-orange-500/20 via-purple-600/10 to-slate-900" />
+        <div className="container relative mx-auto px-4 py-20">
+          <div className="grid gap-10 md:grid-cols-2 items-center">
+            <div className="space-y-4">
+              <p className="text-xs uppercase tracking-[0.3em] text-orange-200">Hành trình VietTravel</p>
+              <h1 className="text-4xl md:text-5xl font-bold leading-tight">
+                Câu chuyện của chúng tôi
+              </h1>
+              <p className="text-lg text-slate-200/80">
+                Bắt đầu từ một nhóm du khách tò mò, VietTravel nay trở thành nền tảng du lịch được tin dùng tại châu Á, kết nối hàng ngàn trải nghiệm độc đáo với công nghệ đơn giản.
+              </p>
+              <div className="flex gap-3 flex-wrap">
+                <span className="rounded-full bg-white/10 border border-white/15 px-3 py-2 text-sm">5.000+ hoạt động</span>
+                <span className="rounded-full bg-white/10 border border-white/15 px-3 py-2 text-sm">40+ điểm đến</span>
+                <span className="rounded-full bg-white/10 border border-white/15 px-3 py-2 text-sm">24/7 hỗ trợ</span>
+              </div>
+            </div>
+            <div className="relative">
+              <div className="absolute -left-6 -top-6 h-24 w-24 rounded-full bg-orange-500/20 blur-3xl" />
+              <div className="absolute right-0 bottom-0 h-24 w-24 rounded-full bg-purple-500/20 blur-3xl" />
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur shadow-2xl space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-full bg-orange-500/20 p-3"><Sparkles className="h-5 w-5 text-orange-300" /></div>
+                  <div>
+                    <p className="text-sm text-slate-200/80">Niềm tin từ du khách</p>
+                    <p className="text-2xl font-semibold">12M+ lượt đặt</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="rounded-full bg-blue-500/20 p-3"><Plane className="h-5 w-5 text-blue-200" /></div>
+                  <div>
+                    <p className="text-sm text-slate-200/80">Đối tác địa phương</p>
+                    <p className="text-2xl font-semibold">500+ nhà cung cấp</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="rounded-full bg-emerald-500/20 p-3"><Compass className="h-5 w-5 text-emerald-200" /></div>
+                  <div>
+                    <p className="text-sm text-slate-200/80">Mức độ hài lòng</p>
+                    <p className="text-2xl font-semibold">4.8/5 trung bình</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Story Content */}
       <section className="py-16">
         <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto space-y-12">
-            <div>
-              <h2 className="text-3xl font-bold mb-4">Khởi đầu hành trình</h2>
-              <p className="text-lg text-muted-foreground leading-relaxed">
-                VietTravel được thành lập vào năm 2014 bởi một nhóm những người đam mê du lịch, 
-                với mong muốn mang đến trải nghiệm đặt chỗ dễ dàng và thuận tiện cho khách du lịch 
-                trên khắp châu Á. Chúng tôi nhận thấy rằng việc đặt các hoạt động và dịch vụ du lịch 
-                thường rất phức tạp và tốn thời gian.
-              </p>
-            </div>
-
-            <div>
-              <h2 className="text-3xl font-bold mb-4">Sứ mệnh của chúng tôi</h2>
-              <p className="text-lg text-muted-foreground leading-relaxed">
-                Sứ mệnh của VietTravel là biến mọi khoảnh khắc trong hành trình du lịch của bạn trở nên 
-                đáng nhớ và dễ dàng hơn. Chúng tôi kết nối du khách với hàng nghìn trải nghiệm 
-                tuyệt vời trên toàn thế giới, từ vé tham quan các điểm đến nổi tiếng đến những 
-                trải nghiệm địa phương độc đáo.
-              </p>
-            </div>
-
-            <div className="grid md:grid-cols-2 gap-8 my-12">
-              <div className="p-8 bg-card rounded-lg shadow-sm">
-                <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4">
-                  <Globe className="w-6 h-6 text-primary" />
+          <div className="grid gap-6 md:grid-cols-2">
+            {values.map((item) => (
+              <div key={item.title} className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-lg bg-white/10 p-2">{item.icon}</div>
+                  <div>
+                    <h3 className="text-lg font-semibold">{item.title}</h3>
+                    <p className="mt-1 text-sm text-slate-200/80">{item.desc}</p>
+                  </div>
                 </div>
-                <h3 className="text-xl font-semibold mb-2">2,000+ Điểm đến</h3>
-                <p className="text-muted-foreground">
-                  Phủ sóng rộng khắp châu Á và mở rộng ra toàn cầu
-                </p>
               </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-              <div className="p-8 bg-card rounded-lg shadow-sm">
-                <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4">
-                  <Users className="w-6 h-6 text-primary" />
-                </div>
-                <h3 className="text-xl font-semibold mb-2">100 Triệu+ Khách hàng</h3>
-                <p className="text-muted-foreground">
-                  Phục vụ hàng triệu du khách mỗi năm
-                </p>
+      <section className="pb-20">
+        <div className="container mx-auto px-4">
+          <h2 className="text-3xl font-bold text-center mb-10">Các mốc đáng nhớ</h2>
+          <div className="grid gap-4 md:grid-cols-4">
+            {milestones.map((m) => (
+              <div key={m.year} className="rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-white/5 p-5">
+                <p className="text-sm text-orange-200">{m.year}</p>
+                <h4 className="text-lg font-semibold mt-2">{m.title}</h4>
+                <p className="text-sm text-slate-200/80 mt-2 leading-relaxed">{m.desc}</p>
               </div>
-
-              <div className="p-8 bg-card rounded-lg shadow-sm">
-                <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4">
-                  <Heart className="w-6 h-6 text-primary" />
-                </div>
-                <h3 className="text-xl font-semibold mb-2">500,000+ Hoạt động</h3>
-                <p className="text-muted-foreground">
-                  Đa dạng trải nghiệm cho mọi loại hình du lịch
-                </p>
-              </div>
-
-              <div className="p-8 bg-card rounded-lg shadow-sm">
-                <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4">
-                  <Award className="w-6 h-6 text-primary" />
-                </div>
-                <h3 className="text-xl font-semibold mb-2">Nhiều giải thưởng</h3>
-                <p className="text-muted-foreground">
-                  Được công nhận bởi các tổ chức uy tín toàn cầu
-                </p>
-              </div>
-            </div>
-
-            <div>
-              <h2 className="text-3xl font-bold mb-4">Tầm nhìn tương lai</h2>
-              <p className="text-lg text-muted-foreground leading-relaxed">
-                Chúng tôi không ngừng đổi mới và phát triển để mang đến những trải nghiệm tốt nhất 
-                cho khách hàng. Từ công nghệ đặt chỗ thông minh đến dịch vụ chăm sóc khách hàng 
-                24/7, VietTravel cam kết đồng hành cùng bạn trong mọi chuyến đi.
-              </p>
-            </div>
+            ))}
           </div>
         </div>
       </section>
@@ -103,3 +109,4 @@ const OurStory = () => {
 };
 
 export default OurStory;
+               

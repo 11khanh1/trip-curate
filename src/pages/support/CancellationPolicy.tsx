@@ -205,6 +205,37 @@ const CancellationPolicy = () => {
         </div>
       </section>
 
+      <section className="pb-16">
+        <div className="container mx-auto px-4">
+          <div className="grid gap-6 md:grid-cols-3">
+            <Card className="md:col-span-2">
+              <CardContent className="p-6 space-y-3">
+                <h2 className="text-xl font-semibold">Cần thêm trợ giúp?</h2>
+                <p className="text-sm text-muted-foreground">
+                  Nếu chính sách hủy của từng tour chưa rõ ràng hoặc bạn cần xác nhận mức hoàn tiền, hãy liên hệ đội ngũ VietTravel.
+                </p>
+                <ul className="text-sm space-y-2 text-muted-foreground">
+                  <li>• Chat trực tiếp trong app/web để được phản hồi trong giờ hành chính.</li>
+                  <li>• Hotline <span className="font-semibold text-foreground">1900 1234</span> (8:00 - 22:00, tất cả các ngày).</li>
+                  <li>• Email: <span className="font-semibold text-foreground">support@viettravel.com</span> kèm mã đơn và chứng từ (nếu có).</li>
+                </ul>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-6 space-y-3">
+                <h3 className="text-base font-semibold">Liên kết hữu ích</h3>
+                <ul className="text-sm space-y-2 text-primary font-medium">
+                  <li><a href="/support/help-center">Trung tâm trợ giúp</a></li>
+                  <li><a href="/support/privacy-policy">Chính sách bảo mật</a></li>
+                  <li><a href="/support/terms-of-service">Điều khoản sử dụng</a></li>
+                </ul>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </section>
+
       <Footer />
     </div>
   );

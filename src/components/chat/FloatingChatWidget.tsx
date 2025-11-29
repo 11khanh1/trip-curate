@@ -17,6 +17,7 @@ import {
   type ChatbotSource,
 } from "@/services/chatbotApi";
 import { useChatWidget } from "@/context/ChatWidgetContext";
+import { useUser } from "@/context/UserContext";
 
 const MAX_CHATBOT_MESSAGE_LENGTH = 2000;
 
@@ -34,6 +35,7 @@ const languageLabel: Record<ChatbotLanguage, string> = {
 const FloatingChatWidget = () => {
   const { toast } = useToast();
   const { isOpen, openChat, closeChat, toggleChat } = useChatWidget();
+  const { currentUser } = useUser() as any;
   const [chatMessage, setChatMessage] = useState("");
   const [chatLanguage, setChatLanguage] = useState<ChatbotLanguage>("vi");
   const [showSuggestions, setShowSuggestions] = useState(true);
@@ -153,7 +155,19 @@ const FloatingChatWidget = () => {
     const history = buildHistoryPayload();
 
     chatbotMutation.mutate(
-      { message: trimmed, language: turnLanguage, history },
+      {
+        message: trimmed,
+        language: turnLanguage,
+        history,
+        user: currentUser
+          ? {
+              id: currentUser.id ?? null,
+              name: currentUser.name ?? null,
+              email: currentUser.email ?? null,
+              role: currentUser.role ?? null,
+            }
+          : undefined,
+      },
       {
         onSuccess: (data) => {
           const normalizedSources = normalizeSources(

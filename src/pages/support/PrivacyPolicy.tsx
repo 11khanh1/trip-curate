@@ -170,6 +170,20 @@ const PrivacyPolicy = () => {
                 </div>
               </CardContent>
             </Card>
+
+            <Card className="mt-6">
+              <CardContent className="p-8 space-y-3">
+                <h3 className="text-xl font-semibold">Liên kết & tài nguyên</h3>
+                <p className="text-sm text-muted-foreground">
+                  Đọc thêm về điều khoản sử dụng và quyền hủy đặt chỗ để hiểu rõ quyền lợi của bạn trên VietTravel.
+                </p>
+                <ul className="text-primary font-medium space-y-2 text-sm">
+                  <li><a href="/support/terms-of-service">Điều khoản sử dụng</a></li>
+                  <li><a href="/support/cancellation-policy">Chính sách hủy</a></li>
+                  <li><a href="/support/help-center">Trung tâm trợ giúp</a></li>
+                </ul>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </section>

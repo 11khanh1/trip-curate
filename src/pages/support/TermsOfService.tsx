@@ -204,6 +204,20 @@ const TermsOfService = () => {
                   </div>
                 </CardContent>
               </Card>
+
+              <Card className="mt-6">
+                <CardContent className="p-8 space-y-3">
+                  <h3 className="text-xl font-semibold">Tài nguyên liên quan</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Để hiểu rõ hơn về cách VietTravel bảo vệ dữ liệu và xử lý hủy đặt chỗ, hãy xem thêm các trang dưới đây.
+                  </p>
+                  <ul className="text-primary font-medium space-y-2 text-sm">
+                    <li><a href="/support/privacy-policy">Chính sách bảo mật</a></li>
+                    <li><a href="/support/cancellation-policy">Chính sách hủy</a></li>
+                    <li><a href="/support/help-center">Trung tâm trợ giúp</a></li>
+                  </ul>
+                </CardContent>
+              </Card>
             </div>
           </div>
         </div>
