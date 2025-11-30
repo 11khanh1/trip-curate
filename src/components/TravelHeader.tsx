@@ -461,9 +461,7 @@ const TravelHeader = () => {
             </div>
 
             <div className="flex items-center gap-2 justify-end w-full md:w-auto md:justify-end order-2 md:order-none">
-              <Button variant="ghost" size="sm" className="hidden md:flex text-gray-600 hover:text-gray-800 text-sm">
-                Mở ứng dụng
-              </Button>
+            
               <Button
                 variant="ghost"
                 size="sm"
