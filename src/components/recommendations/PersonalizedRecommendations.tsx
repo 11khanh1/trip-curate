@@ -129,14 +129,16 @@ const PersonalizedRecommendations = ({
   const { currentUser } = useUser();
   const { trackEvent } = useAnalytics();
   const hasInitialData = Array.isArray(initialData) && initialData.length > 0;
+  const queryKey = ["personalized-recommendations", { limit }];
 
   const {
     data,
     isLoading,
     isError,
     error,
+    refetch,
   } = useQuery({
-    queryKey: ["personalized-recommendations", { limit }],
+    queryKey,
     queryFn: () => fetchPersonalizedRecommendations(limit),
     enabled: !hasInitialData && Boolean(currentUser),
     staleTime: 60 * 1000,
@@ -255,6 +257,16 @@ const PersonalizedRecommendations = ({
               Khám phá những hành trình phù hợp dựa trên hoạt động gần đây của bạn.
             </p>
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-2"
+            onClick={() => refetch()}
+            disabled={isLoading}
+          >
+            <Sparkles className="h-4 w-4 text-orange-500" />
+            Làm mới gợi ý
+          </Button>
         </div>
 
         {isLoading && !hasInitialData ? (

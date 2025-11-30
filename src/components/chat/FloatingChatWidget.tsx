@@ -39,6 +39,7 @@ const FloatingChatWidget = () => {
   const [chatMessage, setChatMessage] = useState("");
   const [chatLanguage, setChatLanguage] = useState<ChatbotLanguage>("vi");
   const [showSuggestions, setShowSuggestions] = useState(true);
+  const [suggestionKey, setSuggestionKey] = useState(0);
   const [chatHistory, setChatHistory] = useState<
     Array<{
       id: string;
@@ -152,6 +153,19 @@ const FloatingChatWidget = () => {
     setChatHistory((prev) => [...prev, { id: turnId, question: trimmed, language: turnLanguage }]);
     setChatMessage("");
 
+    const storedToken =
+      typeof window !== "undefined" ? window.localStorage.getItem("token") ?? null : null;
+    const authToken = storedToken ?? (currentUser as { token?: string } | null)?.token ?? null;
+
+    if (!authToken || authToken.trim().length === 0) {
+      toast({
+        title: "Cần đăng nhập",
+        description: "Vui lòng đăng nhập lại để chatbot truy cập thông tin tài khoản.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const history = buildHistoryPayload();
 
     chatbotMutation.mutate(
@@ -167,6 +181,9 @@ const FloatingChatWidget = () => {
               role: currentUser.role ?? null,
             }
           : undefined,
+        user_id: currentUser?.id ?? null,
+        user_email: currentUser?.email ?? null,
+        authToken,
       },
       {
         onSuccess: (data) => {
@@ -243,18 +260,33 @@ const FloatingChatWidget = () => {
                 }}
               >
                 {showSuggestions && chatHistory.length === 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {quickReplies.map((reply) => (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">Gợi ý nhanh</span>
                       <Button
-                        key={reply}
-                        variant="outline"
-                        className="rounded-full border border-orange-300 bg-white px-4 text-xs font-medium text-orange-600 hover:bg-orange-50"
-                        onClick={() => handleQuickReply(reply)}
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 text-orange-600 hover:bg-orange-50"
+                        onClick={() => setSuggestionKey((k) => k + 1)}
                         disabled={chatbotMutation.isPending}
+                        aria-label="Làm mới gợi ý"
                       >
-                        {reply}
+                        <Send className="h-4 w-4" />
                       </Button>
-                    ))}
+                    </div>
+                    <div className="flex flex-wrap gap-2" key={suggestionKey}>
+                      {quickReplies.map((reply) => (
+                        <Button
+                          key={reply}
+                          variant="outline"
+                          className="rounded-full border border-orange-300 bg-white px-4 text-xs font-medium text-orange-600 hover:bg-orange-50"
+                          onClick={() => handleQuickReply(reply)}
+                          disabled={chatbotMutation.isPending}
+                        >
+                          {reply}
+                        </Button>
+                      ))}
+                    </div>
                   </div>
                 )}
 

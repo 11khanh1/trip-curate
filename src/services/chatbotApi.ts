@@ -13,6 +13,10 @@ export interface ChatbotRequestPayload {
     email?: string | null;
     role?: string | null;
   };
+  user_id?: string | number | null;
+  user_email?: string | null;
+  /** Không gửi lên backend, chỉ dùng để set header Authorization nếu cần */
+  authToken?: string | null;
 }
 
 export interface ChatbotHistoryEntry {
@@ -41,6 +45,9 @@ export const sendChatbotMessage = async ({
   history,
   systemPrompt,
   user,
+  user_id,
+  user_email,
+  authToken,
 }: ChatbotRequestPayload): Promise<ChatbotResponse> => {
   const trimmed = message.trim();
   if (!trimmed) {
@@ -63,12 +70,23 @@ export const sendChatbotMessage = async ({
           .filter((entry): entry is { role: "user"; content: string } => Boolean(entry))
       : [];
 
-  const res = await apiClient.post<ChatbotResponse>("/chatbot", {
-    message: trimmed,
-    language,
-    history: normalizedHistory,
-    user,
-    // systemPrompt bỏ qua để tránh gửi role lạ (backend chỉ nhận user/model)
-  });
+  const headers =
+    authToken && authToken.trim().length > 0
+      ? { Authorization: authToken.toLowerCase().startsWith("bearer") ? authToken : `Bearer ${authToken}` }
+      : undefined;
+
+  const res = await apiClient.post<ChatbotResponse>(
+    "/chatbot",
+    {
+      message: trimmed,
+      language,
+      history: normalizedHistory,
+      user,
+      user_id: user_id ?? user?.id ?? null,
+      user_email: user_email ?? user?.email ?? null,
+      // systemPrompt bỏ qua để tránh gửi role lạ (backend chỉ nhận user/model)
+    },
+    { headers },
+  );
   return res.data ?? (res as unknown as ChatbotResponse);
 };
