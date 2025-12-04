@@ -1,72 +1,43 @@
-# Welcome to your Lovable project
+## Giới thiệu
 
-## Project info
+Frontend Vite + React + TypeScript cho nền tảng đặt tour (VietTravel), dùng Tailwind + shadcn/ui, React Query, Axios.
 
-**URL**: https://lovable.dev/projects/d819bbaa-db55-4ee7-84ca-eebc061a04e2
+## Yêu cầu môi trường
+- Node.js >= 18
+- npm (hoặc Bun nếu muốn dùng `bun install` theo `bun.lockb`, nhưng npm vẫn chạy bình thường)
 
-## How can I edit this code?
+## Cài đặt & chạy local
 
-There are several ways of editing your application.
-
-**Use Lovable**
-
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
+```bash
 git clone <YOUR_GIT_URL>
+cd trip-curate
+# cài dependency
+npm install        # hoặc bun install
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+# chạy dev
+npm run dev        # mặc định http://localhost:8080/
 
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+# build production
+npm run build      # output trong dist/
 ```
 
-**Edit a file directly in GitHub**
+## Biến môi trường
+- Tạo `.env` (sao chép từ `.env.example` nếu có) và đặt:
+  - `VITE_API_BASE_URL` (dev) và `VITE_API_BASE_URL_PROD` (prod) trỏ tới backend của bạn.
+- Ứng dụng cần backend cho các API: auth, chatbot, recommendations... Nếu chạy backend riêng, chỉnh lại các URL này.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Công nghệ chính
+- Vite + React + TypeScript
+- Tailwind CSS + shadcn/ui
+- React Query, Axios
+- Context API (user, cart, chat widget...)
 
-**Use GitHub Codespaces**
+## Lệnh hữu ích
+- `npm run dev`: chạy dev server
+- `npm run build`: build production
+- `npm run preview`: xem thử build
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
+## Lưu ý
+- Chatbot yêu cầu header `Authorization: Bearer <token>` (token đăng nhập) để backend nhận diện user. Đăng nhập qua luồng có trả token để `localStorage("token")` tồn tại.
+- Các trang gợi ý cá nhân hóa chỉ chạy khi có user đăng nhập; nếu không, sẽ fallback dữ liệu trending.
 

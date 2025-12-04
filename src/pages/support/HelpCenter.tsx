@@ -14,6 +14,7 @@ import {
   MessageCircle,
   ChevronDown,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useChatWidget } from "@/context/ChatWidgetContext";
 
 const HelpCenter = () => {
@@ -127,6 +128,16 @@ const HelpCenter = () => {
                 placeholder="Tìm kiếm câu hỏi, từ khóa..." 
                 className="pl-12 h-14 text-lg bg-white text-foreground"
               />
+            </div>
+
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+              <Button asChild variant="secondary" className="bg-white text-primary hover:bg-white/90">
+                <Link to="/support/tickets">Gửi yêu cầu hỗ trợ</Link>
+              </Button>
+              <Button variant="outline" onClick={openChat} className="bg-transparent text-white border-white hover:bg-white/10">
+                <MessageCircle className="w-4 h-4 mr-2" />
+                Chat với trợ lý
+              </Button>
             </div>
           </div>
         </div>

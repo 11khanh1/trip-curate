@@ -17,6 +17,7 @@ const Footer = () => {
       title: "Hỗ trợ",
       links: [
         { name: "Trung tâm trợ giúp", url: "/support/help-center" },
+        { name: "Yêu cầu hỗ trợ (ticket)", url: "/support/tickets" },
         { name: "Chính sách hủy", url: "/support/cancellation-policy" },
         { name: "Chính sách bảo mật", url: "/support/privacy-policy" },
         { name: "Điều khoản sử dụng", url: "/support/terms-of-service" },

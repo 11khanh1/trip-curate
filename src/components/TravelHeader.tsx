@@ -378,6 +378,7 @@ const TravelHeader = () => {
     { label: "Ưu đãi hot", href: "/deals" },
     { label: "Khám phá VietTravel", href: "/about/our-story" },
     { label: "Hỗ trợ", href: "/support/help-center" },
+    { label: "Gửi yêu cầu hỗ trợ", href: "/support/tickets" },
   ];
 
 
@@ -580,6 +581,12 @@ const TravelHeader = () => {
                             </Link>
                           </DropdownMenuItem>
                         )}
+                        <DropdownMenuItem asChild>
+                          <Link to="/support/tickets" className="flex items-center gap-2 cursor-pointer">
+                            <HelpCircle className="w-4 h-4" />
+                            Yêu cầu hỗ trợ
+                          </Link>
+                        </DropdownMenuItem>
                         <DropdownMenuItem asChild>
                           <Link to="/account-settings" className="flex items-center gap-2 cursor-pointer">
                             <Settings className="w-4 h-4" />

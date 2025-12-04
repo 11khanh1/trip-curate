@@ -19,6 +19,7 @@ import HelpCenter from "./pages/support/HelpCenter";
 import CancellationPolicy from "./pages/support/CancellationPolicy";
 import PrivacyPolicy from "./pages/support/PrivacyPolicy";
 import TermsOfService from "./pages/support/TermsOfService";
+import SupportTickets from "./pages/support/SupportTickets";
 import AccountSettings from "./pages/AccountSettings";
 import AdminLayout from "./pages/admin/AdminLayout";
 import Dashboard from "./pages/admin/Dashboard";
@@ -87,6 +88,7 @@ const App = () => (
             <Route path="/support/cancellation-policy" element={<CancellationPolicy />} />
             <Route path="/support/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="/support/terms-of-service" element={<TermsOfService />} />
+            <Route path="/support/tickets" element={<SupportTickets />} />
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<Dashboard />} />
               <Route path="dashboard" element={<Dashboard />} />
