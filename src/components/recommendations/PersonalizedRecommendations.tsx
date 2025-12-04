@@ -136,6 +136,7 @@ const PersonalizedRecommendations = ({
     isLoading,
     isError,
     error,
+    isFetching,
     refetch,
   } = useQuery({
     queryKey,
@@ -218,17 +219,14 @@ const PersonalizedRecommendations = ({
 
   const meta = personalizedMeta ?? {};
   const recommendationCount =
-    typeof meta.count === "number" && Number.isFinite(meta.count) ? meta.count : cards.length;
+    typeof meta.count === "number" && Number.isFinite(meta.count) ? meta.count : displayedCards.length;
   const hasPersonalizedSignals =
     typeof meta.has_personalized_signals === "boolean" ? meta.has_personalized_signals : false;
   const personalizedResults =
     typeof meta.personalized_results === "boolean" ? meta.personalized_results : hasPersonalizedData;
+  const isRefreshing = isFetching || isFallbackLoading;
   const shouldShowEmptyState =
-    !isLoading &&
-    !isFallbackLoading &&
-    !isError &&
-    (recommendationCount === 0 || !personalizedResults) &&
-    fallbackCards.length === 0;
+    !isRefreshing && !isError && (recommendationCount === 0 || !personalizedResults) && displayedCards.length === 0;
 
   const hasError = Boolean(isError);
   if (hasError && !hasInitialData) {
@@ -262,14 +260,14 @@ const PersonalizedRecommendations = ({
             size="sm"
             className="flex items-center gap-2"
             onClick={() => refetch()}
-            disabled={isLoading}
+            disabled={isRefreshing}
           >
             <Sparkles className="h-4 w-4 text-orange-500" />
             Làm mới gợi ý
           </Button>
         </div>
 
-        {isLoading && !hasInitialData ? (
+        {(isLoading || isFallbackLoading) && !hasInitialData ? (
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             {Array.from({ length: limit }).map((_, index) => (
               <div key={`recommend-skeleton-${index}`} className="h-48 animate-pulse rounded-2xl bg-slate-200/60" />
@@ -277,7 +275,7 @@ const PersonalizedRecommendations = ({
           </div>
         ) : null}
 
-        {!isLoading && cards.length > 0 ? (
+        {!isRefreshing && displayedCards.length > 0 ? (
           <div className="mt-6 grid gap-6 lg:grid-cols-2">
             {displayedCards.map((card) => (
               <CollectionTourCard
