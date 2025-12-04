@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Users, Briefcase, Layers, Gift, BarChart3, Settings, Shield, Search, MapPin } from "lucide-react";
+import { LayoutDashboard, Users, Briefcase, Layers, Gift, BarChart3, Settings, Shield, Search, MapPin, LifeBuoy } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -31,6 +31,7 @@ const menuItems = [
   { title: "Báo cáo", url: "/admin/reports", icon: BarChart3 },
   { title: "Cài đặt hệ thống", url: "/admin/settings", icon: Settings },
   { title: "Quản trị viên", url: "/admin/admins", icon: Shield },
+  { title: "Support tickets", url: "/admin/support-tickets", icon: LifeBuoy },
 ];
 
 function AdminSidebar() {
@@ -138,6 +139,7 @@ export default function AdminLayout() {
     "/admin/reports": { title: "Báo cáo", desc: "Phân tích dữ liệu và hiệu suất kinh doanh" },
     "/admin/settings": { title: "Cài đặt hệ thống", desc: "Thiết lập vận hành và bảo mật" },
     "/admin/admins": { title: "Quản trị viên", desc: "Quản lý đội ngũ admin nội bộ" },
+    "/admin/support-tickets": { title: "Support tickets", desc: "Theo dõi và cập nhật trạng thái yêu cầu hỗ trợ" },
   };
 
   const currentPage =

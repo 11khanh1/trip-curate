@@ -31,6 +31,7 @@ import AdminTours from "./pages/admin/Tours";
 import AdminCategories from "./pages/admin/Categories";
 import AdminReports from "./pages/admin/Reports";
 import AdminAdmins from "./pages/admin/Admins";
+import SupportTicketsAdmin from "./pages/admin/SupportTicketsAdmin";
 import PartnerLayout from "./pages/partner/PartnerLayout";
 import PartnerDashboard from "./pages/partner/Dashboard";
 import PartnerActivities from "./pages/partner/Activities";
@@ -100,6 +101,7 @@ const App = () => (
               <Route path="reports" element={<AdminReports />} />
               <Route path="settings" element={<Settings />} />
               <Route path="admins" element={<AdminAdmins />} />
+              <Route path="support-tickets" element={<SupportTicketsAdmin />} />
             </Route>
         <Route path="/partner" element={<PartnerLayout />}>
           <Route index element={<PartnerDashboard />} />
