@@ -7,7 +7,19 @@ import {
   Tooltip as RechartsTooltip,
   XAxis,
 } from "recharts";
-import { Calendar, CheckCircle2, DollarSign, Package, RefreshCcw, Tag } from "lucide-react";
+import {
+  Calendar,
+  CheckCircle2,
+  DollarSign,
+  Package,
+  RefreshCcw,
+  Tag,
+  Rocket,
+  Sparkles,
+  TrendingUp,
+  ShieldCheck,
+  ArrowUpRight,
+} from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -158,82 +170,80 @@ const PartnerDashboard = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Tổng quan kinh doanh</h1>
-          <p className="text-sm text-muted-foreground">
-            Phạm vi thống kê: {data.range_days ?? Number(range)} ngày gần nhất
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Select value={range} onValueChange={setRange}>
-            <SelectTrigger className="w-36">
-              <SelectValue placeholder="Phạm vi" />
-            </SelectTrigger>
-            <SelectContent>
-              {RANGE_OPTIONS.map((option) => (
-                <SelectItem key={option} value={String(option)}>
-                  {option} ngày
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button variant="outline" onClick={() => refetch()} disabled={isFetching}>
-            <RefreshCcw className={`mr-2 h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
-            Làm mới
-          </Button>
+      <div className="rounded-2xl bg-gradient-to-r from-amber-200 via-orange-200 to-rose-200 p-[1px] shadow-xl">
+        <div className="flex flex-col gap-4 rounded-2xl bg-white px-6 py-6 text-slate-900 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-orange-700">
+              <Rocket className="h-4 w-4 text-orange-600" />
+              Partner Pulse
+            </div>
+            <h1 className="text-2xl font-bold md:text-3xl">Tổng quan kinh doanh</h1>
+            <p className="text-sm text-muted-foreground">
+              Phạm vi: {data.range_days ?? Number(range)} ngày gần nhất • Cập nhật real-time
+            </p>
+            <div className="flex flex-wrap gap-2 text-xs text-slate-700">
+              <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2 py-1 text-orange-700">
+                <ShieldCheck className="h-3.5 w-3.5" /> SLA ưu tiên đối tác
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2 py-1 text-orange-700">
+                <TrendingUp className="h-3.5 w-3.5" /> Theo dõi tăng trưởng
+              </span>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Select value={range} onValueChange={setRange}>
+              <SelectTrigger className="w-32 bg-white text-slate-900 border-orange-200">
+                <SelectValue placeholder="Phạm vi" />
+              </SelectTrigger>
+              <SelectContent>
+                {RANGE_OPTIONS.map((option) => (
+                  <SelectItem key={option} value={String(option)}>
+                    {option} ngày
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              variant="secondary"
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="border-orange-100 bg-orange-50 text-orange-700 hover:bg-orange-100"
+            >
+              <RefreshCcw className={`mr-2 h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
+              Làm mới
+            </Button>
+          </div>
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <StatCard title="Tổng số tour" value={stats.toursTotal} icon={Package} gradient />
         <StatCard title="Tour đã duyệt" value={stats.toursApproved} icon={CheckCircle2} />
         <StatCard title="Tour chờ duyệt" value={stats.toursPending} icon={Calendar} />
         <StatCard title="Khuyến mãi đang bật" value={stats.activePromotions} icon={Tag} />
+        <StatCard title="Tổng đơn đặt" value={stats.totalBookings} icon={DollarSign} />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Đơn đặt (theo phạm vi)</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              {data.bookings?.range?.bookings ?? 0} đơn • {data.bookings?.range?.paid_bookings ?? 0} đã thanh toán
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {data.bookings?.by_status && Object.keys(data.bookings.by_status).length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {Object.entries(data.bookings.by_status).map(([status, count]) => (
-                  <Badge key={status} variant="secondary" className="text-xs">
-                    {bookingStatusLabel(status)}:{" "}
-                    <span className="ml-1 font-semibold text-foreground">{count}</span>
-                  </Badge>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">Chưa có dữ liệu đơn hàng.</p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="col-span-1 md:col-span-1 lg:col-span-2">
-          <CardHeader className="pb-2">
+      <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
+        <Card className="border border-slate-200/70 shadow-md">
+          <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-base">Doanh thu</CardTitle>
+                <CardTitle className="text-base">Doanh thu theo ngày</CardTitle>
                 <p className="text-sm text-muted-foreground">
                   Tổng: {formatCurrency(data.revenue?.overall)} • Phạm vi: {formatCurrency(data.revenue?.range)}
                 </p>
               </div>
+              <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
             </div>
           </CardHeader>
-          <CardContent className="h-64">
+          <CardContent className="h-72">
             {data.revenue?.daily && data.revenue.daily.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={data.revenue.daily}>
                   <defs>
                     <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
                       <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
                     </linearGradient>
                   </defs>
@@ -241,7 +251,7 @@ const PartnerDashboard = () => {
                     dataKey="date"
                     tickFormatter={(value) => format(new Date(value), "dd/MM")}
                     tick={{ fontSize: 12 }}
-                    dy={5}
+                    dy={8}
                   />
                   <RechartsTooltip content={<RevenueTooltip />} />
                   <Area
@@ -260,13 +270,59 @@ const PartnerDashboard = () => {
             )}
           </CardContent>
         </Card>
+
+        <Card className="border border-slate-200/70 shadow-md">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base">Đơn đặt (theo phạm vi)</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  {data.bookings?.range?.bookings ?? 0} đơn • {data.bookings?.range?.paid_bookings ?? 0} đã thanh toán
+                </p>
+              </div>
+              <Sparkles className="h-4 w-4 text-primary" />
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {data.bookings?.by_status && Object.keys(data.bookings.by_status).length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(data.bookings.by_status).map(([status, count]) => (
+                  <Badge key={status} variant="secondary" className="text-xs">
+                    {bookingStatusLabel(status)}:{" "}
+                    <span className="ml-1 font-semibold text-foreground">{count}</span>
+                  </Badge>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Chưa có dữ liệu đơn hàng.</p>
+            )}
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="rounded-lg border border-slate-200/80 bg-slate-50 p-3">
+                <p className="text-xs text-muted-foreground">Tỉ lệ thanh toán</p>
+                <p className="text-lg font-semibold text-foreground">
+                  {data.bookings?.range?.bookings
+                    ? Math.round(
+                        ((data.bookings?.range?.paid_bookings ?? 0) / Math.max(data.bookings.range.bookings, 1)) * 100,
+                      )
+                    : 0}
+                  %
+                </p>
+              </div>
+              <div className="rounded-lg border border-slate-200/80 bg-slate-50 p-3">
+                <p className="text-xs text-muted-foreground">Tổng doanh thu</p>
+                <p className="text-lg font-semibold text-foreground">{formatCurrency(data.revenue?.range)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
+        <Card className="border border-slate-200/70 shadow-sm">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>Lịch khởi hành sắp tới</CardTitle>
+              <CardTitle className="text-base">Lịch khởi hành sắp tới</CardTitle>
               <span className="text-xs text-muted-foreground">Tối đa 6 lịch</span>
             </div>
           </CardHeader>
@@ -275,7 +331,7 @@ const PartnerDashboard = () => {
               data.upcoming_departures.map((departure) => (
                 <div
                   key={departure.id}
-                  className="flex flex-wrap items-center justify-between gap-3 border-b pb-3 last:border-0 last:pb-0"
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-100 bg-slate-50/60 p-3"
                 >
                   <div>
                     <p className="font-semibold text-foreground">{departure.tour_title ?? "Tour chưa đặt tên"}</p>
@@ -300,10 +356,10 @@ const PartnerDashboard = () => {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border border-slate-200/70 shadow-sm">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>Đơn đặt gần đây</CardTitle>
+              <CardTitle className="text-base">Đơn đặt gần đây</CardTitle>
               <span className="text-xs text-muted-foreground">5 đơn mới nhất</span>
             </div>
           </CardHeader>
@@ -312,7 +368,7 @@ const PartnerDashboard = () => {
               data.recent_bookings.map((booking) => (
                 <div
                   key={booking.id}
-                  className="flex flex-wrap items-center justify-between gap-3 border-b pb-3 last:border-0 last:pb-0"
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-100 bg-white p-3 shadow-sm"
                 >
                   <div>
                     <p className="font-semibold text-foreground">
@@ -322,7 +378,7 @@ const PartnerDashboard = () => {
                       KH: {booking.customer_name ?? "Khách lẻ"} • Mã: {booking.id}
                     </p>
                   </div>
-                  <div className="text-right text-sm">
+                  <div className="text-right text-sm space-y-1">
                     <p className="font-semibold text-primary">{formatCurrency(booking.total_price)}</p>
                     <p className="text-xs text-muted-foreground">{formatDate(booking.booking_date)}</p>
                     <div className="flex justify-end gap-2">

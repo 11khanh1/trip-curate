@@ -172,7 +172,7 @@ export default function PartnerLayout() {
         <PartnerPortalSidebar />
         
         <div className="flex flex-1 flex-col bg-slate-50">
-          <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-4 border-b border-slate-200 bg-white/90 px-4 pr-6 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/80">
+          <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-3 border-b border-slate-200 bg-white/90 px-3 pr-4 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/80">
             <div className="flex items-center gap-4">
               <SidebarTrigger className="text-muted-foreground" />
               <div className="space-y-0.5">
@@ -182,7 +182,7 @@ export default function PartnerLayout() {
             </div>
 
             <div className="flex flex-1 items-center justify-end gap-4">
-              <div className="relative hidden w-full max-w-md md:block">
+              <div className="relative hidden w-full max-w-sm md:block">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input placeholder="Tìm kiếm trong trang đối tác..." className="pl-9" />
               </div>
@@ -202,8 +202,8 @@ export default function PartnerLayout() {
             </div>
           </header>
           
-          <main className="flex-1 overflow-auto px-4 py-6">
-            <div className="mx-auto w-full max-w-6xl space-y-6">
+          <main className="flex-1 overflow-auto px-3 py-4">
+            <div className="mx-auto w-full max-w-5xl space-y-4">
               <Outlet />
             </div>
           </main>

@@ -1,11 +1,14 @@
 import { useMemo } from "react";
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import CollectionTourCard from "@/components/CollectionTourCard";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { fetchSimilarRecommendations, type RecommendationItem } from "@/services/recommendationApi";
 import type { PublicTour } from "@/services/publicApi";
 import { getTourStartingPrice, formatCurrency as formatPrice } from "@/lib/tour-utils";
+import { Compass, Sparkles } from "lucide-react";
 
 const REASON_LABELS: Record<string, string> = {
   content_match: "Nội dung tương đồng",
@@ -78,6 +81,8 @@ const SimilarTourRecommendations = ({ tourId, baseTourTitle, limit = 8 }: Simila
     data,
     isLoading,
     isError,
+    isFetching,
+    refetch,
   } = useQuery({
     queryKey: ["similar-recommendations", { tourId, limit }],
     queryFn: () => fetchSimilarRecommendations(String(tourId), limit),
@@ -92,11 +97,13 @@ const SimilarTourRecommendations = ({ tourId, baseTourTitle, limit = 8 }: Simila
       .filter((value): value is NonNullable<ReturnType<typeof mapItemToCard>> => Boolean(value));
   }, [data?.data]);
 
-  if (!tourId || isError) {
+  if (!tourId) {
     return null;
   }
 
   const showEmptyState = !isLoading && cards.length === 0;
+  const hasData = cards.length > 0;
+  const isRefreshing = isFetching && !isLoading;
 
   const handleCardClick = (recommendedTourId: string, reasons: string[]) => {
     trackEvent({
@@ -112,22 +119,55 @@ const SimilarTourRecommendations = ({ tourId, baseTourTitle, limit = 8 }: Simila
   };
 
   return (
-    <section className="mt-12 space-y-6">
-      <div>
-        <h3 className="text-xl font-semibold text-foreground">Tour tương tự</h3>
-        <p className="text-sm text-muted-foreground">
-          {baseTourTitle ? `Dựa trên "${baseTourTitle}"` : "Khám phá các lựa chọn có nội dung tương đồng."}
-        </p>
+    <section className="mt-12 rounded-3xl border border-slate-200/70 bg-gradient-to-b from-white to-slate-50 p-6 shadow-sm space-y-6">
+      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h3 className="text-2xl font-semibold text-foreground">Tour tương tự</h3>
+          <p className="text-sm text-muted-foreground">
+            {baseTourTitle ? `Dựa trên "${baseTourTitle}"` : "Khám phá các lựa chọn có nội dung tương đồng."}
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="flex items-center gap-2"
+          onClick={() => refetch()}
+          disabled={isRefreshing}
+        >
+          <Sparkles className="h-4 w-4 text-orange-500" />
+          Làm mới gợi ý
+        </Button>
       </div>
-      {isLoading ? (
+
+      {isLoading && !hasData ? (
         <div className="grid gap-4 lg:grid-cols-2">
           {Array.from({ length: Math.min(limit, 4) }).map((_, index) => (
             <div key={`similar-skeleton-${index}`} className="h-44 animate-pulse rounded-2xl bg-slate-200/60" />
           ))}
         </div>
       ) : showEmptyState ? (
-        <div className="rounded-2xl border border-dashed border-primary/40 bg-white p-6 text-sm text-muted-foreground">
-          <p>Chúng tôi đang thu thập thêm dữ liệu để gợi ý tour tương tự cho bạn.</p>
+        <div className="space-y-4 rounded-2xl border border-dashed border-primary/50 bg-white/80 p-6 text-sm text-muted-foreground shadow-sm">
+          <div className="flex items-start gap-3">
+            <Compass className="mt-1 h-6 w-6 text-primary" />
+            <div className="space-y-1">
+              <p className="text-base font-semibold text-foreground">Chưa có gợi ý phù hợp lúc này</p>
+              <p>
+                Chúng tôi đang thu thập thêm dữ liệu để gợi ý tour tương tự
+                {baseTourTitle ? ` cho "${baseTourTitle}".` : " cho bạn."}
+              </p>
+              <p className="text-xs italic text-muted-foreground">
+                Hãy tiếp tục xem, thêm wishlist hoặc đặt tour để nhận nhiều gợi ý chính xác hơn.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Button asChild size="sm" variant="default">
+              <Link to="/activities">Khám phá thêm tour</Link>
+            </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link to="/wishlist">Xem wishlist</Link>
+            </Button>
+          </div>
         </div>
       ) : (
         <div className="grid gap-6 lg:grid-cols-2">

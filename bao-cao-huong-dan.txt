@@ -1,0 +1,36 @@
+HƯỚNG DẪN BÁO CÁO KHÓA LUẬN – TRIP CURATE
+
+1) Tổng quan hệ thống
+- Frontend: Vite + React + TypeScript, Tailwind + shadcn/ui, React Query, Axios, Context API (giỏ hàng, người dùng, chat), xem Router trong src/App.tsx.
+- Các mảng chức năng: trang khách (tìm tour, chi tiết, giỏ hàng, wishlist, đặt tour, thanh toán Sepay/offline), tài khoản (đăng nhập OTP, đăng ký, quên mật khẩu, cập nhật hồ sơ), hỗ trợ (chat widget, ticket), quản trị (admin), đối tác (partner).
+- API: cấu hình base URL qua .env; dịch vụ chính trong src/services/*.ts (publicApi, bookingApi, partnerApi, adminApi...).
+
+2) Ràng buộc dữ liệu/validation chính (kèm nguồn code)
+- Số điện thoại Việt Nam: chỉ chấp nhận 10 số bắt đầu 0 hoặc 11 số bắt đầu 84; luôn normalize trước khi gửi (src/lib/validators.ts, dùng tại BookingCheckout, AccountSettings, admin/Partners).
+- Email: regex /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/ hoặc z.string().email (LoginForm, ForgotForm, RegisterForm, BookingCheckout).
+- Mã OTP: tối thiểu 4 ký tự trước khi xác minh (LoginForm.tsx).
+- Mật khẩu khách: tối thiểu 8 ký tự và khớp xác nhận (ForgotForm.tsx, RegisterForm.tsx, AccountSettings.tsx).
+- Mật khẩu admin/đối tác tạo từ trang admin: tối thiểu 6 ký tự, bắt buộc khớp xác nhận (admin/Admins.tsx, admin/Partners.tsx).
+- Đăng ký đối tác: tên công ty ≥3 ký tự, loại hình ≥2, email hợp lệ, số điện thoại đúng 10 số đầu 0, MST 8–15 số (partner/PartnerSignup.tsx).
+- Biểu mẫu đặt tour: package_id và schedule_id bắt buộc; adults >=1, children >=0; hành khách tối thiểu 1; yêu cầu giấy tờ nếu tour đòi passport/visa; trẻ em phải có ngày sinh và không vượt childAgeLimit; số khách không dưới minParticipants của lịch và không vượt seats_available (BookingCheckout.tsx).
+- Thông tin hành khách: họ tên bắt buộc; ngày sinh (nếu nhập) phải trước hiện tại; giấy tờ 9 hoặc 12 số, hoặc 6–20 ký tự chữ/số không khoảng trắng (BookingCheckout.tsx, src/lib/validators.ts).
+- Liên hệ khi đặt tour: nếu nhập thì phải đủ họ tên + email + điện thoại; nếu để trống phải có đủ trong hồ sơ người dùng (BookingCheckout.tsx + AccountSettings.tsx).
+- Cập nhật hồ sơ: số điện thoại (nếu nhập) tuân thủ quy tắc VN; ngày sinh phải trước hôm nay (AccountSettings.tsx).
+- Cấu hình tour đối tác: seats_total >=1; seats_available >=0 và không vượt seats_total (partner/Activities.tsx).
+- Chọn khách trên trang chi tiết tour: luôn có ≥1 người lớn; tổng khách tối đa 15; trẻ em không vượt phần còn lại sau khi trừ người lớn (ActivityDetail.tsx).
+
+3) Quy trình nghiệp vụ chính (tóm tắt theo luồng)
+- Khách hàng khám phá & tìm kiếm: Index/AllActivities/Deals/RecentTours/ResultSearch hiển thị danh sách, lọc theo loại, giá, ngày khởi hành; ActivityDetail cho phép chọn gói, lịch, số lượng khách, xem ưu đãi, đánh giá.
+- Giỏ hàng & wishlist: thêm/xóa sản phẩm, lưu trong context + API (CartContext, wishlistApi); checkout có thể lấy từ cartItemId hoặc từ trang chi tiết.
+- Đặt tour & thanh toán: BookingCheckout tải hồ sơ mặc định, kiểm tra seats/minParticipants, validate hành khách & liên hệ, gọi createBooking (bookingApi). Thanh toán Sepay: nhận payment_url/QR, hiển thị panel, poll trạng thái qua fetchBookingPaymentStatus, tự chuyển sang trang booking khi success; offline: thông báo đặt thành công và điều hướng. Cache tour/cart/booking được invalidate sau khi tạo.
+- Quản lý đặt chỗ sau bán: BookingsList/BookingDetail hiển thị trạng thái, thanh toán, huỷ, yêu cầu hoàn tiền; SepayReturn xử lý callback. RefundRequests hiển thị cho đối tác và admin (bookingApi).
+- Tài khoản & bảo mật: Đăng nhập OTP email (gửi mã, verify, lưu token, redirect theo role), đăng ký mật khẩu, quên mật khẩu, cập nhật hồ sơ & đổi mật khẩu; chặn đăng nhập nếu tài khoản bị suspended (LoginForm).
+- Hỗ trợ & thông báo: Chat widget (context), trang Notifications lấy dữ liệu notificationApi; người dùng tạo/đọc ticket (support/SupportTickets), admin xem/điều phối (admin/SupportTicketsAdmin).
+- Quy trình đối tác: PartnerSignup gửi đăng ký; PartnerLayout cung cấp Dashboard, quản lý Activities (tạo/sửa tour, lịch, giá, chỗ), Bookings (xem trạng thái, hành khách, thanh toán), Promotions, RefundRequests, Settings (thông tin doanh nghiệp).
+- Quy trình quản trị: AdminLayout với Dashboard, quản lý Users/Customers/Admins/Partners (duyệt đối tác, đổi trạng thái), Tours & Activities (CRUD tour, gói, lịch, tồn chỗ), Categories, Promotions, Reports (thống kê), Settings, SupportTickets.
+
+4) Gợi ý trình bày báo cáo
+- Bố cục nên có: (a) Vấn đề & mục tiêu nền tảng đặt tour; (b) Kiến trúc & công nghệ (sơ đồ module: frontend, API gateway, các service chính); (c) Quy trình nghiệp vụ chính (use case + sequence cho đặt tour thanh toán Sepay, phê duyệt đối tác, quản trị); (d) Ràng buộc dữ liệu/validation (bảng tổng hợp + dẫn chiếu file code ở mục 2); (e) Thiết kế API & mô hình dữ liệu (bookingApi, publicApi, partnerApi, adminApi); (f) UI/UX minh họa (ảnh màn hình các luồng chính); (g) Kiểm thử (case cho validation, thanh toán, phân quyền); (h) Đánh giá & hướng phát triển.
+- Slide/demo đề xuất: 1) Demo khách: tìm tour -> thêm giỏ -> checkout Sepay (cho thấy kiểm tra chỗ, QR, poll trạng thái); 2) Demo hồ sơ & bảo mật: cập nhật thông tin, đổi mật khẩu, đăng nhập OTP; 3) Demo đối tác: tạo tour mới, đặt chỗ thử, xem tồn chỗ; 4) Demo admin: duyệt đối tác, chỉnh seats_available, tạo ưu đãi.
+- Minh họa kỹ thuật: sơ đồ luồng thanh toán (BookingCheckout -> createBooking -> payment_url -> poll payment-status), luồng đăng nhập OTP, luồng duyệt đối tác (PartnerSignup -> admin/Partners status).
+- Điểm nhấn khi thuyết trình: tính chuẩn hóa dữ liệu (normalizeVietnamPhone, validators), an toàn giao dịch (polling trạng thái, xử lý callback), trải nghiệm người dùng (prefill hồ sơ, nhắc thiếu thông tin), khả năng vận hành (admin & partner dashboards).
