@@ -2572,7 +2572,7 @@ useEffect(() => {
             </Tabs>
 
             <SimilarTourRecommendations
-              tourId={tourDetail?.id ?? tourDetail?.uuid ?? activity?.id ?? null}
+              tourId={tourDetail?.id ?? tourDetail?.uuid ?? activity?.id ?? id ?? null}
               baseTourTitle={activity?.title}
               limit={6}
             />
