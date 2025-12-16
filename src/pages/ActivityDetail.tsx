@@ -1597,6 +1597,14 @@ useEffect(() => {
 
   const handleBookNow = () => {
     if (!activity || !selectedPackage) return;
+    if (!currentUser) {
+      toast({
+        title: "Yêu cầu đăng nhập",
+        description: "Vui lòng đăng nhập để tiến hành đặt tour.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (selectedScheduleMinParticipants !== null && totalTravellers < selectedScheduleMinParticipants) {
       toast({
         title: "Chưa đủ số khách tối thiểu",

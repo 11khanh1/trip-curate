@@ -419,6 +419,14 @@ const CartPage = () => {
 
   const handleCheckout = () => {
     if (isSyncing) return;
+    if (!currentUser) {
+      toast({
+        title: "Yêu cầu đăng nhập",
+        description: "Vui lòng đăng nhập để tiến hành đặt tour.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (selectedItems.length !== 1) {
       toast({
         title: "Vui lòng chọn một dịch vụ",
