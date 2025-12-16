@@ -1,0 +1,51 @@
+﻿HƯỚNG DẪN ÔN CODE TRƯỚC KHI BÁO CÁO
+
+1) Dàn ý tổng thể (dựa trên react-code-overview.txt)
+- Kiến trúc FE & router (App.tsx): BrowserRouter, Toaster, ChatWidget, ScrollToTop; các nhóm route: khách, booking/payment, account, support, partner, admin.
+- Trang chi tiết & gợi ý tương tự: ActivityDetail.tsx + SimilarTourRecommendations.tsx.
+- Gợi ý cá nhân hóa (home/wishlist): PersonalizedRecommendations.tsx.
+- Đặt tour & thanh toán: BookingCheckout.tsx (form + validation + thanh toán Sepay/offline).
+- Validation & bảo mật: validators, LoginForm/AccountSettings, PartnerSignup.
+- Phân quyền & dịch vụ API: UserContext, admin/partner layout, services (bookingApi, recommendationApi, publicApi...).
+
+2) Đọc code theo flow người dùng
+- Trang chi tiết (ActivityDetail.tsx):
+  + Data: lấy id từ URL -> React Query fetchTourDetail -> normalizeTourDetail (giá, gói, lịch, tags, images...).
+  + Tương tác: chọn gói/lịch, thêm giỏ (CartContext), wishlist, đặt ngay; kiểm tra minParticipants, seatsAvailable, tổng khách <=15; log analytics + user activity.
+  + Gợi ý tương tự: SimilarTourRecommendations (tourId fallback id/uuid/param) gọi fetchSimilarRecommendations, refetch, empty state có CTA.
+- Trang home/wishlist: PersonalizedRecommendations (fetchPersonalizedRecommendations, fallback trending). Nút “Làm mới gợi ý”, badge lý do, empty state hướng dẫn tạo tín hiệu (xem, wishlist, đặt).
+- Form đặt tour (BookingCheckout.tsx): zod schema + react-hook-form; kiểm tra seats/minParticipants, hành khách, contact; gọi createBooking; nếu Sepay → panel QR + poll fetchBookingPaymentStatus; offline → toast thành công; invalidate cache tours/cart/bookings.
+
+3) Ràng buộc/validation quan trọng
+- Phone VN: 10 số bắt đầu 0 hoặc 11 số bắt đầu 84; normalizeVietnamPhone (validators.ts); áp dụng ở BookingCheckout, AccountSettings, admin/Partners.
+- Email: regex /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i hoặc z.string().email (LoginForm, ForgotForm, RegisterForm, BookingCheckout).
+- OTP: tối thiểu 4 ký tự (LoginForm).
+- Mật khẩu khách: >=8, khớp xác nhận (ForgotForm, RegisterForm, AccountSettings). Admin/đối tác tạo từ admin: >=6, khớp.
+- Đặt tour: package_id & schedule_id bắt buộc; adults>=1, children>=0; passengers>=1; contact đủ 3 trường hoặc lấy từ hồ sơ; giấy tờ hợp lệ, ngày sinh trong quá khứ; nếu tour yêu cầu passport/visa thì document_number bắt buộc; tổng khách <=15; kiểm tra minParticipants & seatsAvailable.
+- Cập nhật hồ sơ: phone VN, ngày sinh < hôm nay (AccountSettings).
+- Đăng ký đối tác: tên công ty>=3, loại hình>=2, email hợp lệ, phone 10 số đầu 0, MST 8–15 số.
+
+4) API layer cần nhớ
+- recommendationApi: fetchPersonalizedRecommendations, fetchSimilarRecommendations.
+- bookingApi: createBooking, fetchBookingPaymentStatus, pay-later, refund requests.
+- publicApi: fetchTourDetail, trending, public tours.
+- profileApi, wishlistApi, notificationApi, supportTicketApi; partnerApi/adminApi cho CRUD tour, lịch, đối tác, users, promotions.
+- Pattern: React Query dùng queryKey, services Axios trả dữ liệu; normalize để chống null/format lạ.
+
+5) Phân quyền & bảo mật
+- Sau login: redirect theo role (admin/partner/customer); chặn tài khoản suspended trong LoginForm.
+- CSRF: ensureCsrfToken trong api-client; token lưu localStorage (có thể đề xuất cải thiện HttpOnly cookie).
+- Route layout riêng: AdminLayout, PartnerLayout; UserContext lưu currentUser.
+
+6) Demo/Q&A luyện nói (mỗi flow 2–3 câu)
+- “Không có gợi ý?” → SimilarTourRecommendations/Personalized: empty state, CTA, nút Làm mới; fallback trending (home/wishlist).
+- “Thanh toán Sepay đóng tab?” → Có poll payment-status; nếu không trả về dùng offline (pay later) hoặc refetch; có panel QR kèm status.
+- “Kiểm soát chỗ?” → Client kiểm minParticipants + seatsAvailable; đề xuất server hold chỗ/time-out.
+- “Vì sao stack này?” → Vite + TS (nhanh, HMR), React Query (cache + retry), Tailwind + shadcn (nhanh layout), tách services Axios.
+- “Hạn chế & cải tiến?” → SEO/SSR (có thể prerender/Next.js), webhook payment, hold chỗ, Sentry/log tập trung, e2e test (Playwright) cho checkout + phân quyền.
+
+7) Cách ôn nhanh trước buổi bảo vệ
+- Mỗi mục trên chuẩn bị 1 slide/bullet: Kiến trúc, Detail page, Gợi ý, Booking, Validation/Bảo mật, API/Phân quyền, Q&A.
+- Mở code song song: ActivityDetail.tsx + SimilarTourRecommendations.tsx + PersonalizedRecommendations.tsx + BookingCheckout.tsx + validators.ts.
+- Thực hành nói: “Bối cảnh → bước chính → ràng buộc → fallback/kết quả” cho từng flow.
+- Nếu demo: thử một tour không có gợi ý (xem empty state), thử checkout thiếu contact/giấy tờ để thấy validation.

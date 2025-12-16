@@ -233,6 +233,11 @@ const PersonalizedRecommendations = ({
     console.error("Không thể tải gợi ý cá nhân hóa:", error);
   }
 
+  // Nếu người dùng chưa đăng nhập thì không hiển thị phần gợi ý cá nhân hóa
+  if (!currentUser) {
+    return null;
+  }
+
   const handleCardClick = (tourId: string, reasons: string[]) => {
     trackEvent({
       event_name: "tour_view",

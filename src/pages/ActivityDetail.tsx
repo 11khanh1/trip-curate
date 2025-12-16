@@ -71,7 +71,7 @@ import {
   type TourReviewListResponse,
 } from "@/services/reviewApi";
 import { logUserActivity } from "@/services/userActivityLogService";
-import SimilarTourRecommendations from "@/components/recommendations/SimilarTourRecommendations";
+// Similar recommendations removed from activity detail per UX request
 
 
 // ====================================================================================
@@ -2571,11 +2571,7 @@ useEffect(() => {
               </TabsContent>
             </Tabs>
 
-            <SimilarTourRecommendations
-              tourId={tourDetail?.id ?? tourDetail?.uuid ?? activity?.id ?? id ?? null}
-              baseTourTitle={activity?.title}
-              limit={6}
-            />
+            {/* SimilarTourRecommendations removed from detail page per design */}
 
             {hasFaqs && (
               <div className="space-y-4">

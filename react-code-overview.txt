@@ -1,0 +1,83 @@
+TỔNG HỢP MÃ REACT CHÍNH (TRIP CURATE)
+
+1) Định tuyến & khung ứng dụng
+- File: src/App.tsx
+- Nội dung: Khởi tạo BrowserRouter, Toaster, ChatWidget, ScrollToTop; khai báo toàn bộ Routes:
+  - Trang khách: "/", "/activities", "/activity/:id", "/recent", "/deals", "/resultsearch", "/cart", "/wishlist", "/notifications".
+  - Đặt tour & thanh toán: "/bookings", "/bookings/new", "/bookings/:id", "/payments/sepay/gateway", "/payments/sepay/return".
+  - Tài khoản: "/account-settings", "/auth/callback".
+  - Hỗ trợ/chính sách: "/support/*", "/about/*".
+  - Đối tác: "/partner/*" (Dashboard, Activities, Bookings, Promotions, RefundRequests, Settings).
+  - Quản trị: "/admin/*" (Dashboard, Users, Partners, Tours, Categories, Promotions, Reports, Settings, Admins, SupportTickets).
+- Ý nghĩa báo cáo: Đây là “sitemap” FE; có thể vẽ sơ đồ module hoặc flow truy cập.
+
+2) Trang chi tiết tour
+- File: src/pages/ActivityDetail.tsx
+- Dữ liệu: Lấy id từ URL -> React Query gọi fetchTourDetail -> normalizeTourDetail chuẩn hóa giá, lịch, gói, tags, hình.
+- Chức năng chính:
+  - Gallery (zoom/fullscreen), highlight, thông tin giá (khuyến mãi autoPromotion), chọn gói/lịch khởi hành.
+  - Kiểm tra ràng buộc: minParticipants, seats_available, tổng khách tối đa 15 (logic chung trong file), yêu cầu passport/visa nếu có.
+  - Thao tác: thêm giỏ (CartContext), wishlist, đặt ngay (đi kèm adults/children/schedule/package), log analytics & user activity.
+  - Đánh giá: load reviews dạng infinite scroll.
+  - Liên hệ/đối tác: hiển thị thông tin partner nếu có.
+- Gợi ý ở cuối trang:
+  - Component: SimilarTourRecommendations (tourId = id/uuid/param fallback, baseTourTitle).
+  - Hiển thị lưới thẻ gợi ý hoặc empty state thân thiện (Compass icon, CTA “Khám phá thêm tour”, “Xem wishlist”), nút “Làm mới gợi ý”.
+
+3) Gợi ý cá nhân hóa (home/wishlist)
+- File: src/components/recommendations/PersonalizedRecommendations.tsx
+- Cơ chế: React Query fetchPersonalizedRecommendations; nếu lỗi/thiếu data thì fallback trending (fetchTrendingTours).
+- UI: tiêu đề “Dành riêng cho bạn”, nút “Làm mới gợi ý”, badge lý do gợi ý, empty state giải thích cần thêm hành vi (xem, wishlist, đặt).
+- Dùng CollectionTourCard hiển thị giá, rating, tags; theo dõi click để log analytics.
+
+4) Gợi ý tour tương tự (detail)
+- File: src/components/recommendations/SimilarTourRecommendations.tsx
+- Props: tourId, baseTourTitle, limit (mặc định 8).
+- Cơ chế: React Query fetchSimilarRecommendations(tourId, limit); loading -> skeleton; có data -> lưới CollectionTourCard (badge lý do gợi ý, hình ảnh fallback); empty -> khung dashed, CTA khám phá thêm tour/wishlist; nút “Làm mới gợi ý” (refetch).
+- Đã bổ sung fallback tourId từ param URL để phần này luôn hiển thị.
+
+5) Form đặt tour & ràng buộc
+- File: src/pages/bookings/BookingCheckout.tsx
+- Tech: react-hook-form + zodResolver.
+- Ràng buộc chính:
+  - package_id, schedule_id bắt buộc; adults ≥1, children ≥0; passengers ≥1.
+  - contact: nếu nhập thì đủ họ tên + email (regex) + phone VN; nếu bỏ trống, lấy từ hồ sơ (AccountSettings).
+  - Phone VN: normalizeVietnamPhone, chấp nhận 10 số đầu 0 hoặc 11 số đầu 84.
+  - Email regex: /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.
+  - Hành khách: ngày sinh (nếu nhập) phải trong quá khứ; giấy tờ 9/12 số hoặc 6–20 ký tự chữ/số không khoảng trắng; nếu tour yêu cầu passport/visa thì document_number bắt buộc.
+  - Kiểm tra seats_available, minParticipants trước submit; tổng khách tối đa 15 (ActivityDetail).
+- Thanh toán: createBooking -> nếu Sepay có payment_url/QR, mở panel, poll fetchBookingPaymentStatus; offline thì toast thành công. Invalidate cache tours/cart/booking sau khi tạo.
+
+6) Xác thực & hồ sơ
+- File: src/components/auth/LoginForm.tsx
+  - Đăng nhập OTP email: OTP ≥4 ký tự; email regex; gửi/verify OTP; persist token; chặn tài khoản suspended; redirect theo role (admin/partner/customer).
+  - Social login: mở popup redirect, nhận token qua postMessage.
+- File: src/pages/AccountSettings.tsx
+  - Cập nhật hồ sơ: phone VN, ngày sinh < hôm nay, đổi mật khẩu (≥8, khớp xác nhận).
+
+7) Ngữ cảnh dùng chung
+- File: src/context/UserContext.tsx: lưu currentUser, hỗ trợ setCurrentUser, dùng cho redirect phân quyền.
+- File: src/context/CartContext.tsx: lưu giỏ hàng, thêm/xoá/cập nhật item, liên kết BookingCheckout.
+- File: src/context/ChatWidgetContext.tsx: bật/tắt widget chat.
+
+8) Lớp dịch vụ API (Axios)
+- Thư mục: src/services
+- publicApi.ts: tour công khai, trending, detail.
+- bookingApi.ts: tạo booking, thanh toán, payment-status, refund requests.
+- recommendationApi.ts: personalized, similar.
+- partnerApi/adminApi: đăng ký đối tác, duyệt đối tác, CRUD tour/gói/lịch, quản lý users, promotions, reports.
+- profileApi, wishlistApi, notificationApi, supportTicketApi: các tác vụ hồ sơ, wishlist, thông báo, ticket hỗ trợ.
+
+9) Cách kể trong báo cáo/slide
+- Kiến trúc FE: App.tsx router + Context + React Query + Services (Axios) + UI layer (components).
+- Trang chi tiết: luồng data (fetch -> normalize -> render), tương tác (chọn gói/lịch, cart/wishlist, analytics), gợi ý tương tự (SimilarTourRecommendations).
+- Trang home/wishlist: gợi ý cá nhân hóa (PersonalizedRecommendations) + fallback trending.
+- Đặt tour: BookingCheckout với ràng buộc (liệt kê bullets), flow thanh toán Sepay/offline, invalidation cache.
+- Bảo mật/validation: phone VN, email, OTP, password; chặn suspended; CSRF (ensureCsrfToken trong api-client).
+- Phân quyền: redirect theo role sau login; route layout riêng admin/partner.
+
+10) Check nhanh khi demo
+- Mở `/activity/:id` xem “Tour tương tự” luôn xuất hiện (kể cả empty state).
+- Mở home/wishlist xem “Dành riêng cho bạn” có fallback trending nếu chưa có signals.
+- Thử form BookingCheckout với thiếu contact, sai phone/email, thiếu giấy tờ passport/visa để thấy lỗi hiển thị.
+- Đăng nhập OTP email và thử “Làm mới gợi ý” ở các khối recommendation.

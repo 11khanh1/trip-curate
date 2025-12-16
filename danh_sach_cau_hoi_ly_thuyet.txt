@@ -1,0 +1,149 @@
+Danh sách câu hỏi lý thuyết & câu trả lời chi tiết
+Dự án: Trip Curate (frontend React + TypeScript)
+Ngày: 2025-12-14
+
+Hướng dẫn: mỗi mục gồm (1) giải thích ngắn, (2) cách triển khai thường thấy trong codebase này, (3) câu trả lời mẫu để bạn dùng khi phản biện.
+
+1) Tổng quan dự án
+- Giải thích:
+  Ứng dụng là một frontend SPA để tìm, xem, và đặt các tour/hoạt động. Người dùng có thể duyệt danh sách, xem chi tiết, thêm vào giỏ, thanh toán và nhận thông báo.
+- Triển khai trong codebase:
+  - Các trang chính nằm trong `src/pages` (Index, ActivityDetail, Cart...). UI modular hoá trong `src/components`.
+  - API gọi qua `src/services/*` và client helper trong `src/lib/api-client.ts`.
+- Câu trả lời mẫu:
+  "Ứng dụng hướng tới việc tối giản luồng đặt tour: client chịu trách nhiệm UI và trải nghiệm, server xử lý dữ liệu và giao dịch. Các yêu cầu phi chức năng là hiệu năng trên mobile, bảo mật luồng thanh toán và khả năng mở rộng của backend khi traffic tăng." 
+
+2) Kiến trúc & cấu trúc mã nguồn
+- Giải thích:
+  Ứng dụng tổ chức theo domain-responsibility: components cho UI, pages cho route-level composition, context cho state toàn cục, services cho tương tác API, lib cho helper/utility.
+- Triển khai trong codebase:
+  - `components/` chứa các UI nhỏ và lớn (ví dụ `TravelHeader.tsx`, `TourCard.tsx`).
+  - `pages/` chứa các entry points cho route; mỗi page thường gọi service, lấy dữ liệu, rồi truyền xuống components.
+  - `context/` dùng để chia sẻ `UserContext`, `CartContext` v.v.
+- Câu trả lời mẫu:
+  "Tách `services` và `lib` giúp phân biệt logic gọi API (có thể thay backend) và utility (xử lý dữ liệu, format). Pages lấy dữ liệu (data fetching) và truyền props, trong khi components tập trung render và tương tác người dùng." 
+
+3) Stack kỹ thuật & công cụ
+- Giải thích:
+  TypeScript cung cấp type safety; Vite cho dev server và build nhanh; Tailwind giúp xây UI nhanh bằng utility classes.
+- Triển khai:
+  - `tsconfig` và types trong repo, Vite cấu hình trong `vite.config.ts`, Tailwind theo `tailwind.config.ts`.
+- Câu trả lời mẫu:
+  "Chọn TypeScript để tránh lỗi kiểu thời gian chạy và giúp refactor an toàn trong dự án lớn. Vite vì dev HMR cực nhanh và build nhanh hơn Webpack mặc định. Tailwind tăng tốc xây UI, nhưng cần cân nhắc extract component để tránh class quá dài." 
+
+4) Quản lý state
+- Giải thích:
+  Contexts dùng cho state có phạm vi ứng dụng như user session hoặc giỏ hàng; tránh dùng Context cho mọi thứ vì sẽ gây re-render không cần thiết.
+- Triển khai:
+  - `src/context/CartContext.tsx` giữ thông tin giỏ hàng và các action (add/remove).
+  - Để tối ưu, cần tách context theo domain (cart, user, analytics) và dùng memo để giới hạn re-render.
+- Câu trả lời mẫu:
+  "Chúng tôi dùng Context cho state có phạm vi rộng nhưng không quá phức tạp. Nếu state cần normalized store, nhiều async middleware hay time-travel, chuyển sang Redux/RTK sẽ phù hợp hơn." 
+
+5) Routing & điều hướng
+- Giải thích:
+  Routing điều phối page components. Bảo vệ route là kiểm tra authentication trước khi render.
+- Triển khai:
+  - Có thể dùng react-router (hoặc giải pháp tương tự). Để bảo vệ route, wrapper component kiểm tra `UserContext`.
+  - Khi redirect tới login, lưu `returnTo` (ví dụ trong query param hoặc session) để quay về trang ban đầu.
+- Câu trả lời mẫu:
+  "Bảo vệ route được thực hiện bằng một PrivateRoute/HOC: nếu không có user token thì redirect tới `/login?returnTo=/cart`. Sau login, callback đọc `returnTo` để chuyển hướng người dùng." 
+
+6) Giao tiếp với backend / API
+- Giải thích:
+  API client tập trung hoá giúp xử lý auth headers, error handling, và retry policy đồng nhất.
+- Triển khai:
+  - `lib/api-client.ts` cấu hình axios/fetch wrapper: base URL, interceptors để thêm access token, bắt 401 để trigger refresh.
+  - `services/*.ts` chứa các function cụ thể (getTours, createOrder) dùng api-client.
+- Câu trả lời mẫu:
+  "Chúng tôi dùng một api-client trung tâm để set header, parse lỗi và tự động thử refresh token trên 401. Retry cho các lỗi tạm thời (5xx) được cấu hình với backoff." 
+
+7) Xác thực & ủy quyền
+- Giải thích:
+  SPA thường dùng OAuth/OIDC hoặc JWT; giữ refresh token an toàn là quan trọng.
+- Triển khai:
+  - Nếu có `AuthCallback.tsx`, flow có thể là OAuth: redirect tới provider, provider trả code, server exchange code thành token và thiết lập session cookie.
+  - Thực hiện session-based auth (HttpOnly cookies) giảm rủi ro token leak.
+- Câu trả lời mẫu:
+  "Ưu tiên lưu refresh token trong HttpOnly cookie (server-side) và only expose access token ngắn hạn cho client nếu cần. Khi dùng JWT, giảm TTL token và cung cấp endpoint refresh an toàn." 
+
+8) Thanh toán
+- Giải thích:
+  Thanh toán luôn có bước tạo transaction trên server, chuyển đến gateway, sau đó server xác nhận callback để commit booking.
+- Triển khai:
+  - Client gọi `services/bookingApi.createPayment`, server tạo order và gọi gateway, trả về url/checkout token.
+  - Sau callback thành công, server verify signature và cập nhật trạng thái booking.
+- Câu trả lời mẫu:
+  "Luồng: client yêu cầu tạo order -> server tạo transaction và gọi gateway -> client hoàn thành payment trên gateway -> gateway callback server -> server verify và finalize booking. Luôn xử lý rollback nếu verify thất bại." 
+
+9) Thông báo & chat
+- Giải thích:
+  Realtime notifications dùng WebSocket hoặc push; polling chỉ dùng khi không thể hỗ trợ realtime.
+- Triển khai:
+  - Chat widget có thể dùng WebSocket/Socket.IO hoặc 3rd-party service; notifications có thể dùng server-sent events hoặc push.
+  - Khi offline, queue các event local (IndexedDB/localStorage) và gửi lại khi kết nối.
+- Câu trả lời mẫu:
+  "Với chat yêu cầu realtime, WebSocket là hợp lý. Nếu không có infra realtime, cơ chế polling có thể tạm thay thế. Luôn có cơ chế lưu message tạm thời và retry khi reconnect." 
+
+10) Hiệu năng & tối ưu
+- Giải thích:
+  Tối ưu front gồm giảm bundle size, lazy load trang/ảnh, memoization, tránh re-render.
+- Triển khai:
+  - Dùng React.lazy + Suspense để code-split pages, React.memo cho component nặng, virtualization cho long lists.
+  - Dùng CDN để phục vụ static, và prefetch dữ liệu/các chunk quan trọng.
+- Câu trả lời mẫu:
+  "Để tối ưu, phân tách bundle theo route, lazy-load các component nặng, cache API ở client, và dùng virtualization cho danh sách dài. Dùng Lighthouse để identify bottlenecks." 
+
+11) Kiểm thử
+- Giải thích:
+  Unit test cho utils/services; component test cho critical UI; integration test cho luồng booking, e2e cho flow end-to-end.
+- Triển khai:
+  - Dùng Jest + React Testing Library cho unit/integration; dùng msw để mock API; Cypress/Playwright cho e2e.
+- Câu trả lời mẫu:
+  "Ưu tiên test logic quan trọng như pricing và booking; kiểm thử component chủ chốt dưới nhiều trạng thái; dùng msw để mock backend và chạy CI tests." 
+
+12) Bảo mật
+- Giải thích:
+  Phòng XSS, CSRF, đảm bảo secure headers, validate input và không lưu sensitive data ở client.
+- Triển khai:
+  - Escape/sanitize nội dung render từ user; bật CSP; dùng HttpOnly cookie cho refresh token; validate server-side mọi dữ liệu đầu vào.
+- Câu trả lời mẫu:
+  "Chống XSS bằng sanitize và escape, bật CSP, và không lưu refresh token vào localStorage. Nếu dùng cookies, cần CSRF token hoặc same-site cookie để giảm rủi ro." 
+
+13) Type safety & mô hình dữ liệu
+- Giải thích:
+  TypeScript giúp catch lỗi sớm, làm rõ contract giữa frontend và backend.
+- Triển khai:
+  - Định nghĩa interfaces cho `Tour`, `Order`, `User` trong TypeScript; nếu có OpenAPI/GraphQL, dùng codegen để sinh types.
+- Câu trả lời mẫu:
+  "Dùng TypeScript để giảm lỗi runtime. Để đồng bộ, khuyến nghị dùng OpenAPI hoặc GraphQL schemas và codegen để tránh mismatch giữa frontend và backend." 
+
+14) Triển khai & CI/CD
+- Giải thích:
+  CI chạy lint/test/build; deploy tự động lên hosting (Vercel). Quản lý secrets qua môi trường deploy.
+- Triển khai:
+  - `vercel.json` cho config deploy; secrets lưu trên Vercel dashboard hoặc vault; CI pipeline thực hiện build và tests.
+- Câu trả lời mẫu:
+  "Deploy tự động trên push vào branch chính; secrets không commit vào repo mà dùng Vercel env vars. Có staging environment để test trước production." 
+
+15) Quyền riêng tư & pháp lý
+- Giải thích:
+  Phải tuân thủ luật bảo vệ dữ liệu (GDPR, local law): minimization, quyền truy xuất/xóa dữ liệu.
+- Triển khai:
+  - Lưu trữ ít nhất dữ liệu cần thiết, mã hoá dữ liệu nhạy cảm, cung cấp endpoint để xóa hoặc ẩn dữ liệu người dùng.
+- Câu trả lời mẫu:
+  "Áp dụng data minimization, mã hoá at-rest và in-transit; có quy trình xử lý yêu cầu xóa dữ liệu và audit logs để chứng minh compliance." 
+
+16) Khả năng mở rộng & giám sát
+- Giải thích:
+  Mở rộng cần nhận diện bottleneck: API, database, hoặc frontend (CDN, bundle).
+- Triển khai:
+  - Giám sát bằng Sentry (client errors), APM (Datadog), structured logs; alert on errors/perf regressions.
+- Câu trả lời mẫu:
+  "Khi traffic tăng, scale backend services, cache nhiều hơn (CDN, edge caching), và tách các services nặng (booking/payment). Dùng monitoring để nhanh chóng phát hiện bottleneck." 
+
+---
+Ghi chú: Tôi đã mở rộng từng mục với lời giải thích, cách triển khai tham khảo trong mã nguồn và câu trả lời mẫu. File sẵn sàng để in hoặc ôn tập. Nếu bạn muốn tôi:
+- tách mỗi mục thành flashcard (câu hỏi + câu trả lời ngắn),
+- hoặc xuất thành PDF/Markdown,
+- hãy cho biết lựa chọn.

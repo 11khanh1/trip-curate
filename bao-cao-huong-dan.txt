@@ -11,7 +11,7 @@ HƯỚNG DẪN BÁO CÁO KHÓA LUẬN – TRIP CURATE
 - Mã OTP: tối thiểu 4 ký tự trước khi xác minh (LoginForm.tsx).
 - Mật khẩu khách: tối thiểu 8 ký tự và khớp xác nhận (ForgotForm.tsx, RegisterForm.tsx, AccountSettings.tsx).
 - Mật khẩu admin/đối tác tạo từ trang admin: tối thiểu 6 ký tự, bắt buộc khớp xác nhận (admin/Admins.tsx, admin/Partners.tsx).
-- Đăng ký đối tác: tên công ty ≥3 ký tự, loại hình ≥2, email hợp lệ, số điện thoại đúng 10 số đầu 0, MST 8–15 số (partner/PartnerSignup.tsx).
+- Đăng ký đối tác: tên công ty ≥3 ký tự, loại hình ≥2, email hợp lệ, partner/PartnerSignusố điện thoại đúng 10 số đầu 0, MST 8–15 số (p.tsx).
 - Biểu mẫu đặt tour: package_id và schedule_id bắt buộc; adults >=1, children >=0; hành khách tối thiểu 1; yêu cầu giấy tờ nếu tour đòi passport/visa; trẻ em phải có ngày sinh và không vượt childAgeLimit; số khách không dưới minParticipants của lịch và không vượt seats_available (BookingCheckout.tsx).
 - Thông tin hành khách: họ tên bắt buộc; ngày sinh (nếu nhập) phải trước hiện tại; giấy tờ 9 hoặc 12 số, hoặc 6–20 ký tự chữ/số không khoảng trắng (BookingCheckout.tsx, src/lib/validators.ts).
 - Liên hệ khi đặt tour: nếu nhập thì phải đủ họ tên + email + điện thoại; nếu để trống phải có đủ trong hồ sơ người dùng (BookingCheckout.tsx + AccountSettings.tsx).

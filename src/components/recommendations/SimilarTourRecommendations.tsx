@@ -6,9 +6,9 @@ import { Button } from "@/components/ui/button";
 import CollectionTourCard from "@/components/CollectionTourCard";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { fetchSimilarRecommendations, type RecommendationItem } from "@/services/recommendationApi";
-import type { PublicTour } from "@/services/publicApi";
 import { getTourStartingPrice, formatCurrency as formatPrice } from "@/lib/tour-utils";
 import { Compass, Sparkles } from "lucide-react";
+import { fetchTrendingTours, type PublicTour } from "@/services/publicApi";
 
 const REASON_LABELS: Record<string, string> = {
   content_match: "Nội dung tương đồng",
@@ -97,13 +97,43 @@ const SimilarTourRecommendations = ({ tourId, baseTourTitle, limit = 8 }: Simila
       .filter((value): value is NonNullable<ReturnType<typeof mapItemToCard>> => Boolean(value));
   }, [data?.data]);
 
+  const shouldFetchFallback = !isLoading && (!data?.data || (Array.isArray(data.data) && data.data.length === 0));
+
+  const { data: fallbackTrending, isLoading: isFallbackLoading } = useQuery({
+    queryKey: ["similar-fallback-trending", { limit }],
+    queryFn: () => fetchTrendingTours({ limit }),
+    enabled: Boolean(shouldFetchFallback),
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const fallbackCards = useMemo(() => {
+    if (!fallbackTrending || !Array.isArray(fallbackTrending)) return [];
+    return fallbackTrending
+      .map((tour: PublicTour) => {
+        const price = getTourStartingPrice(tour);
+        const priceLabel = formatPrice(price);
+        const entityId = String(tour.id ?? tour.uuid ?? `trending-${Math.random().toString(36).slice(2, 10)}`);
+        const reasons = [{ code: "popular", label: "Được nhiều khách quan tâm" }];
+        return {
+          id: entityId,
+          entityId,
+          tour,
+          reasons,
+          priceLabel,
+          image: resolveTourImage(tour),
+        } as ReturnType<typeof mapItemToCard>;
+      })
+      .filter((v) => Boolean(v));
+  }, [fallbackTrending]);
+
   if (!tourId) {
     return null;
   }
 
-  const showEmptyState = !isLoading && cards.length === 0;
-  const hasData = cards.length > 0;
-  const isRefreshing = isFetching && !isLoading;
+  const displayedCards = cards.length > 0 ? cards : fallbackCards;
+  const isRefreshing = (isFetching && !isLoading) || isFallbackLoading;
+  const showEmptyState = !isRefreshing && displayedCards.length === 0;
+  const hasData = displayedCards.length > 0;
 
   const handleCardClick = (recommendedTourId: string, reasons: string[]) => {
     trackEvent({
@@ -119,12 +149,12 @@ const SimilarTourRecommendations = ({ tourId, baseTourTitle, limit = 8 }: Simila
   };
 
   return (
-    <section className="mt-12 rounded-3xl border border-slate-200/70 bg-gradient-to-b from-white to-slate-50 p-6 shadow-sm space-y-6">
+    <section className="mt-12 rounded-2xl border border-slate-200/70 bg-gradient-to-b from-white to-slate-50 p-6 shadow-sm space-y-6">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
           <h3 className="text-2xl font-semibold text-foreground">Tour tương tự</h3>
           <p className="text-sm text-muted-foreground">
-            {baseTourTitle ? `Dựa trên "${baseTourTitle}"` : "Khám phá các lựa chọn có nội dung tương đồng."}
+            {baseTourTitle ? `Dựa trên "${baseTourTitle}"` : "Khám phá các lựa chọn tương đồng."}
           </p>
         </div>
         <Button
@@ -140,9 +170,9 @@ const SimilarTourRecommendations = ({ tourId, baseTourTitle, limit = 8 }: Simila
       </div>
 
       {isLoading && !hasData ? (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {Array.from({ length: Math.min(limit, 4) }).map((_, index) => (
-            <div key={`similar-skeleton-${index}`} className="h-44 animate-pulse rounded-2xl bg-slate-200/60" />
+        <div className="mt-6 grid gap-6 lg:grid-cols-2">
+          {Array.from({ length: Math.min(limit, 2) }).map((_, index) => (
+            <div key={`similar-skeleton-${index}`} className="h-48 animate-pulse rounded-2xl bg-slate-200/60" />
           ))}
         </div>
       ) : showEmptyState ? (
@@ -170,11 +200,11 @@ const SimilarTourRecommendations = ({ tourId, baseTourTitle, limit = 8 }: Simila
           </div>
         </div>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-2">
-          {cards.map((card) => (
+        <div className="mt-6 grid gap-6 lg:grid-cols-2">
+          {displayedCards.map((card) => (
             <CollectionTourCard
               key={card.id}
-              className="border border-slate-200/60 shadow-sm transition hover:-translate-y-1 hover:shadow-md"
+              className="border border-slate-200/70 shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
               href={`/activity/${card.tour.id ?? card.tour.uuid ?? card.id}`}
               image={card.image}
               title={card.tour.title ?? card.tour.name ?? "Tour đang cập nhật"}
@@ -204,6 +234,7 @@ const SimilarTourRecommendations = ({ tourId, baseTourTitle, limit = 8 }: Simila
           ))}
         </div>
       )}
+      
     </section>
   );
 };
